@@ -1,0 +1,65 @@
+{
+  "schema": "workai.material.reference.v1",
+  "id": "aluminum-polycrystal-blaschke2017-v1",
+  "name": "多晶铝 · 文献参考",
+  "material_class": "isotropic_polycrystalline_aluminum",
+  "grade": null,
+  "temper": null,
+  "temperature_k": null,
+  "status": "literature_reference_not_specimen_calibration",
+  "rho_kg_m3": 2700,
+  "lambda_pa": 58100000000,
+  "mu_pa": 26100000000,
+  "third_order": {
+    "convention": "murnaghan_principal_invariants_of_green_lagrange_strain",
+    "l_pa": -143000000000,
+    "m_pa": -297000000000,
+    "n_pa": -345000000000,
+    "reported_uncertainty_pa": {
+      "l": 13000000000,
+      "m": 6000000000,
+      "n": 4000000000,
+      "interpretation": "原表报告的 ± 范围；不将其解释为已知置信水平或独立标准差。"
+    }
+  },
+  "energy_convention": {
+    "strain": "E = (F^T F - I)/2",
+    "invariants": "i1=tr(E); i2=((tr(E))^2-tr(E^2))/2; i3=det(E)",
+    "energy_j_m3": "W=(lambda+2*mu)/2*i1^2-2*mu*i2+(l+2*m)/3*i1^3-2*m*i1*i2+n*i3",
+    "stress": "S=dW/dE; P=F*S; sigma=P*F^T/det(F)",
+    "landau_conversion": "A=n; B=m-n/2; C=l-m+n/2",
+    "landau_energy_j_m3": "W=lambda/2*(tr(E))^2+mu*tr(E^2)+A/3*tr(E^3)+B*tr(E)*tr(E^2)+C/3*(tr(E))^3"
+  },
+  "sources": [
+    {
+      "id": "elastic_constants",
+      "title": "D. N. Blaschke (2017), Averaging of elastic constants for polycrystals",
+      "url": "https://arxiv.org/abs/1706.07132",
+      "doi": "10.1063/1.4993443",
+      "location": "arXiv v2, Table 2, p. 5; Appendix A.6, p. 10",
+      "parameters": ["lambda_pa", "mu_pa", "l_pa", "m_pa", "n_pa", "reported_uncertainty_pa"],
+      "provenance": "二阶常数和三阶常数为文献汇总，未证明来自同一试样；Al 三阶实验值由 Reddy 1976 经 Wasserbäch 1990 转引。未直接取得 Reddy 原始实验数据。",
+      "retrieved_on": "2026-10-22",
+      "download_url": "https://arxiv.org/pdf/1706.07132v2",
+      "download_sha256": "5bc2f5cf7eed624e7134cab0c6c0d55b14c60cbebe873e83883cf84e77eab99b"
+    },
+    {
+      "id": "nominal_density",
+      "title": "D. M. Stobbe (2005), Acoustoelasticity in 7075-T651 Aluminum and Dependence of Third Order Elastic Constants on Fatigue Damage",
+      "url": "https://hdl.handle.net/1853/7184",
+      "location": "Table 2, printed p. 15: nominal Aluminum density; not the alloy-specific constants in Table 18",
+      "parameters": ["rho_kg_m3"],
+      "provenance": "仅取其背景材料表中的普通铝名义密度 2700 kg/m³；不将其 7075-T651 三阶常数混入本组。",
+      "retrieved_on": "2026-10-22",
+      "download_url": "https://repository.gatech.edu/bitstreams/96e48a7d-5ab9-4b4b-b29e-566bec81a4cc/download",
+      "download_sha256": "88f2dcb6ce4381c80fecd49c652bc234ead79b9947d1d0e3cffcc20495316b2f"
+    }
+  ],
+  "limitations": [
+    "用于建立可复查的铝参考算例，不是特定牌号、热处理、纯度、温度或试样的标定值。",
+    "名义密度来自另一来源；整组属于明确记录来源的参考组合，不声称同批试样一致测量。",
+    "原表未提供精确温度、三阶常数协方差或完整测量不确定度模型。",
+    "截断到三次应变能只用于小弹性应变；不能据此描述塑性、疲劳演化或任意大变形。",
+    "现有远程模型只使用密度及二阶弹性参数；三阶常数尚未用于 COMSOL 求解。"
+  ]
+}

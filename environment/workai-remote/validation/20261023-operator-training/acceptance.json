@@ -1,0 +1,161 @@
+{
+  "schema": "workai.operator_training_acceptance.v1",
+  "completed_at_utc": "2026-10-23T02:29:59.948493+00:00",
+  "new_physical_geometries": 32,
+  "new_local_fem_solves": 96,
+  "controls_per_geometry": [
+    "linear",
+    "geometric",
+    "material"
+  ],
+  "split_unit": "whole active geometry",
+  "v1_test_reassigned_to_development_train_for_v2": true,
+  "v2_new_validation_and_test": true,
+  "v2_test_now_consumed_do_not_call_fresh_after_tuning": true,
+  "total_training_steps": 10000,
+  "runs": [
+    {
+      "run_id": "aluminum-operator3d-20261023-v1",
+      "steps": 2000,
+      "selected_step": 650,
+      "elapsed_s": 74.2681790229999,
+      "checkpoint_sha256": "130a52654f9d54a084c0084836deaf55b2379e4a6a9f59979a6a463582e73136",
+      "split_counts": {
+        "train": 8,
+        "validation": 4,
+        "test": 4
+      },
+      "full_field_test_error": {
+        "min": 1.0083276693733012,
+        "case_mean": 1.0161669717925192,
+        "max": 1.0271930880399873
+      },
+      "acceptance": {
+        "threshold": 0.05,
+        "held_out_full_fields": false,
+        "held_out_material_increment": false,
+        "held_out_material_2f": false,
+        "sampled_weak_physics": false,
+        "strain_and_positive_J": true,
+        "label_discretization_verified": false,
+        "all_gates_passed": false
+      },
+      "source_snapshot_retained": true
+    },
+    {
+      "run_id": "aluminum-operator3d-20261023-v2",
+      "steps": 8000,
+      "selected_step": 6050,
+      "elapsed_s": 341.28555675600023,
+      "checkpoint_sha256": "fdfeb8b48825230c75488188adfd06c36b7b3a3282f9d5711339eb88f358f6b0",
+      "split_counts": {
+        "train": 16,
+        "validation": 8,
+        "test": 8
+      },
+      "full_field_test_error": {
+        "min": 0.5138656973517882,
+        "case_mean": 0.7239526591097201,
+        "max": 0.9466195866722334
+      },
+      "acceptance": {
+        "threshold": 0.05,
+        "held_out_full_fields": false,
+        "held_out_material_increment": false,
+        "held_out_material_2f": false,
+        "sampled_weak_physics": false,
+        "strain_and_positive_J": true,
+        "label_discretization_verified": false,
+        "all_gates_passed": false
+      },
+      "source_snapshot_retained": true
+    }
+  ],
+  "runtime_counts": {
+    "jobs": {
+      "completed": 175
+    },
+    "studies": {
+      "completed": 12
+    }
+  },
+  "no_training_or_fem_process_active_at_check": true,
+  "discretization_verified": false,
+  "surrogate_enabled": false,
+  "previous_solver_source_and_material_card_preserved": true,
+  "previous_pinn_weight_preserved": true,
+  "previous_refined_artifacts_and_archive_preserved": true,
+  "tests": {
+    "node": 73,
+    "old_training_physics": 5,
+    "new_training_physics": 6,
+    "frozen_weight_reload": {
+      "passed": true,
+      "checkpoint_sha256": "fdfeb8b48825230c75488188adfd06c36b7b3a3282f9d5711339eb88f358f6b0",
+      "selected_step": 6050,
+      "frozen_source_used": true,
+      "cases": [
+        {
+          "case_id": "plate-test-free",
+          "full_field_metric_reproduced": true,
+          "probe_prediction_and_fem_reproduced": true
+        },
+        {
+          "case_id": "plate-test-fixed",
+          "full_field_metric_reproduced": true,
+          "probe_prediction_and_fem_reproduced": true
+        },
+        {
+          "case_id": "pipe-test-free",
+          "full_field_metric_reproduced": true,
+          "probe_prediction_and_fem_reproduced": true
+        },
+        {
+          "case_id": "pipe-test-fixed",
+          "full_field_metric_reproduced": true,
+          "probe_prediction_and_fem_reproduced": true
+        },
+        {
+          "case_id": "hole-test-free",
+          "full_field_metric_reproduced": true,
+          "probe_prediction_and_fem_reproduced": true
+        },
+        {
+          "case_id": "hole-test-fixed",
+          "full_field_metric_reproduced": true,
+          "probe_prediction_and_fem_reproduced": true
+        },
+        {
+          "case_id": "notch-test-free",
+          "full_field_metric_reproduced": true,
+          "probe_prediction_and_fem_reproduced": true
+        },
+        {
+          "case_id": "notch-test-fixed",
+          "full_field_metric_reproduced": true,
+          "probe_prediction_and_fem_reproduced": true
+        }
+      ],
+      "reproduction_not_independent_physics_validation": true,
+      "new_training_steps": 0
+    },
+    "browser": {
+      "passed": true,
+      "run_id": "aluminum-operator3d-20261023-v2",
+      "steps": 8000,
+      "desktop_mobile_layout": true,
+      "offline_report": true,
+      "failed_acceptance_preserved": true,
+      "javascript_errors": [],
+      "post_requests": [],
+      "offline_external_requests": [],
+      "direct_windows_file_open_tested": false
+    }
+  },
+  "source_bundle_sha256": "a279dd4383aa258c95d4a7ea338a32fbbb723603f2e2bbbaea8c2a9331ae0da5",
+  "source_file_count": 137,
+  "all_previous_source_paths_retained": true,
+  "new_remote_comsol_solves": 0,
+  "published_new_website": false,
+  "git_commit_or_push": false
+}

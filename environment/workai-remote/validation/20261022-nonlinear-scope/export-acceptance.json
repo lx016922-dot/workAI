@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "checks": [
+    "Exact allowlist, byte/hash preservation, manifest paths ignored, original tree unchanged, source scripts not executed",
+    "Repeated export creates a new archive without overwriting the first",
+    "Rejects synthetic embedded PEM private material before creating ZIP",
+    "Rejects synthetic embedded XML private material before creating ZIP",
+    "Rejects synthetic Tailscale credential before creating ZIP",
+    "Rejects oversized source before creating ZIP",
+    "Rejects export into the installation directory",
+    "Missing model source produces no archive",
+    "Rejects symlink escape"
+  ],
+  "count": 9,
+  "runtime": "PowerShell 7.6.7 on Linux; Windows execution remains untested"
+}

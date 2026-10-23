@@ -1,0 +1,13 @@
+{
+  "name": "workai-workbench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WorkAI ultrasound workbench backed by the recovered signed COMSOL client",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "node server/index.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:protocol": "node tests/model-protocol-check.mjs"
+  }
+}

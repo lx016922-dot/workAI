@@ -1,0 +1,59 @@
+{
+  "schema": "workai.modal_iteration_acceptance.v1",
+  "run_id": "aluminum-modal-energy-20261023-v1",
+  "training_steps": 1000,
+  "trainable_parameters": 3,
+  "training_and_validation_geometries": 56,
+  "fresh_test_geometries": 8,
+  "new_local_FEM_solves": 72,
+  "remote_COMSOL_solves": 0,
+  "retained_completed_solid_jobs": 319,
+  "active_training_or_FEM_jobs": 0,
+  "scientific_acceptance": {
+    "threshold": 0.05,
+    "held_out_full_fields": true,
+    "held_out_material_increment": true,
+    "held_out_material_2f": true,
+    "sampled_weak_physics": false,
+    "strain_and_positive_J": true,
+    "label_discretization_verified": false,
+    "all_gates_passed": false
+  },
+  "reference_space_passed": 1,
+  "reference_time_passed": 8,
+  "node_tests_passed": 78,
+  "python_physics_tests_passed": 17,
+  "reload": {
+    "passed": true,
+    "checkpoint_sha256": "3f592d72c4a6d1e0109c4ad6d45aa8201d5ca63a08c191319b417770398abcf1",
+    "trainable_parameters": 3,
+    "verified_development_cache_files": 56,
+    "test_fields_and_metrics_reproduced": [
+      "modal-test-plate-free",
+      "modal-test-plate-fixed",
+      "modal-test-pipe-free",
+      "modal-test-pipe-fixed",
+      "modal-test-hole-free",
+      "modal-test-hole-fixed",
+      "modal-test-notch-free",
+      "modal-test-notch-fixed"
+    ],
+    "one_prediction_recomputed_from_frozen_source": "modal-test-plate-free",
+    "new_FEM_solves": 0,
+    "new_training_steps": 0
+  },
+  "browser_checks": {
+    "animation": true,
+    "comparison": true,
+    "training": true
+  },
+  "accepted_for_solver_routing": false,
+  "arbitrary_shape_FE_replacement_achieved": false,
+  "limitations": [
+    "7 of 8 reference mesh checks fail",
+    "initial independent-test momentum residual fails",
+    "adaptive feedback improves four development cases only",
+    "finer reference costs exceed current solver limits for some cases"
+  ],
+  "source_archive_sha256": "ec64e2396a33c478c819bb3ee3d5054d2e335ca2fa5a989e37cd99f5e00e413e"
+}

@@ -1,0 +1,16 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {createHash} from 'node:crypto';
+import {SolidService} from '../server/solid.mjs';
+import {comparePropagationProbes} from '../public/solid-propagation.js';
+import {buildPropagationReport} from '../public/solid-propagation-report.js';
+const [root,evidence,output]=process.argv.slice(2);if(!root||!evidence||!output)throw new Error('Usage: node tools/export-solid-propagation.mjs ROOT EVIDENCE NEW.html');
+const manifest=JSON.parse(await readFile(join(evidence,'studies.json'))),ref=manifest.references.find(r=>r.level==='timecheck');if(!manifest.complete||!ref)throw new Error('Completed three-level comparison required.');
+const service=new SolidService(root);await service.init();const {study}=await service.studies.result(ref.study_id);
+const bytes=await readFile(join(service.studies.path(ref.study_id),'result.json'));if(createHash('sha256').update(bytes).digest('hex')!==ref.result_sha256)throw new Error('Study identity changed.');
+const reference=await service.studies.validation(ref.study_id);if(!reference)throw new Error('Verified numerical sidecar required.');
+const probes=[];for(const rx of study.scene.receivers)probes.push(await service.studies.probe(ref.study_id,{point_mm:rx.point_mm,direction:[1,0,0]}));
+const analysis=comparePropagationProbes(probes),resources={};for(const [key,file] of Object.entries({css:'styles.css',data:'solid-data.js',dispersion:'plate-dispersion.js',harmonics:'solid-harmonics.js',propagation:'solid-propagation.js',viewer:'solid-harmonic-viewer.js',propagationViewer:'solid-propagation-viewer.js'}))resources[key]=await readFile(new URL('../public/'+file,import.meta.url),'utf8');
+const html=buildPropagationReport(probes,resources);await writeFile(output,html,{flag:'wx'});
+await writeFile(join(evidence,'propagation-probes.json'),JSON.stringify(probes),{flag:'wx'});await writeFile(join(evidence,'propagation-analysis.json'),JSON.stringify(analysis,null,2),{flag:'wx'});
+console.log(JSON.stringify({output,bytes:Buffer.byteLength(html),sha256:createHash('sha256').update(html).digest('hex'),study_id:ref.study_id,selected_checks_pass:analysis.selected_numerical_checks_pass,candidate_phase_agreement:analysis.candidate_phase_agreement_within_5_percent,phase_checks:analysis.phase_checks}));

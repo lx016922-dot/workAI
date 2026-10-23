@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec /workspace/workai-remote/bin/workai-pwsh -NoLogo -NoProfile -NonInteractive \
+    -File /workspace/workai-remote/Invoke-WorkAI.ps1 "$@"

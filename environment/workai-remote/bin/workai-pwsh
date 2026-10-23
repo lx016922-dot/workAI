@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+export XDG_CACHE_HOME=/workspace/workai-remote/cache
+export XDG_CONFIG_HOME=/workspace/workai-remote/config
+export XDG_DATA_HOME=/workspace/workai-remote/data
+export POWERSHELL_TELEMETRY_OPTOUT=1
+export POWERSHELL_UPDATECHECK=Off
+mkdir -p "$XDG_CACHE_HOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+exec /workspace/workai-remote/tools/powershell-7.6.7/pwsh "$@"

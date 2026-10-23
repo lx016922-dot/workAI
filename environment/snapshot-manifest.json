@@ -1,0 +1,2199 @@
+{
+  "schema": "workai.github.source_environment_snapshot.v1",
+  "created_at_utc": "2026-10-23T12:49:45.157086+00:00",
+  "repository": "https://github.com/lx016922-dot/workAI",
+  "intended_branch": "main",
+  "scope": "source, environment scripts, configuration examples, and small validation records",
+  "full_machine_backup": false,
+  "source_archive": {
+    "name": "workai-website-20261023-curved-training-final.zip",
+    "sha256": "2bf8bfe4ca5e27e08fd2f7616e2c3fc7f1b68527a4c8c2eda5855bcfdc1202a1",
+    "source_files": 207,
+    "archive_uploaded": false,
+    "unpacked_source_uploaded": true,
+    "modified_source_files": [
+      ".gitignore",
+      "README.md"
+    ]
+  },
+  "excluded": [
+    "client private key and actual connection/identity reports",
+    "platform credentials, environment secrets, and internal platform directories",
+    "virtual environments, installed runtimes, download and package caches",
+    "finite-element field outputs, training datasets, and model weights",
+    "large generated HTML, video, image and other report artifacts",
+    "cloud/VPN configuration state, running processes, and system image"
+  ],
+  "original_environment_files_preserved": true,
+  "credential_scan": "passed",
+  "file_count_excluding_this_manifest": 361,
+  "bytes_excluding_this_manifest": 1978954,
+  "files": [
+    {
+      "path": ".env.example",
+      "bytes": 470,
+      "sha256": "c825f256d2aea1f87524e62f970a532581ac890d1a0f01bd5ee9068969d67866",
+      "category": "project"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 790,
+      "sha256": "d34b7de3c6db4f0ca800f01913003ccfda64e84ecdd34e75d148e9e372279c96",
+      "category": "project"
+    },
+    {
+      "path": "README.md",
+      "bytes": 16079,
+      "sha256": "66af7db510ca15b1477984e29d6cabc27db5eea939482439e7aedd5674868483",
+      "category": "project"
+    },
+    {
+      "path": "archives",
+      "bytes": 1,
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "category": "project"
+    },
+    {
+      "path": "data/materials/aluminum-polycrystal-blaschke2017.json",
+      "bytes": 3357,
+      "sha256": "39102235cd2fae341a277e46aa08573ae2294710c79abd104b10491fe5edef0a",
+      "category": "project"
+    },
+    {
+      "path": "data/research/nonlinear-spatial-reference-20261022.json",
+      "bytes": 379,
+      "sha256": "2475945eb85b756fbc29c596fe0167ccaa6f66f9c22473459feae31a4661d6f9",
+      "category": "project"
+    },
+    {
+      "path": "docs/aluminum-material.md",
+      "bytes": 6854,
+      "sha256": "2d719e9b033b85141e26e7cddcb1f437854de060dd45ed86c4eed1b9d726ad7b",
+      "category": "project"
+    },
+    {
+      "path": "docs/modal-energy-training.md",
+      "bytes": 7422,
+      "sha256": "99cfb332f7578871e51a6ebaf1bfe03abc97c66677cc33cbdaa9d130cba84362",
+      "category": "project"
+    },
+    {
+      "path": "docs/nonlinear-comsol.md",
+      "bytes": 11759,
+      "sha256": "f67fa0eba2cdd61c3cde2fc61f4034c9c906fb93016acd05d9c21b4bb87bc093",
+      "category": "project"
+    },
+    {
+      "path": "docs/nonlinear-guided-waves.md",
+      "bytes": 10454,
+      "sha256": "b1950068582174d43f97df85f16c788afb92514a588d23fdd91ab9004e57b46b",
+      "category": "project"
+    },
+    {
+      "path": "docs/operator-training-3d.md",
+      "bytes": 10605,
+      "sha256": "f76cdeff6bedfe5c13f96ed46766f0e30d9f1fd1cd923f0fdc8673b44203241f",
+      "category": "project"
+    },
+    {
+      "path": "docs/operator-training-improvement.md",
+      "bytes": 11368,
+      "sha256": "2756a9be328f0915bd8381d447de13339ca69b018d8b5354fcfb7ac2e6d47635",
+      "category": "project"
+    },
+    {
+      "path": "docs/physics-training.md",
+      "bytes": 7670,
+      "sha256": "0cc3e1d682edb81110c366385bb167360f59cccc26a24e0e8828c963ca45eb70",
+      "category": "project"
+    },
+    {
+      "path": "docs/recovered-research.md",
+      "bytes": 6465,
+      "sha256": "51d35ee2e100a2150349c9f308f9baac1c39adfefbf738fb42fc5f789ae7332a",
+      "category": "project"
+    },
+    {
+      "path": "docs/rectangular-waveguide.md",
+      "bytes": 5155,
+      "sha256": "6d6b8c134da4cde49c035c7af0b16f5c8019270826862a3efb6a85e73ffd2357",
+      "category": "project"
+    },
+    {
+      "path": "docs/reference/ultrasound-physics-ai-plan.md",
+      "bytes": 26556,
+      "sha256": "cedbeb323b02820c9cf184600adb093d63ead052c29f18fce16cba2cd9c0fbbf",
+      "category": "project"
+    },
+    {
+      "path": "docs/solid-harmonics.md",
+      "bytes": 7424,
+      "sha256": "681e838b36a95830f98086ebd3bb0c5f3b12dea812a2591d0af8f371a60d8137",
+      "category": "project"
+    },
+    {
+      "path": "docs/solid-hyperelastic.md",
+      "bytes": 7271,
+      "sha256": "6628239fa4e59f30f20260f9ee602e947e55f6b560c3a0d3b33aad7848a2fc61",
+      "category": "project"
+    },
+    {
+      "path": "docs/solid-propagation.md",
+      "bytes": 10124,
+      "sha256": "4255054147767e388a52c73dffc94dfcdc6f1bd64dec195a46d972d37a8f5255",
+      "category": "project"
+    },
+    {
+      "path": "docs/spectral-operator.md",
+      "bytes": 11406,
+      "sha256": "c8bdbb5666a6460b418211f23bdfb393cc479b5608827778edb32ca153e08e0a",
+      "category": "project"
+    },
+    {
+      "path": "docs/spectral-reference.md",
+      "bytes": 6138,
+      "sha256": "1595a2cd378a644763b83a2c2674efcee77af2db51573a39a53c72d0aa6c1653",
+      "category": "project"
+    },
+    {
+      "path": "environment/README.md",
+      "bytes": 4670,
+      "sha256": "07706154ae2b81eb765e83a32cf80c2e597e9f559dfec46efbd92a21322fa825",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/attachments/7f0b3536-f377-4521-8dbc-c67e0eaa06f0/volume-protocol-update-20261014-v2.zip",
+      "bytes": 16447,
+      "sha256": "59280383b5713663a56ad383fbf76e9a7f06faba5feb4c35c79f9dc929f6ca38",
+      "category": "small_verified_input"
+    },
+    {
+      "path": "environment/attachments/baee6534-78e8-4723-978c-5d5f211361e3/workai-research-source-20261022-054345-67e7149a.zip",
+      "bytes": 11605,
+      "sha256": "d8c16e7c70183dc86e833fd70b876b7fc2f2469d4c22239e2eff7ded1f854d0f",
+      "category": "small_verified_input"
+    },
+    {
+      "path": "environment/runtime-versions.json",
+      "bytes": 692,
+      "sha256": "29ca046a54cea2473d0cdd135788680d2ca82696765945d8f3e6aad1a4575b30",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/verification/node-tests.log",
+      "bytes": 8952,
+      "sha256": "6b6577685df873c958f343d9b85587ee47b9a8635ce669ef4e653652515ab664",
+      "category": "current_verification"
+    },
+    {
+      "path": "environment/verification/protocol-tests.log",
+      "bytes": 476,
+      "sha256": "6652bf92695b53f70e08e917eebaa1236f1193550ffd35c4030e1df616a9612d",
+      "category": "current_verification"
+    },
+    {
+      "path": "environment/verification/summary.json",
+      "bytes": 740,
+      "sha256": "9da5c1384537b47180545a5efa4d4431a64e347456d5fdfd28ab03d5ae117f91",
+      "category": "current_verification"
+    },
+    {
+      "path": "environment/workai-remote/Get-WorkAIArtifacts.ps1",
+      "bytes": 3052,
+      "sha256": "aff32166f903d0c43b6f1890c812b1e1ad0b7c57a4e87d8413d487cc65929a02",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/Inspect-WorkAIResearch.ps1",
+      "bytes": 451,
+      "sha256": "0ea010e87b304d3f4415ac7a51f15d4486260bbcad07179de413f303cc2f2563",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/Install-NonlinearResearch.ps1",
+      "bytes": 1877,
+      "sha256": "4efd2694b7f73ed50284ed7715bf5713199e34171665773f620cde416be7d753",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/Invoke-WorkAI.ps1",
+      "bytes": 2779,
+      "sha256": "0e618f31128e5ddf6301bc85234b2df7c7b7031f5df35a8d824119a106d03f54",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/New-WorkAIIdentity.ps1",
+      "bytes": 1929,
+      "sha256": "220211fd073a155dbfcd1a6612a6455dee6ac7addda5ea31b2bbe5a75df15193",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/Read-NonlinearProgress.ps1",
+      "bytes": 867,
+      "sha256": "6b66f853b6df8acf269a7a33208604fa7667e73d8e34aad97be18913871fa694",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/WorkAI.Client.Common.ps1",
+      "bytes": 6295,
+      "sha256": "1759729e27f46d7adc71dfc8361cddacb5dc5536b8433d470ae29347b18db691",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/bin/workai",
+      "bytes": 179,
+      "sha256": "1888b5315569750b6523a56c49cdc654a81d381fa98b5808189342998e1ccd44",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/bin/workai-pwsh",
+      "bytes": 394,
+      "sha256": "b1a59cd860123bd6c0b6688fa2bfd70ff7736290e4865ce59bf79e791ce55c75",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/check-client.ps1",
+      "bytes": 15997,
+      "sha256": "15aab5abde9aa27cb1b6cc50660053a1d17a8574077af96dba70d21a14c2e165",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/check-diagnostics.ps1",
+      "bytes": 5459,
+      "sha256": "f81120835ea98066acf91560403f0146f8f1ad9558c33f31dd567b802cbabebb",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/check-protocol.ps1",
+      "bytes": 2177,
+      "sha256": "5d6db25569e38098db35d824c87f86174e1f0d642830b42951d430cb3d538242",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/connection/Http.Common.ps1",
+      "bytes": 8669,
+      "sha256": "091cfcad0077b58903a4e9117fa85d8f56b1d3950350f0b974cfb0acddda9b41",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/connection/server.example.json",
+      "bytes": 347,
+      "sha256": "38e18729a7a52a23b1d2c0d0c3cce73483851fc90b237dd9bea9458eb8255876",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/prepare-environment.sh",
+      "bytes": 5313,
+      "sha256": "87996032ac1f30797b039c8d9b2e24d7f1ecc368013f032a64c4ae96a708136e",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/prepare-website.sh",
+      "bytes": 8657,
+      "sha256": "ac59d44cce5c7b248e338e5e7a80b1be6eef2a701bd64dd48195e897771760ba",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/recovered-research-20261022/Research.Common.ps1",
+      "bytes": 11945,
+      "sha256": "4a20b13f3410cfc37935860a653deca6d4c15cf23fdad109123dc400f7fa8748",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/recovered-research-20261022/Run-ResearchJob.ps1",
+      "bytes": 1590,
+      "sha256": "e6f89c0ecaf0075f3685bcc71a80c1bd62d7faa1c6700ab7563f7cbd855750ef",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/recovered-research-20261022/export-manifest.json",
+      "bytes": 1560,
+      "sha256": "0cfd475a03ecbb3bb8489767d7ccf932cbda05da95031f25de490fbc3823f54b",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/recovered-research-20261022/research-manifest.json",
+      "bytes": 565,
+      "sha256": "c4235517e0c11ff1c1ceac38cafd9628e9a39579c69b2ad834633be55003439e",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/recovered-research-20261022/research-template/UltraResearch.java",
+      "bytes": 19472,
+      "sha256": "ac090340bd65c47240b7954d2a51125b010f18d0e608bed012a6525febacccd7",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/research-export/Export-WorkAIResearch.cmd",
+      "bytes": 431,
+      "sha256": "6b66ee4874382b3b284f2d2375772a01313e8f0e2b5df22f6c142fe62d257194",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/research-export/Export-WorkAIResearch.ps1",
+      "bytes": 6488,
+      "sha256": "2301d1aec6bb311629a1d9cac75f448766c78d9ed1d20036860a5b750263a58a",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/research-export/使用说明.txt",
+      "bytes": 2057,
+      "sha256": "77874e4cb17668f6a8fd668cb3b508fd9e335ce1a7969c81fb133a2ad79a116b",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-aluminum-material/acceptance.json",
+      "bytes": 1690,
+      "sha256": "8a8c48a0b171ae2365f12c6f8dbff3537437bb819060fa3af8f22d3cce760a64",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-aluminum-material/research-browser-acceptance.json",
+      "bytes": 427,
+      "sha256": "f72060e56a0ee969d23b2edc52f4180029af940e20e3313bf0498e6dc7f9c5f5",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-aluminum-material/runtime-acceptance.json",
+      "bytes": 582,
+      "sha256": "8e3d39adccc7eb45b6132808071016a7c271999e9c0d56c8ddcd6ad73df42e35",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-aluminum-material/source-bundle-manifest.json",
+      "bytes": 5124,
+      "sha256": "bd68708fdba24193743ebab39b60048ef987189ba31f5b73225c0527ac7a5eb0",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-comsol/acceptance.json",
+      "bytes": 3199,
+      "sha256": "a4329f3c70c2d4c62500783e7a6bcb1eb6d9d2d218ab2d989c8884040b37109b",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-comsol/comsol-d62800aa89a8478e85d6478acd71d783/browser-acceptance.json",
+      "bytes": 289,
+      "sha256": "739d2f0004e098a5324a78a7f61ac53682066c71bd8ac83f9adf41783371d1ae",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-comsol/comsol-eec8757166b547e38c8cf07ed1754498/browser-acceptance.json",
+      "bytes": 290,
+      "sha256": "698fb0d5941715e770d11092d89cfb867bf716be820c746fb7445d285b9104e6",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-comsol/linear-regression/research-browser-acceptance.json",
+      "bytes": 427,
+      "sha256": "f72060e56a0ee969d23b2edc52f4180029af940e20e3313bf0498e6dc7f9c5f5",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-comsol/nonlinear-browser-acceptance.json",
+      "bytes": 264,
+      "sha256": "6e4aaf5993705d070588c219d982bba46f7465d44b1b3c933d6005e5d78219b2",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-comsol/source-bundle-manifest.json",
+      "bytes": 8704,
+      "sha256": "c12577f77df1eeb49f149e21b820a67cb419376e94de53d0fbb331eb238931bf",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-scope/bundle-manifest.json",
+      "bytes": 4189,
+      "sha256": "f9973edfdbedcde380882a42a85618b138a6e3e3baf3fd494c9e060e4b049f47",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-scope/export-acceptance.json",
+      "bytes": 731,
+      "sha256": "9b1b368a8d10a75fb335c2d83d0d0bd006c025723762f50d6f7da3f57afd2bec",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-scope/model-browser-acceptance.json",
+      "bytes": 318,
+      "sha256": "ccda98f1e69172d8fa34791867ae8cecc8793d4d8f59d399048c7b9df3ee2619",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-scope/physics-ui-acceptance.json",
+      "bytes": 351,
+      "sha256": "f4a1ae665a2e80b688c76b0a934a8eb811addb6a5879c5e46bf17a146f072519",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-nonlinear-scope/本次迁移记录.md",
+      "bytes": 3794,
+      "sha256": "edb2d1d31aaf7a22fd922a189264863acdd412f4032b835db0a57b67fea57911",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-offline-results/browser-acceptance.json",
+      "bytes": 488,
+      "sha256": "8a4c2b1c49735e10354be6e5febecee2e7396168b4bd242048bcdbe4ac9a95ed",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-offline-results/source-bundle-manifest.json",
+      "bytes": 9181,
+      "sha256": "068fb4e8e01e51db9f609c99f9761f478164c68f15e4098ad151b296ed061b73",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-post-publish/verified-smoke-summary.json",
+      "bytes": 635,
+      "sha256": "d9c2a104f8ae36f085d8d706831dc5e1c78aa635963c8ab409f06cdc345f1e4f",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-post-publish/验收记录.md",
+      "bytes": 2617,
+      "sha256": "eebeb32751cfe985072376587f498949d9b587168f550f7556459b4a1dd3a271",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-research-source/ascan-browser-acceptance.json",
+      "bytes": 424,
+      "sha256": "12025d7f2e9ec04a9ca07c9273ba48016ab9c9e86345368cbe68c94bf97292ee",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-research-source/browser-acceptance.json",
+      "bytes": 321,
+      "sha256": "35a3bff4657f8d66ce0965108ff720d804e2edb4b37d528e5a65a287bcaf9089",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-research-source/migration-acceptance.json",
+      "bytes": 1407,
+      "sha256": "491297133b3949ac6f69d8267fb9396fc1f1161560812898f0e1ffebb9e466ce",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-research-source/model-browser-acceptance.json",
+      "bytes": 318,
+      "sha256": "ccda98f1e69172d8fa34791867ae8cecc8793d4d8f59d399048c7b9df3ee2619",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-research-source/research-browser-acceptance.json",
+      "bytes": 300,
+      "sha256": "90f3206e9fd31f88cb0ceb2e0e31688ba6c950767c504c1e4485da41e3aee80a",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-research-source/source-bundle-manifest.json",
+      "bytes": 4230,
+      "sha256": "ed4a9d2f84064b90b082c585980a53a0de7d6e9c651d6bc9bf93a405b36a6ad6",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid/acceptance.json",
+      "bytes": 1390,
+      "sha256": "867447c32f9c2e8a1aa8116d0270996e2f202712255343551fab81e55e38d8fd",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid/browser-acceptance.json",
+      "bytes": 474,
+      "sha256": "f603df699936bd34182a0419207d06413acecb8e0649e0973dbc555e6a092cff",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid/browser-final-acceptance.json",
+      "bytes": 1452,
+      "sha256": "4a49f25634c5188bc70a708dacbdf1faa20c39776d1f0a3f02c43fc0ee2712e1",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid/browser-submit-acceptance.json",
+      "bytes": 531,
+      "sha256": "e8ebedb03d0aa3d83d676028b28c01c4591f1d70cbc4e285fcfdc6aa0175f8c3",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid/cad-fixtures/acceptance.json",
+      "bytes": 648,
+      "sha256": "7ee878a983517bc01511ecd20417f944ea465002025533e941d6045ae49ea73f",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid/source-bundle-manifest.json",
+      "bytes": 14970,
+      "sha256": "4fa428fd4ecdbcf71534eb2b8c63c8d7434b4bfcac8c01069ba5a26b05bcecb1",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-harmonics-f64/acceptance.json",
+      "bytes": 1971,
+      "sha256": "a7776520f79955193ece1d3b51821d5c57f209930bb5bfa6e7bc7d50ebec6408",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-harmonics-f64/browser-float32-acceptance.json",
+      "bytes": 449,
+      "sha256": "d51c512d014356aa118cd5cf75cc1e9ab708204352a5b02fd445e487e5a850ca",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-harmonics-f64/browser-launch-acceptance.json",
+      "bytes": 449,
+      "sha256": "d4177e164fa36f6276a8469bdc7d7b601b008d5d362b0335b01e49cf548aeed9",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-harmonics-f64/browser-readonly-acceptance.json",
+      "bytes": 529,
+      "sha256": "bd62407b0cab9bc20f5a61f6abeb7af2909d30518b2f878ef40f654113eaa9db",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-harmonics-f64/source-bundle-manifest.json",
+      "bytes": 17283,
+      "sha256": "240e18951aa04924b4ec09dcfe82f167df5a8239885bbf7a4a2e5dc8abb0bce6",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-propagation/acceptance.json",
+      "bytes": 1124,
+      "sha256": "dac8a51d16e469f53d81c43e604d2bbc92ab9356b093791fdd0e72b2e040a08f",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-propagation/browser-final/browser-acceptance.json",
+      "bytes": 529,
+      "sha256": "b390de1b972809085a3ae4943d90228aed63bf93b29f4ef670c34d90e403772f",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-propagation/browser-preliminary/browser-acceptance.json",
+      "bytes": 428,
+      "sha256": "139900c76078bc65eda5f768a8a87d7176e864b1f2610b49aca18353017c308b",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-propagation/node-tests.log",
+      "bytes": 7295,
+      "sha256": "185edc9471107c9fbb1cf3068448153d64f42a197ed767df6404e3e7104fc89b",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-propagation/source-bundle-final-manifest.json",
+      "bytes": 18664,
+      "sha256": "15723699de6df6ab1eeb9933d2f5fe26198921707b92ed59d6d2aa5c5d01a9b8",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-solid-propagation/source-bundle-manifest.json",
+      "bytes": 18320,
+      "sha256": "377f72fe9ed0affced12e9863ab76ccd843bd9447bc7ee70eafcd9380f5f1c4f",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-training/browser-acceptance.json",
+      "bytes": 246,
+      "sha256": "d758bcc91daa6dd0232ab942ff4e64c3e69b582eaa096059e930ea44a89426ba",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-training/report-acceptance.json",
+      "bytes": 371,
+      "sha256": "02c52f9495a8e45df46f80be54f161a00285d55760fbc16d862817805bc44cc0",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-training/source-bundle-manifest.json",
+      "bytes": 11468,
+      "sha256": "0634dbd83bc7532fcdafb8942d4b5df916a32831a3edd009882f913f26c385e6",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-training/training-bundle-manifest.json",
+      "bytes": 251,
+      "sha256": "d75e695fc1abdb85020dae5e083bd0af47b6d8cb70c0e29d587e2e5b7686ec39",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-website/browser-acceptance.json",
+      "bytes": 321,
+      "sha256": "35a3bff4657f8d66ce0965108ff720d804e2edb4b37d528e5a65a287bcaf9089",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-website/migration-summary.json",
+      "bytes": 541,
+      "sha256": "4ab0879db26fb9301135e8122c63a7112309ad4e6e4272a56bbe9e9c4b817c90",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-website/model-browser-acceptance.json",
+      "bytes": 318,
+      "sha256": "ccda98f1e69172d8fa34791867ae8cecc8793d4d8f59d399048c7b9df3ee2619",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-website/source-manifest.json",
+      "bytes": 1918,
+      "sha256": "4641cde9f8562af7aacc2fa7ab9265b3859e8f1525ad552e974d4625339c0323",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261022-website/迁移验收.md",
+      "bytes": 3564,
+      "sha256": "4678c6169ceff23cdd894605998c438133370b1048636996ef7ddcb24071aaf3",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/acceptance-before-final-ui.json",
+      "bytes": 9961,
+      "sha256": "dc92c734a7a657c197ac9f44f8bd98e77cdb6a4770f06e55eb29659a44ce3586",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/acceptance.json",
+      "bytes": 10895,
+      "sha256": "dc0876d63fc950e82d46f7c42a5fbf20c67c3e73998ba5d078b88f60e82e28bc",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/browser-comparison/acceptance.json",
+      "bytes": 372,
+      "sha256": "80abf96549359d3e30f3152841a42deb8bc64273a1010574f0a476fb4b33b9bd",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/browser-final-solid-view/acceptance.json",
+      "bytes": 460,
+      "sha256": "15d5b8c5e138f20c2c1ebf86381664412ba39b7960299d791d2af1dd7bc70956",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/browser-hole-admitted/acceptance.json",
+      "bytes": 909,
+      "sha256": "98cea24de7b5746b5adaa93e2ea212d2742cc08c56f400bdac3bcb9858993a85",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/browser-pipe/acceptance.json",
+      "bytes": 909,
+      "sha256": "26822496390c1512bf869832c40f848ba8cdc50ba97c817a72cda692617a9861",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/browser-pipe-admitted/acceptance.json",
+      "bytes": 909,
+      "sha256": "26822496390c1512bf869832c40f848ba8cdc50ba97c817a72cda692617a9861",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/browser-spectral-submit-v2/acceptance.json",
+      "bytes": 437,
+      "sha256": "cce99dcd478b3b2e812dc2285e169116173686fa9e06900bdc26c85538f4b65b",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/browser-submit-hole/acceptance.json",
+      "bytes": 459,
+      "sha256": "6d86303d047dd82c29b47cd898c18e3d801b9c973133f033809535811fde4584",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/browser-submit-notch/acceptance.json",
+      "bytes": 460,
+      "sha256": "ae28a5ff71ea9822f93069257bc3613db8a4ef5d10acc6c8bdb05be3169efcbb",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/browser-submit-pipe/acceptance.json",
+      "bytes": 459,
+      "sha256": "b63383140ad8a2e9c3e65cbb996ed76a1de1b1ed41c5d9c684cda10fa18c5596",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/browser-training/acceptance.json",
+      "bytes": 343,
+      "sha256": "ca9c35f20c656612a9270d29ec45167f1c0aa05b8030a3b346708ecda84c95c4",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/scientific-summary.json",
+      "bytes": 37542,
+      "sha256": "09b418fe3d096b81cba505da2b3407cbcbc3655999cbc98a9367f96d52a3c291",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/source-bundle-final-manifest.json",
+      "bytes": 33340,
+      "sha256": "7a1892fd2d441aaaf3750dd6a533a344f09ee9a55d1bb4871eb2fe85b002cea2",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/source-bundle-manifest.json",
+      "bytes": 33334,
+      "sha256": "96a7d8a38e2ad2fc3e47c49d664b858b801b18814a504c54d0e01563341a0d17",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/training-physics-tests-current.log",
+      "bytes": 104,
+      "sha256": "e8829fd056892abfe4b0d9bfda509c603c1517388f49090593dfa78b01b496f4",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/training-physics-tests-final.log",
+      "bytes": 104,
+      "sha256": "a2c3f4e9ef5713090ef62d61edc8fa0f7cd89f6bb73e0e093420f27d80bb3679",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-curved-training/training-physics-tests.log",
+      "bytes": 101,
+      "sha256": "146b23b9bbdbedacad0390fadcd3c38f6c13773d828d341968858189ec9e2cb5",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/acceptance.json",
+      "bytes": 1974,
+      "sha256": "ef6cef5bd32a01067fd7ca6b4aeb3a7348c54a9139c91936e26d00ffd3e99078",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/artifact-manifest.json",
+      "bytes": 1011,
+      "sha256": "e9dafa5eae8417ccd8e7fd4af987ac4e8b88f99f59b2dc5fb3fc6d384aeb490d",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/browser-animation/acceptance.json",
+      "bytes": 948,
+      "sha256": "71c15a7e8b5d84616938068861a0692f92d495a4d5bf78bb77e0a569881f355c",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/browser-comparison/acceptance.json",
+      "bytes": 377,
+      "sha256": "a14f25a07b512250829a0db76b93811dba47db66915396a5210fb1b3228ecbbe",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/browser-training/acceptance.json",
+      "bytes": 337,
+      "sha256": "52911f324b797d8562cab104a7e17e80490c70f8406ca9363c6ee7d8133fe84e",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/node-tests-escalated.log",
+      "bytes": 8366,
+      "sha256": "ed2a56870369ab9b5462653a8561b98547690b45550c6c51e9a26351e273a2a8",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/node-tests-final-verified.log",
+      "bytes": 8349,
+      "sha256": "4a561cbd961eec36d007165f72c402479448c4f26f04d959554ec6bcde60cc63",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/node-tests-final.log",
+      "bytes": 1040,
+      "sha256": "c3b7938a5bc68bfd11231e53dd0051c9f5a0f8efc9ef6dae1e6d18789563764e",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/node-tests.log",
+      "bytes": 1039,
+      "sha256": "6258b7cb223dd4d5ab573fc721c03c92a75146886563043d9cfe1465c733c433",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/physics-tests-expanded.log",
+      "bytes": 1036,
+      "sha256": "274574039d93e94c6a74b2a43d64b263697954f4eb2398e84f0ca4c3585f99c2",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/physics-tests.log",
+      "bytes": 708,
+      "sha256": "799016ce002290cf044ec526954d890ed48aeb19cf01e75a8e5a0e935e1cfbea",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/python-tests-final.log",
+      "bytes": 3048,
+      "sha256": "a98089a14ffdd150768842472460dcf44244d7b2653388507b0e12f5d20e31d1",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-modal-prototype/source-bundle-manifest.json",
+      "bytes": 27090,
+      "sha256": "598e9e02d133ad7f93b0efbe060265139ddd6b98549518aa06c0f3a5f372057f",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-improvement/acceptance.json",
+      "bytes": 7321,
+      "sha256": "f6737ea2afc41154aacb9adab29bff498f40a8bf440035c03c8c81e72f569d9a",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-improvement/artifact-manifest.json",
+      "bytes": 802,
+      "sha256": "047e812ee7a0733c30c918021eb26d8c9561b46e1836d2b80c3a6609abe5196f",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-improvement/browser-comparison-v3/acceptance.json",
+      "bytes": 375,
+      "sha256": "2a9a81365443109fe43e009255cdde527aa89a8e813ba47894e2ca77cc2fe6bf",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-improvement/browser-comparison-v3-final/acceptance.json",
+      "bytes": 375,
+      "sha256": "2a9a81365443109fe43e009255cdde527aa89a8e813ba47894e2ca77cc2fe6bf",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-improvement/browser-training-v3-restarted/browser-acceptance.json",
+      "bytes": 312,
+      "sha256": "550864c5ec07d1de3172b04575b6717ca5885a2637f88e4aa88b7bcacb23a08b",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-improvement/node-tests-final.log",
+      "bytes": 8168,
+      "sha256": "230a2ba0763d434a8a88d4d097bd02aca65fb1ce25b072f42fab4d9ac1bcdd0c",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-improvement/node-tests.log",
+      "bytes": 8972,
+      "sha256": "a69c4a90695759bd1f3aa0c53b128a971ffd032a0a71a95f81df04d017304045",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-improvement/physics-tests-final.log",
+      "bytes": 2875,
+      "sha256": "93dff5be41fe6a359b67cd6d8d87d5d3946c6a61ad51195e297303f3feaa0dc7",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-improvement/physics-tests.log",
+      "bytes": 1747,
+      "sha256": "73884d6af8b764bf3969ced5287d1d6ce1972758366fa2fbb06dcc9e1ca82714",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-improvement/source-bundle-manifest.json",
+      "bytes": 23591,
+      "sha256": "9573cb6fe6586ec863cd107e413d90e71c1748a6b37671473e9ff365a5d84923",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-training/acceptance.json",
+      "bytes": 5031,
+      "sha256": "f90f2ba8d62f582ae832785e7d94d3c0725671f7a269965b45298d0c05d92783",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-training/artifact-manifest.json",
+      "bytes": 606,
+      "sha256": "33b8f9a86a51288bf9d76281c3e8f31008b214f778e994b8017649e5305732de",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-training/browser-v2/browser-acceptance.json",
+      "bytes": 311,
+      "sha256": "248e5d0a056c5e12f01fc9054a0d8fd46230e3c828411223471ca49aaee98f95",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-training/node-tests.log",
+      "bytes": 7894,
+      "sha256": "3b6bd91ab38c3fa0f5ecb09a7efff229e810987d4d7a9778514e7c313fd5fa3d",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-training/physics-tests.log",
+      "bytes": 2106,
+      "sha256": "e29fe18147e3e86460a6b2d27c4e21d0fd70365986321fa059f3c1cbb4a61d3c",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-operator-training/source-bundle-manifest.json",
+      "bytes": 22244,
+      "sha256": "43c26e25a2a3b9f31ae645ea5676552fdd033c014f1cf0c776e9e5fa977147ea",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-solid-refinement/acceptance.json",
+      "bytes": 2545,
+      "sha256": "d2b2b9ca1488d477ce2f53e8e9f39eda575472301bb24b0c2ae92056d4f8d49b",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-solid-refinement/artifact-manifest.json",
+      "bytes": 627,
+      "sha256": "a7b7a46c3572ea79b838f9f3d80fae6f01ceb8f81a66fd8e3630fc3c3aa184f4",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-solid-refinement/browser-final/browser-acceptance.json",
+      "bytes": 631,
+      "sha256": "580dc56bca8bed3e8a701d330afaeb774af52551b32aee2f5e5a6213422b78e0",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-solid-refinement/node-tests.log",
+      "bytes": 7697,
+      "sha256": "57bd8bea44e2bea0814c89c2dd4ef0fd48a606c76106fcd2394682dd1a5c12f4",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-solid-refinement/physics-tests.log",
+      "bytes": 2205,
+      "sha256": "ab798655a6a09c29ec5296edadc311514709b6fa032ce83bc647c699feca6adf",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-solid-refinement/source-bundle-manifest.json",
+      "bytes": 20401,
+      "sha256": "df923af70ed0e585e62dfe5a40562dbbd9fe41916477bdbd3f786664ba8405b4",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/acceptance.json",
+      "bytes": 5085,
+      "sha256": "7140522e993ed2389ca3f8ec12bd194c70bca270123728195bd024d0f69eb692",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/artifact-manifest.json",
+      "bytes": 818,
+      "sha256": "be647f5e4d7b36d656804d1160e85a76568a181a55dbeb23c897ec3eb28de51d",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/browser-animation-http/acceptance.json",
+      "bytes": 913,
+      "sha256": "0895ee9e6658446e8db2b4d859d394ff4b73d5ea5af27521a0d7d10193879ab2",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/browser-review/acceptance.json",
+      "bytes": 327,
+      "sha256": "102348c5b6bdfa9f959a0340d353372135511a48daf882e46d30ca529aef1bf7",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/node-tests-final.log",
+      "bytes": 8450,
+      "sha256": "6511904b59b3cd7aa896a2f01d9152ad66a9539ba75da1f3b06a562576f7c910",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/node-tests.log",
+      "bytes": 8456,
+      "sha256": "6632d12132e12a406009b10c8ee9981cc53a32e27d45e982518aa1d51e453272",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/physics-tests.log",
+      "bytes": 1020,
+      "sha256": "0ae63ce3cebf24987966648d30339ac62516685c53d188bf65fce02e81a26344",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/python-tests-final.log",
+      "bytes": 2098,
+      "sha256": "3c4be9ed9b56c16feb0ee76a2f146954eca6fff820ed75d5c254bc20db3f7833",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/source-bundle-manifest.json",
+      "bytes": 29642,
+      "sha256": "52d28eaae3e67b02ad363d86abdb7410c9ad000e3e8ca1bc51b7804d875b7d8e",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/summary.json",
+      "bytes": 3126,
+      "sha256": "0cdde7dbd62c8c16be6dced9e36e0c848b1fad86a6aff3549b4ceeed296108ea",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/validation/20261023-spectral-reference/summary.log",
+      "bytes": 3127,
+      "sha256": "c6617cd9ebc4f7d069afbd6730739b6cb8bba538a11a2750dabcf4a8708649e9",
+      "category": "historical_validation"
+    },
+    {
+      "path": "environment/workai-remote/volume-protocol-update-20261014-v2/Update-Volume.cmd",
+      "bytes": 211,
+      "sha256": "8e46df6abf628376cc559c9c366bb08fb66093d47c1e69a3ef0571edd4cb0b94",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/volume-protocol-update-20261014-v2/Update-Volume.ps1",
+      "bytes": 8457,
+      "sha256": "18777b5f2dc17cf9eecca2cd685446c12bc48021d5700ec01072901a7343af10",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/volume-protocol-update-20261014-v2/volume-protocol-payload/Plate.Common.ps1",
+      "bytes": 16618,
+      "sha256": "034976f2c70934c0e4b083aeb16ff8d95b6513dd73b7801961fcc81d4506880b",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/volume-protocol-update-20261014-v2/volume-protocol-payload/Serve-Comsol.ps1",
+      "bytes": 16807,
+      "sha256": "a20e7fe2f3b46ad5433e0946a2965efef530025149573c13782b2afbcb3075e8",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/volume-protocol-update-20261014-v2/volume-protocol-payload/Volume.Protocol.ps1",
+      "bytes": 5719,
+      "sha256": "b6794d76206b20b18e87de66d3ece499fbcd3b2634ae23ed39f2438be37da75c",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/volume-protocol-update-20261014-v2/volume-protocol-payload/manifest.json",
+      "bytes": 670,
+      "sha256": "95c0570b44221bd406e7330e23712e19f15995d7bb28484fe0ece0ac79aede31",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "environment/workai-remote/volume-protocol-update-20261014-v2/使用说明.txt",
+      "bytes": 1745,
+      "sha256": "27473a1b7b3649dca530985b66bfe20dcab33a18456c42f65b82e4006d2a128d",
+      "category": "environment_configuration_and_helpers"
+    },
+    {
+      "path": "modal3d/__init__.py",
+      "bytes": 82,
+      "sha256": "a84383cb02225d33ee80152f88822f19ef217af83e160e2553fd568b16e6dc8c",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/adaptive.py",
+      "bytes": 1682,
+      "sha256": "87640c612ef9282f524431fe4be9234e6530d4ef70df16767c491f0467e0ad2c",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/basis.py",
+      "bytes": 3592,
+      "sha256": "ece6eb1d93957d6cef65033e83c196bbd973ef52553b03abf14426b8e5bdec80",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/cache.py",
+      "bytes": 3930,
+      "sha256": "9bcd614c7aca3288e8a9ac6409399abaf948427fba5e27a7d9ec195f7b1b9fb7",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/differential.py",
+      "bytes": 1854,
+      "sha256": "c8134c47d8821579b9a52ace987226f79725a959362008ae0186e9d70d7ebaf7",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/energy.py",
+      "bytes": 970,
+      "sha256": "7e3993452c43f5455b7f91e830c4fb31e075cb1f46d09889df21b60dc4c06ea0",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/enrichment.py",
+      "bytes": 2420,
+      "sha256": "7daafc03d0ec9d91fb9980a0c97542d9c47726915fb212d0beed7897aff093cd",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/evaluate.py",
+      "bytes": 12522,
+      "sha256": "f1256f2d961e03cb2589f83c03976ed80b0199a807b64ada426a9c709dd9ab8d",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/holdout.py",
+      "bytes": 5010,
+      "sha256": "8fdd0d7f5d5f2c6e69576ece8013d07e6888bd9c4a20a6e09e5f6937adf797a4",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/nonlinear.py",
+      "bytes": 3401,
+      "sha256": "416da87fe98d31fafda681ad39e97477bb40ae4922f93703e235ce51cd3c5e41",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/preflight.py",
+      "bytes": 2578,
+      "sha256": "9853aac32dca6b5e81d0c535eefa43d9fd31cc00f730766c184b81bc1bc9b4fa",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/propagator.py",
+      "bytes": 971,
+      "sha256": "1af260c8c3ed06fc664f30121cf3918c49f131e389dc49a99b4bb1901d25ed0f",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/refine.py",
+      "bytes": 8089,
+      "sha256": "9db62a248d2824f025fd012f74b950dadfe08b497c18ba49286fd8644351431f",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/residual_enrichment.py",
+      "bytes": 2406,
+      "sha256": "3c1001ce976e08649234e7583f8378bbf828fc8030e57579e7121c38e3a75d60",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/response.py",
+      "bytes": 4560,
+      "sha256": "f1cf77182f90e451a0e8aa7bd883c9a135e6d7c58b37132d79c02f17a78d8dfa",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/test_physics.py",
+      "bytes": 5013,
+      "sha256": "65dfb886791c1255cfcea9addf0f2e911ef615b899bb43cc8d6e2c1548cf6c22",
+      "category": "project"
+    },
+    {
+      "path": "modal3d/train_energy.py",
+      "bytes": 5130,
+      "sha256": "bb25da6bc686dadfe495bb18b122e719ff7fc9ac7850ba0747de00e435bf17e2",
+      "category": "project"
+    },
+    {
+      "path": "operator3d/__init__.py",
+      "bytes": 78,
+      "sha256": "01000b66affe5c950ea2a1c9be985a1a7ed5fc9fa076d86cba8306d84c0c2895",
+      "category": "project"
+    },
+    {
+      "path": "operator3d/campaign.py",
+      "bytes": 6670,
+      "sha256": "0a46146043a29be036f53fb44401475ad8c361953124e5c75e63b89786b958ff",
+      "category": "project"
+    },
+    {
+      "path": "operator3d/data.py",
+      "bytes": 7699,
+      "sha256": "56880c4d41aeab5dae369442a9428b2a80563025721dcd57f68d77a3a4744fab",
+      "category": "project"
+    },
+    {
+      "path": "operator3d/expand_campaign.py",
+      "bytes": 5763,
+      "sha256": "d33bd692246a64279f7c502074a7aa3e079c654d3961648ddce12992efa24c85",
+      "category": "project"
+    },
+    {
+      "path": "operator3d/expand_independent.py",
+      "bytes": 6392,
+      "sha256": "3b42ec5c9436612d77edce4427de9ebdb38f011aa15c35bd80e9892d93de35fb",
+      "category": "project"
+    },
+    {
+      "path": "operator3d/model.py",
+      "bytes": 2685,
+      "sha256": "92d31d8dcb72ba5276e2dff9a7a8a430aa52ffe211348a263bc555b9892fdefb",
+      "category": "project"
+    },
+    {
+      "path": "operator3d/physics.py",
+      "bytes": 3394,
+      "sha256": "6bde5b3374d7ce2a4229e2bf7f55da129be4f5bab502aca845a633c5978d3368",
+      "category": "project"
+    },
+    {
+      "path": "operator3d/propagation_model.py",
+      "bytes": 7002,
+      "sha256": "0a0cbc285e60d12b7a9af834fadcad010fabaf6c0d961ae853f710c90a64334b",
+      "category": "project"
+    },
+    {
+      "path": "operator3d/test_physics.py",
+      "bytes": 12641,
+      "sha256": "35aa446365118e15df15f91ccb5dfe02770e15cc2de3efca3f125be1492ab89e",
+      "category": "project"
+    },
+    {
+      "path": "operator3d/train.py",
+      "bytes": 16236,
+      "sha256": "0adfa2111664199f677b460f7a870171daf0174bc8095b70aff53cd1a16ffcd7",
+      "category": "project"
+    },
+    {
+      "path": "package-lock.json",
+      "bytes": 246,
+      "sha256": "b4aa0e947a658e1f390cdf7f29f284938965333d2f962ce055e3065905b0f933",
+      "category": "project"
+    },
+    {
+      "path": "package.json",
+      "bytes": 381,
+      "sha256": "bc8943ca474c170a459a2f9c533191ef1b121e39812b34c2e689be7312708946",
+      "category": "project"
+    },
+    {
+      "path": "public/app.js",
+      "bytes": 30992,
+      "sha256": "5e5d20f9fb0516c938cb104ab2a3208a505a65482b9290ee92e319d1f4be7f63",
+      "category": "project"
+    },
+    {
+      "path": "public/favicon.svg",
+      "bytes": 253,
+      "sha256": "1a025c6d471d16afbb78bf7212f67a41f69cf5c2e0499c5cea58bec28501b998",
+      "category": "project"
+    },
+    {
+      "path": "public/index.html",
+      "bytes": 4367,
+      "sha256": "ae9713a08192af151d6608ef77ce29549d3af7286a7d1cc46fb980d3afde21e3",
+      "category": "project"
+    },
+    {
+      "path": "public/material-ui.js",
+      "bytes": 3064,
+      "sha256": "8f4d57e7403ec407259d6542d10a17efef8b7fa991cf8c13c62a6968e54ac835",
+      "category": "project"
+    },
+    {
+      "path": "public/modal-data.js",
+      "bytes": 678,
+      "sha256": "9edee78bcfa0dd4aa88d1eba2a0b6823f1e36df9620b3e07a32db3bf7ad382ad",
+      "category": "project"
+    },
+    {
+      "path": "public/model-ui.js",
+      "bytes": 23204,
+      "sha256": "4579a10b600b24bda51e4e49e1926c1a5362f4661cb87d50140ef077b555a809",
+      "category": "project"
+    },
+    {
+      "path": "public/nonlinear-ui.js",
+      "bytes": 10716,
+      "sha256": "79d0cc04c274292d88acd260735ab5a11dd7c7a8250820a7ff0d17c6b5fbcf38",
+      "category": "project"
+    },
+    {
+      "path": "public/offline-report.js",
+      "bytes": 9118,
+      "sha256": "22204d2cee5eade5c314a8803090ea7d7d768f04f25602532454e495dd36cdc6",
+      "category": "project"
+    },
+    {
+      "path": "public/operator-comparison.js",
+      "bytes": 9342,
+      "sha256": "ca3fe7aa2872189bd5fadf86e2de638a387905fe0da164b46876984a8aa78ef4",
+      "category": "project"
+    },
+    {
+      "path": "public/plate-dispersion.js",
+      "bytes": 1677,
+      "sha256": "4b08ad85a5dfdfc2e9ee335cbdaab492366ab5658cca5c67b806a760ed6e0c2a",
+      "category": "project"
+    },
+    {
+      "path": "public/research-ui.js",
+      "bytes": 8214,
+      "sha256": "9fd51f4cc5a5814f26081ba012804d821b5c7f34aa676e7164ddd0bd5c62e6a7",
+      "category": "project"
+    },
+    {
+      "path": "public/solid-data.js",
+      "bytes": 6558,
+      "sha256": "3acf9ee43fd12617d7b1d210c921b88e3807a0b1cae65bc832456e37f94eb317",
+      "category": "project"
+    },
+    {
+      "path": "public/solid-harmonic-report.js",
+      "bytes": 2755,
+      "sha256": "a0d90b6173987659123bdcc0159b83513d9f974a7b0c061444d92fc8f14beee4",
+      "category": "project"
+    },
+    {
+      "path": "public/solid-harmonic-viewer.js",
+      "bytes": 10802,
+      "sha256": "dd642084f1c52ad2a662f39ae1c1f5c1d517d81c5ae0ae4b6cdc66abb5ed185e",
+      "category": "project"
+    },
+    {
+      "path": "public/solid-harmonics.js",
+      "bytes": 6042,
+      "sha256": "c85921d3501469597b4d319f82e3459353ffac6f351bcc225558e1e55a8bb037",
+      "category": "project"
+    },
+    {
+      "path": "public/solid-propagation-report.js",
+      "bytes": 2553,
+      "sha256": "7be0253a06a1ad3d7b5fcd6ee609fd00d993f11202b16db54fd677a7eae9ff59",
+      "category": "project"
+    },
+    {
+      "path": "public/solid-propagation-viewer.js",
+      "bytes": 6730,
+      "sha256": "75decc6b80c787ea3248c2925e6ad877ec9b4641ea2624d329920473d2369092",
+      "category": "project"
+    },
+    {
+      "path": "public/solid-propagation.js",
+      "bytes": 7418,
+      "sha256": "094e0d052fb18f839a6428b9a8f474b1945cd0a5fb5d9839e4386aec191ed89a",
+      "category": "project"
+    },
+    {
+      "path": "public/solid-study-ui.js",
+      "bytes": 9296,
+      "sha256": "8289c506bb8cc02cc3b555301bd26405521627feb5071ae9ae6bdb176d87c01b",
+      "category": "project"
+    },
+    {
+      "path": "public/solid-ui.js",
+      "bytes": 14719,
+      "sha256": "cdfe275c153ce67a3ad70d0bc89e3830882630857157502deace7802fc93c365",
+      "category": "project"
+    },
+    {
+      "path": "public/solid-viewer.js",
+      "bytes": 16686,
+      "sha256": "11a1932d1db8cf5751bdd465e1d1d0636a389570bb27a0247062dc1c59cc532a",
+      "category": "project"
+    },
+    {
+      "path": "public/spectral-data.js",
+      "bytes": 5837,
+      "sha256": "8f7eb7a8d8dc3e46b8f947c0b58488ca4b06b301c4bcb0655f3b43b651d2f248",
+      "category": "project"
+    },
+    {
+      "path": "public/styles.css",
+      "bytes": 19833,
+      "sha256": "e9a3da2dbccc186f15661082d18177fa2e8ea14b0b465c6ffd976b70f0085767",
+      "category": "project"
+    },
+    {
+      "path": "public/training-ui.js",
+      "bytes": 26615,
+      "sha256": "db5f539e27e734d871d47c2e049971871c7571cd358a87e30f67c3a424efa80b",
+      "category": "project"
+    },
+    {
+      "path": "public/waveform-ui.js",
+      "bytes": 4816,
+      "sha256": "e25076ad62eadf9833193fea4552ae319f180d379406e918080434bd80289a46",
+      "category": "project"
+    },
+    {
+      "path": "server/Invoke-Plate.ps1",
+      "bytes": 3157,
+      "sha256": "2d6456c649c41ce88479a45402f81962091084db880c9467212dc9ba43e1259d",
+      "category": "project"
+    },
+    {
+      "path": "server/Invoke-Research.ps1",
+      "bytes": 3917,
+      "sha256": "c44209b2ad282cb6ce98a9efbee325269c691fc26e12fca8921ac2997c0737bc",
+      "category": "project"
+    },
+    {
+      "path": "server/app.mjs",
+      "bytes": 19259,
+      "sha256": "7a330656d09b8eda21ea64bd7a9de7cb67d1727fd6a86ac3106dfe315020ed27",
+      "category": "project"
+    },
+    {
+      "path": "server/comsol/UltraResearch.java",
+      "bytes": 33491,
+      "sha256": "528b3b8190866b8f1fbe05f27d093370a2e75c9288e8d91aaf654a8b39a09513",
+      "category": "project"
+    },
+    {
+      "path": "server/comsol/model.json",
+      "bytes": 352,
+      "sha256": "ee3ac3982cc92aa8db45b3d7a76e039d0efee88cbd6e80599448047877d3c2e6",
+      "category": "project"
+    },
+    {
+      "path": "server/index.mjs",
+      "bytes": 3285,
+      "sha256": "4b2048f463c520b93611b200908fc04ef0c7d184443ec42893efb5e3b6a4dd18",
+      "category": "project"
+    },
+    {
+      "path": "server/materials.mjs",
+      "bytes": 1689,
+      "sha256": "28497b5ab7574c87e8795dc13136a80f3cdfa481a7c1b081faf2ec8a6b5b3f4c",
+      "category": "project"
+    },
+    {
+      "path": "server/models.mjs",
+      "bytes": 4494,
+      "sha256": "878daf03f128da4c470c28cdaec4c28653914bd59b9402bc40c0a51e39fc6c5c",
+      "category": "project"
+    },
+    {
+      "path": "server/nonlinear.mjs",
+      "bytes": 4491,
+      "sha256": "8402fb063c8984d1134afda1918a22f6729f8b00abd7fcbb010b078fadd7ae63",
+      "category": "project"
+    },
+    {
+      "path": "server/physics/convergence.mjs",
+      "bytes": 3918,
+      "sha256": "2af7e1b12817c8c225d2083a314e8d36384724af161a8ba789e464bb0992303e",
+      "category": "project"
+    },
+    {
+      "path": "server/physics/harmonics.mjs",
+      "bytes": 6768,
+      "sha256": "7322798e76091be007faceaf22bf7c8661ab1479bdc8472eda994d8b4c3eccbf",
+      "category": "project"
+    },
+    {
+      "path": "server/physics/murnaghan.mjs",
+      "bytes": 3339,
+      "sha256": "869259efaa363500c1b5e4bc8b831dfb63388a5773acb7e84e3207b00dfeb657",
+      "category": "project"
+    },
+    {
+      "path": "server/remote.mjs",
+      "bytes": 9709,
+      "sha256": "2b7e6ad0c2e17a4c74f40c3a654f98586d95e28abd6a00d509c041952d74f96f",
+      "category": "project"
+    },
+    {
+      "path": "server/research-results.mjs",
+      "bytes": 1725,
+      "sha256": "03f2da877b551b8234a83433a61961d2a7c512d949d52caabe0c1c401e139533",
+      "category": "project"
+    },
+    {
+      "path": "server/research.mjs",
+      "bytes": 13903,
+      "sha256": "f48fc9accac751faea309d1eff06850b4576b8e251bf56c9ce92a38a61328a95",
+      "category": "project"
+    },
+    {
+      "path": "server/solid-studies.mjs",
+      "bytes": 9539,
+      "sha256": "ba315f664950f038c0d5074cec69ee1002adb1874e1ddcbb7a95049e6e5c6179",
+      "category": "project"
+    },
+    {
+      "path": "server/solid-validation.mjs",
+      "bytes": 1800,
+      "sha256": "c5956cb2aa25455256915b57bf3bee08c5e171343ae3f3df7d09216f9182ac35",
+      "category": "project"
+    },
+    {
+      "path": "server/solid-waveguide.mjs",
+      "bytes": 5556,
+      "sha256": "419f25c5419d6ed6ff36c72c05dadbd239dc3b9badd8ebac2ce1b46e385d93c1",
+      "category": "project"
+    },
+    {
+      "path": "server/solid.mjs",
+      "bytes": 7247,
+      "sha256": "94a47273c419d235554935263f3bbcb2ce6f9a1c8800b888e8544dd1790eba8b",
+      "category": "project"
+    },
+    {
+      "path": "server/spectral.mjs",
+      "bytes": 5390,
+      "sha256": "44d4f8d97e90a94c3cee056dde3088d58fbfe10b3645654e5cc6cad626f95798",
+      "category": "project"
+    },
+    {
+      "path": "server/store.mjs",
+      "bytes": 2428,
+      "sha256": "fe1f550ecd6ffdd1e2e5d4acb223ad65077dc2d4c8565aefb30e449858876971",
+      "category": "project"
+    },
+    {
+      "path": "server/training.mjs",
+      "bytes": 11946,
+      "sha256": "b24b642435807fd08c12d17f9769ab390f016daa02e803b865e16ea6084cabf0",
+      "category": "project"
+    },
+    {
+      "path": "solid/__init__.py",
+      "bytes": 83,
+      "sha256": "ecd0821c2d0a96f75782cdfd9e0eb1faddfc32563f4ba612f9abfeee172b414e",
+      "category": "project"
+    },
+    {
+      "path": "solid/cad.py",
+      "bytes": 3676,
+      "sha256": "9c7a57d56a13d2b13bcd499b0bf4de9bdad031c46d8dcdccf4974a8ba56496d9",
+      "category": "project"
+    },
+    {
+      "path": "solid/cli.py",
+      "bytes": 1538,
+      "sha256": "dc07fdf4072c240ed278712c971d9fc6d564b5b21d5abd39b6df139ace6ada3c",
+      "category": "project"
+    },
+    {
+      "path": "solid/fem.py",
+      "bytes": 5591,
+      "sha256": "ed08e7d663119a5f941088fec05af16103af6c3bba7def80398a218d28ba1c12",
+      "category": "project"
+    },
+    {
+      "path": "solid/mesh.py",
+      "bytes": 6377,
+      "sha256": "6efbce80655fc72a79b6f535937817637e8d12dff4df41438f17f291deb643f1",
+      "category": "project"
+    },
+    {
+      "path": "solid/prepare-solid.sh",
+      "bytes": 1165,
+      "sha256": "24d001a29a96cc59ead214b6506422fa886e18fe5e314156fd56f8779423dfe6",
+      "category": "project"
+    },
+    {
+      "path": "solid/requirements.txt",
+      "bytes": 80,
+      "sha256": "6ad0c9771b117a28e5d3a46d6b714ac21389a8f3ab4e019cfd9bb51699cac7d1",
+      "category": "project"
+    },
+    {
+      "path": "solid/schema.py",
+      "bytes": 6424,
+      "sha256": "1c8aed750e20d08ec372bd5e964441c90e9804c01f018de9be59b9b68308d92e",
+      "category": "project"
+    },
+    {
+      "path": "solid/study.py",
+      "bytes": 4045,
+      "sha256": "ff8c6585fbc1a13b25f7fb08e6c4cdb66686630d32a25c7474647b3adc4aa47a",
+      "category": "project"
+    },
+    {
+      "path": "solid/test_physics.py",
+      "bytes": 5969,
+      "sha256": "a9d97839de2e36c63ef693e33bb1a6d356889c95035cbf3d0deced8ed31da0ab",
+      "category": "project"
+    },
+    {
+      "path": "solid/worker.py",
+      "bytes": 7377,
+      "sha256": "f63db75f768fac8fa8f857e1ab0baf50d01318c053b0c68f6b8f1a988530f562",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/__init__.py",
+      "bytes": 79,
+      "sha256": "a07d5f61dba5b9dbb856f83346b4c82e036d710eab9b5296f843925d8c278ad3",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/admit.py",
+      "bytes": 9043,
+      "sha256": "84891388d708baf1b7244a6511590f8978f6a26e914535b85d5f2a068cdba27d",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/campaign.py",
+      "bytes": 5214,
+      "sha256": "e7d8bf3fde5ca936d45011e2d2659da2d4f99c42e49b1095d46df88bad69b617",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/compare.py",
+      "bytes": 6997,
+      "sha256": "d51fe34df4d3e4f10e8b9dee9eae7575dea8e247397d626b0a4706cae4f02756",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/curved_mesh.py",
+      "bytes": 8092,
+      "sha256": "549202a44b1f1acbd7eedc4fe1c565f245c305972fdf96a8d9e4cfba8d97e5e4",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/curved_solver.py",
+      "bytes": 1755,
+      "sha256": "7ecad180e9a2433d6a517fc0498672c99432e2af3a89a0fd34fb944073378077",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/dataset.py",
+      "bytes": 7657,
+      "sha256": "a68394ada56984c93db6ee1689e2f5ec51970fb7b64011827515902f71202c5e",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/field_compare.py",
+      "bytes": 5494,
+      "sha256": "20bc83b590a7a07b85099c9b5a0043d1a48103d5020df09e03c40834ea4a9921",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/implicit.py",
+      "bytes": 7627,
+      "sha256": "a7b337fb65349d5853fb119349eec4c2a2e2b70404a54dae9bbdbffa766b7e8f",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/mesh.py",
+      "bytes": 6299,
+      "sha256": "258bb3e36208aa6c20490280ab1ff256d1dbe29032f5f9ac48af2f86b556f828",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/result.py",
+      "bytes": 2774,
+      "sha256": "9a6f17f1e4d3e45fb86dc3394fa9d4d3a1800e9590c3d959d2af8076c2b824c2",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/solver.py",
+      "bytes": 6804,
+      "sha256": "dc2459193e9e70a8c012a776c6c7bcf1d9162d391f23de20a6c278825935e160",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/summarize.py",
+      "bytes": 4842,
+      "sha256": "14256bbb60f06aab04d4bf1c02d61d8850fe2388be90b79a577cec06cce55108",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/test_curved.py",
+      "bytes": 3067,
+      "sha256": "aa56af769fcac50fba35dd499ef0beed86aa3674b1a7f9470a0704a52c7cbcd6",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/test_implicit.py",
+      "bytes": 2037,
+      "sha256": "18ba34e243188ab5a4ef8395704fd8efe36bfe931e099c21c9b5f66bea1b9218",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/test_physics.py",
+      "bytes": 5632,
+      "sha256": "5c2c572420dbaaaff80b93e62f556021b9d24fa9d895b315093cf8ab4e57542b",
+      "category": "project"
+    },
+    {
+      "path": "spectral3d/worker.py",
+      "bytes": 4319,
+      "sha256": "0dfce6190701b39d0d5ce1cd2747e05efa09b224dbf56422d1c7a4c8fe3cd4a0",
+      "category": "project"
+    },
+    {
+      "path": "spectralop/__init__.py",
+      "bytes": 84,
+      "sha256": "07696ad04a27d656e7a63b3c7346acd3d608f0a6fc5b2972a359ce8b20a2f9be",
+      "category": "project"
+    },
+    {
+      "path": "spectralop/data.py",
+      "bytes": 7102,
+      "sha256": "8248ca38d6c53965919962212110d4d5dc302f554467ae6f90624267322470fb",
+      "category": "project"
+    },
+    {
+      "path": "spectralop/physics.py",
+      "bytes": 4227,
+      "sha256": "62a9ee1cc86dd799764ea3215dc29ec0b25dad15213dbd9e9fbb7d96212edbc6",
+      "category": "project"
+    },
+    {
+      "path": "spectralop/replay.py",
+      "bytes": 4439,
+      "sha256": "681e2e63bbd95bafe5d174b52adafb9c89cdd79ca0213a572813b4eb7229849d",
+      "category": "project"
+    },
+    {
+      "path": "spectralop/test_physics.py",
+      "bytes": 4743,
+      "sha256": "140d3c1e8decfa8898b102541a3e21dc5cf7e246fe19d7c720f3f3bd74328b6d",
+      "category": "project"
+    },
+    {
+      "path": "spectralop/train.py",
+      "bytes": 12930,
+      "sha256": "5342bc014544526e8859e5d0090d4d7886f3ebc46f62892b66c70be97accaf66",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-modal-training.py",
+      "bytes": 3557,
+      "sha256": "71e6bdeac1248aa7b0a5667b1fc6b52f8918b77ed4fe87defd06586cf1ddf756",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-modal.py",
+      "bytes": 5392,
+      "sha256": "83310c2844221d193e6480916062f266aabfc5f19855c885acab1289fc081846",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-model.py",
+      "bytes": 5777,
+      "sha256": "e855369b97bc025896a0a482346e61bad1b47b0a6820d64315518b5ed1f2e1d6",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-nonlinear-results.py",
+      "bytes": 3685,
+      "sha256": "d6090c42502a5a5317ce78d7ef7a10a93de4a3d6ae814d28a73e9d1d0d700885",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-nonlinear.py",
+      "bytes": 5572,
+      "sha256": "94b2260f0a264b511e4d8b91fd26792564ad3127e7a5bd99c56eba7be3e87bd5",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-offline-results.py",
+      "bytes": 5351,
+      "sha256": "5f6057f48d91895ffe13d1c3fb367dff50e89b922cfb0a1e9135b1b1861c5c27",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-operator-comparison.py",
+      "bytes": 5105,
+      "sha256": "c13cadb0afad6ad90a47337946cbf8c9a78e1bb0a4731a1200f5aaa3e40aa8f8",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-operator-training.py",
+      "bytes": 3769,
+      "sha256": "69a5f31e24e203fa6ad8ecb7e8d086933553b2849025e8bfa12cfbbb89dff36f",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-research-results.py",
+      "bytes": 3031,
+      "sha256": "b66721b9cd32821a653bf7f0fa1ae5d7667a145be9dd3c00cfabcf88af3356c8",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-research.py",
+      "bytes": 9165,
+      "sha256": "ef6886f36df5852a8a3df4ee86a99f8212689c2e195e33de266c3a15de790bb9",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-smoke.py",
+      "bytes": 6170,
+      "sha256": "1a0237b2a2808f96070f583bdf983983eb2a1fdb0daaa2f9ee5ee45a1348cd33",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-solid-harmonics.py",
+      "bytes": 8987,
+      "sha256": "633ccf0403b4bc8d506ea176d0ad5fef1d862437679c36f5eed67f0856955328",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-solid-propagation.py",
+      "bytes": 9461,
+      "sha256": "b92a925c30acf96465892fadf235ec42af861e9a8ab7cad92e72eb57a40821be",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-solid-submit.py",
+      "bytes": 3705,
+      "sha256": "c7800c9ed84b1828ef7f039ecbb93b0c33fbd53bf462992da857cb8457ad1885",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-solid.py",
+      "bytes": 6204,
+      "sha256": "f1194c9039ae9043f4855e4bad114b79c97141ea3c756ec639e441c35a56a461",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-spectral-review.py",
+      "bytes": 5319,
+      "sha256": "8522b2ccf3a09933721396fc80ebd69dc901c7b091c3e760cf7254b1d146ce3f",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-spectral-submit.py",
+      "bytes": 6854,
+      "sha256": "0b888da0de538ef0c6cfa03b83ee0b09dc1238563efaf441910509de452044f7",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-spectral-training.py",
+      "bytes": 3516,
+      "sha256": "574a1e5dcffdd15de634a29c447373dddf4ec52a64ca534b97ef95fcce450e04",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-spectral.py",
+      "bytes": 7425,
+      "sha256": "c286d387a767c985e5681f2106e412650c9d49510335bd92be84828b3a4663fb",
+      "category": "project"
+    },
+    {
+      "path": "tests/browser-training.py",
+      "bytes": 2807,
+      "sha256": "6b558664153e4ac0e7b5cdbe24fa17dfab4fa9b3c6ecd8f76f6b5ea24d716799",
+      "category": "project"
+    },
+    {
+      "path": "tests/materials.test.mjs",
+      "bytes": 6695,
+      "sha256": "62ec4a95b633701c46a69dac4a9b7f2823cb4b4c1ea89e3575a171889676306c",
+      "category": "project"
+    },
+    {
+      "path": "tests/model-protocol-check.mjs",
+      "bytes": 2364,
+      "sha256": "c1501413d28c53e0479595b9b77ae53739e585ae6377b6d5d96fd7040ef07268",
+      "category": "project"
+    },
+    {
+      "path": "tests/models.test.mjs",
+      "bytes": 5472,
+      "sha256": "48668b6bd5a3c405c7c5e9d7c18c982f72a957c8fa5807aa0aae45b9e82a601f",
+      "category": "project"
+    },
+    {
+      "path": "tests/nonlinear.test.mjs",
+      "bytes": 11792,
+      "sha256": "6e644a7513da6a3cab713ac1b6e065677ac5c31d39612307e169a5b92b9f7e0c",
+      "category": "project"
+    },
+    {
+      "path": "tests/offline-report.test.mjs",
+      "bytes": 2870,
+      "sha256": "cfa798f99d5e81034eb3ab5f844fb1ddea8e064b011398c553bed0ac1e552ceb",
+      "category": "project"
+    },
+    {
+      "path": "tests/operator-comparison.test.mjs",
+      "bytes": 2424,
+      "sha256": "a5a6412c04d9248785bae687e4e14d989db09d5303bd2bd60cee15281dd304bf",
+      "category": "project"
+    },
+    {
+      "path": "tests/research.test.mjs",
+      "bytes": 9960,
+      "sha256": "4ab258f2e5fe7de18b257f4fe10a3b3915c439174cffc8bb7394e936dc63c821",
+      "category": "project"
+    },
+    {
+      "path": "tests/solid-harmonics.test.mjs",
+      "bytes": 7756,
+      "sha256": "14e9dd039a8c636f8ee2e937c5f82ac2c225766bbdecb5e7d9fea737726fa57d",
+      "category": "project"
+    },
+    {
+      "path": "tests/solid-propagation.test.mjs",
+      "bytes": 6738,
+      "sha256": "21718c3f9e1e5bdcbcbf89f3afee44ba22d8ee776719903cdd0582418d7a0c70",
+      "category": "project"
+    },
+    {
+      "path": "tests/solid-waveguide.test.mjs",
+      "bytes": 3869,
+      "sha256": "341b79f0bb054ae044875b543e67ae7cdbf5671203471e0382f0ffaa81554b63",
+      "category": "project"
+    },
+    {
+      "path": "tests/solid.test.mjs",
+      "bytes": 7131,
+      "sha256": "29f0df0c5e1365aeeb29ddfa0d5e6e6604e45d5b68496dd07a4303b286bcccc0",
+      "category": "project"
+    },
+    {
+      "path": "tests/spectral-service.test.mjs",
+      "bytes": 4032,
+      "sha256": "3da7bc597b430b8921604f9582a260b1705ce6c2bacbdd5ea3fb37252d68ad44",
+      "category": "project"
+    },
+    {
+      "path": "tests/spectral.test.mjs",
+      "bytes": 2221,
+      "sha256": "dc6c3d5e32810a04d7304a1b584d90ae25aa49d7750209efd90f524bdd48b502",
+      "category": "project"
+    },
+    {
+      "path": "tests/training.test.mjs",
+      "bytes": 10338,
+      "sha256": "f427c80eaab2b7fe6916f5771edddab330d4d677c57aae8448bf19620c9df768",
+      "category": "project"
+    },
+    {
+      "path": "tests/workbench.test.mjs",
+      "bytes": 11062,
+      "sha256": "bbe3686d90923049b445bc46d9a8930a5d1a81f02203bb2f99bd833c20418f67",
+      "category": "project"
+    },
+    {
+      "path": "tools/build-nonlinear-model.py",
+      "bytes": 17341,
+      "sha256": "281397bc5c927f77ccfdaf0aeaa1e3ca3df6e52084708c1470f7aef77e429dde",
+      "category": "project"
+    },
+    {
+      "path": "tools/bundle-source.py",
+      "bytes": 2032,
+      "sha256": "a11a43ba94b96d5598726392ac57eb959fc61a110e63a177bfecfe496cd1c7c6",
+      "category": "project"
+    },
+    {
+      "path": "tools/check-spectral-forces.py",
+      "bytes": 1522,
+      "sha256": "ad79e169a6eb0e229cd9630e229aa9c80184ba795bd0496c4f52bc41505facc6",
+      "category": "project"
+    },
+    {
+      "path": "tools/compare-waveguide-field.py",
+      "bytes": 8527,
+      "sha256": "f63684f6cfbf011bc95c7080a30bfa8de99c7b6c4d309def08105fe5525d0c2f",
+      "category": "project"
+    },
+    {
+      "path": "tools/diagnose-operator3d.py",
+      "bytes": 3042,
+      "sha256": "25c8ae300ac5c68b6617f62129ef841d1c6ca6d16dbe60a54bdb9dc5eb544967",
+      "category": "project"
+    },
+    {
+      "path": "tools/diagnose-reference.py",
+      "bytes": 3750,
+      "sha256": "67ffecd18b21ce18b8bb390a99abf1c012125cb02783a5ebe23c74aa19602d7a",
+      "category": "project"
+    },
+    {
+      "path": "tools/export-modal-result.py",
+      "bytes": 5607,
+      "sha256": "9c221612125e3c6eadc3e8f5053a9ea8af36712ab133f5cea1a3d7e65d6c4884",
+      "category": "project"
+    },
+    {
+      "path": "tools/export-offline-results.mjs",
+      "bytes": 733,
+      "sha256": "3ba3dbdbaaa1788527896d69b3d8405f0f10bae0204f07c7a3209f90daa94da6",
+      "category": "project"
+    },
+    {
+      "path": "tools/export-operator-comparison.py",
+      "bytes": 4642,
+      "sha256": "002dcc5ab05f9d37c28aee8c2af4e25ce4e3ba9eca7ee3497fed617018eb3707",
+      "category": "project"
+    },
+    {
+      "path": "tools/export-solid-harmonics.mjs",
+      "bytes": 952,
+      "sha256": "50ae2cac665b2daf86fedfb63ecdf8e17413e7e47d543b0f3a90a834700bc923",
+      "category": "project"
+    },
+    {
+      "path": "tools/export-solid-propagation.mjs",
+      "bytes": 2331,
+      "sha256": "792842d8f04095ba60807ca32f57e0a98f7071d6a19cb7ac6f2a2f145313f5eb",
+      "category": "project"
+    },
+    {
+      "path": "tools/export-solid-result.mjs",
+      "bytes": 3766,
+      "sha256": "10701d8189ccb4f3b49126264523be0bd89cb33e437d20a5bbd1f125dff17ec6",
+      "category": "project"
+    },
+    {
+      "path": "tools/export-spectral-result.py",
+      "bytes": 7819,
+      "sha256": "50a44412dd2d3c46a4a7fb08491fa79941eacc7c94425d0cf928bd91e1fd44eb",
+      "category": "project"
+    },
+    {
+      "path": "tools/export-spectral-review.py",
+      "bytes": 5341,
+      "sha256": "193b50f3b6896fe56b7f7b1e0fdfee5538be02e14e92933d1a4b5388b189bf0a",
+      "category": "project"
+    },
+    {
+      "path": "tools/export-training-report.mjs",
+      "bytes": 3228,
+      "sha256": "acd3a96154da3bb91769d8b843aab5167bacd8d6420b16ced648a50436ede7b7",
+      "category": "project"
+    },
+    {
+      "path": "tools/link-solid-harmonic-validation.mjs",
+      "bytes": 1254,
+      "sha256": "48b2e13cc711216b690c0570ea96b35724870886baba6e40bc5b8eae687accc8",
+      "category": "project"
+    },
+    {
+      "path": "tools/link-solid-validation.py",
+      "bytes": 2081,
+      "sha256": "18664b436be00e55b6781d87f04e3b87c9942cf60a965ea5d975b299d266868c",
+      "category": "project"
+    },
+    {
+      "path": "tools/link-waveguide-reference.mjs",
+      "bytes": 1356,
+      "sha256": "96d6e1964f8369f2eedcf32e2c6c6aac55f80a43733eb2fedb2798b39eb58f80",
+      "category": "project"
+    },
+    {
+      "path": "tools/local-report-server.py",
+      "bytes": 1314,
+      "sha256": "58ff5414974f8eb07025ed099aacd9282f84945af4d00bc154634ce5913fffbc",
+      "category": "project"
+    },
+    {
+      "path": "tools/render-solid-animation.py",
+      "bytes": 3356,
+      "sha256": "0193cc8a63fd990f73df6ad13050acd52c81c80eeb3d9c302184b477900033f3",
+      "category": "project"
+    },
+    {
+      "path": "tools/review-modal.py",
+      "bytes": 5543,
+      "sha256": "ee287e1946b6a8e1cb4a20bebe1df04e44c20c6f29e89046456687447423ee67",
+      "category": "project"
+    },
+    {
+      "path": "tools/review-operator3d.py",
+      "bytes": 5812,
+      "sha256": "3d0b2d19741e498757a22ac2b20908785502650755bd8c4d3889db1d64f2d619",
+      "category": "project"
+    },
+    {
+      "path": "tools/review-solid-harmonics.mjs",
+      "bytes": 4905,
+      "sha256": "a6641cefa2e3156c5d20e0f5f552007e485ee00281dab8f74565cfc648416aa5",
+      "category": "project"
+    },
+    {
+      "path": "tools/review-training.py",
+      "bytes": 4818,
+      "sha256": "99b3c7846ac459571d66f4dfdd725bfa855ac60c72aa0d39259ec1e8699fb797",
+      "category": "project"
+    },
+    {
+      "path": "tools/run-solid-harmonic-validation.py",
+      "bytes": 5332,
+      "sha256": "b01357ecf70e4c1f79ecc3a65514fefb0cc32d09f39426361039a4171a4dcfd5",
+      "category": "project"
+    },
+    {
+      "path": "tools/run-waveguide-dispersion.py",
+      "bytes": 3137,
+      "sha256": "bca8ba543cea314e5566899ba05d386c8d677cf4147c0a566d175dbdc34c67d4",
+      "category": "project"
+    },
+    {
+      "path": "tools/summarize-spectral-iteration.py",
+      "bytes": 4927,
+      "sha256": "657202391447d70b6878b1e19139a80c0883e0c91fbd5d3488d5709e4e09570a",
+      "category": "project"
+    },
+    {
+      "path": "tools/validate-solid.py",
+      "bytes": 4719,
+      "sha256": "226066b2aa2ec1adad1451f10c173a110dceee0b80f92ca3272f4b5e98912212",
+      "category": "project"
+    },
+    {
+      "path": "tools/verify-nonlinear-results.py",
+      "bytes": 8977,
+      "sha256": "fd1212e38612cd5fd8b7b1bf5ae02df4ec5932985500d3b4442aa9575e76dbbb",
+      "category": "project"
+    },
+    {
+      "path": "tools/verify-solid-harmonics.py",
+      "bytes": 3852,
+      "sha256": "81be7753970f833d3a06b467531896655dd9f909487786860e334dae3e461e3a",
+      "category": "project"
+    },
+    {
+      "path": "training/__init__.py",
+      "bytes": 81,
+      "sha256": "cdba015535f2d630256acfa8d79e0d922e56b238e19aa0e7d4dd150534a0d8ea",
+      "category": "project"
+    },
+    {
+      "path": "training/data.py",
+      "bytes": 5541,
+      "sha256": "4cc82af68879d2d6745161c0c6f325750926f86db7a13cdd8e39058596c29d92",
+      "category": "project"
+    },
+    {
+      "path": "training/model.py",
+      "bytes": 2259,
+      "sha256": "8f3ffcd5fdfe3905eb4eb262df2e40b7c1f55e8dccc8cef073a120ead77712f9",
+      "category": "project"
+    },
+    {
+      "path": "training/physics.py",
+      "bytes": 4116,
+      "sha256": "ec50e2155de5f047cdae51cf3b58ab6c392c293c173d51a6ad8091dc37e2c148",
+      "category": "project"
+    },
+    {
+      "path": "training/prepare-training.sh",
+      "bytes": 1408,
+      "sha256": "36e42226f78d6f286d0978b18d8708cd366c97202e7b036608bf7ed3dcddabf1",
+      "category": "project"
+    },
+    {
+      "path": "training/requirements-torch.txt",
+      "bytes": 148,
+      "sha256": "aa933e57f95665fa8bf1ea9c13ab8fe586b30555c488822032bc60549c5ede73",
+      "category": "project"
+    },
+    {
+      "path": "training/test_physics.py",
+      "bytes": 3427,
+      "sha256": "360695c2e61768874f9efe05b98f03591e5a7a67029357690407261eee903630",
+      "category": "project"
+    },
+    {
+      "path": "training/train.py",
+      "bytes": 13490,
+      "sha256": "d6cd1ac09f5f0ce7e3021a022dfa1cfad2d176f630a593be116490db58baeed5",
+      "category": "project"
+    },
+    {
+      "path": "waveguide/__init__.py",
+      "bytes": 85,
+      "sha256": "39990becf7ff7234aef72b1249e80076f70cc0a274aa285808f8fa946c874e36",
+      "category": "project"
+    },
+    {
+      "path": "waveguide/safe.py",
+      "bytes": 7398,
+      "sha256": "5d1090db782bbebe5395f6e1b19bd16fc81276342e5d48ce98aa44de9a7e3ade",
+      "category": "project"
+    },
+    {
+      "path": "waveguide/test_field.py",
+      "bytes": 2005,
+      "sha256": "cfb4407eb0899f2c8cc76048d417391689b9c56677a4eb8bade441b1b4573ad7",
+      "category": "project"
+    },
+    {
+      "path": "waveguide/test_safe.py",
+      "bytes": 2508,
+      "sha256": "6a320efdab942f359268229ad50039142e09230f239226847f2cb7a6f5eb13e9",
+      "category": "project"
+    }
+  ]
+}

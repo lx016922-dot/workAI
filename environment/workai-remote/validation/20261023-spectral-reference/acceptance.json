@@ -1,0 +1,141 @@
+{
+  "schema": "workai.spectral_iteration_acceptance.v1",
+  "new_reference_solves": 45,
+  "previous_P1_jobs_retained": 319,
+  "prior_studies_retained": 12,
+  "new_training_steps": 0,
+  "old_weights_unchanged": true,
+  "old_solid_source_unchanged": true,
+  "reference_checks": {
+    "schema": "workai.spectral_reference_summary.v1",
+    "completed_at_utc": "2026-10-23T06:17:13.927047+00:00",
+    "completed_solves": 45,
+    "threshold": 0.05,
+    "reporting_floor_nm": 0.0001,
+    "cases": [
+      {
+        "case_id": "modal-test-plate-fixed",
+        "h_passed": true,
+        "p_passed": true,
+        "time_passed": true,
+        "field_passed": true,
+        "energy_and_strain_passed": true,
+        "max_h_full_vector": 0.0032807202421306085,
+        "max_h_material_vector": 0.003722679628071401,
+        "max_p_material_vector": 0.0023207936117062623,
+        "max_time_material_vector": 0.00018628851750423706,
+        "field_h_full_vector": 0.0026728965651022767,
+        "field_h_material_vector": 0.003055911472676378,
+        "all_component_checks_passed": true
+      },
+      {
+        "case_id": "modal-test-notch-free",
+        "h_passed": true,
+        "p_passed": true,
+        "time_passed": true,
+        "field_passed": true,
+        "energy_and_strain_passed": true,
+        "max_h_full_vector": 0.014807435002560314,
+        "max_h_material_vector": 0.023331195809289024,
+        "max_p_material_vector": 0.017864948532341735,
+        "max_time_material_vector": 0.00017447982547402294,
+        "field_h_full_vector": 0.016431977449740447,
+        "field_h_material_vector": 0.02253168574029889,
+        "all_component_checks_passed": true
+      },
+      {
+        "case_id": "modal-test-notch-fixed",
+        "h_passed": true,
+        "p_passed": true,
+        "time_passed": true,
+        "field_passed": true,
+        "energy_and_strain_passed": true,
+        "max_h_full_vector": 0.005270410399679198,
+        "max_h_material_vector": 0.008924459474569725,
+        "max_p_material_vector": 0.013622359221122649,
+        "max_time_material_vector": 0.0001798799651342528,
+        "field_h_full_vector": 0.004298029932459399,
+        "field_h_material_vector": 0.009126660325187556,
+        "all_component_checks_passed": true
+      }
+    ],
+    "all_checks_passed": true,
+    "training_used_these_fields": false,
+    "accepted_for_solver_routing": false,
+    "new_training_steps": 0,
+    "evidence_sha256": {
+      "h": "aa35864f693aebe850677cd4b6e023561fe85a4cf14132bc2dbee8bd36467026",
+      "p": "bfd8ee3b300a2e1052fdc27d096f09b91f44a5d7fa3dc59f57b5ecc40e7b14e7",
+      "time": "dd753f68fdc04f9c36a64e5f59d45630e29f99cf16eaf9cfe255686d1412c461",
+      "field": "1948985b541815c7a0cbfe172de88f94c3916463c61d590859c4c673d34a248f"
+    },
+    "campaign_sha256": {
+      "p3-h16-20261023": "72aec492e8e55a03fb8332979ac3605c7231c0008d1100fa17ed5f22a1c7c44b",
+      "p4-h16-20261023": "e11b44eefe9c8dca65e715e8257c4781cf3c16a9ea4cc9e3ded3d056503f91b9",
+      "p4-h10-20261023": "199aabd4ecae890c4b9f02c8fc34bba276a0e8a744d32f54c27695b09e3dcda8",
+      "p5-h10-20261023": "b0e7ed1f6ef699344c935d84c06d1cfa496a7b2c982e3da5eac645197172fc97",
+      "p4-h10-cfl15-20261023": "4fa538db249c30f853724bc11ff65107f515e9ea6bb54d5b00b57ac206a12378"
+    },
+    "scope": "Plate and through-width notch only. Three consumed geometries. h checks include discrete whole-field RMS; p and time checks cover retained receivers. No arbitrary-point error bound, independent blind AI evaluation, pipe/hole convergence or COMSOL comparison."
+  },
+  "python_tests_passed": 15,
+  "node_tests_passed": 79,
+  "browser_animation_passed": {
+    "passed": true,
+    "checks": [
+      {
+        "part": "full",
+        "frames": 401,
+        "custom_point_mm": [
+          0.25740170665099876,
+          0.3665040564665824,
+          0.44146530100656994
+        ],
+        "direction": [
+          2,
+          -3,
+          1
+        ],
+        "csv_matches_high_order_field": true,
+        "spectrum_matches_numpy": true
+      },
+      {
+        "part": "material",
+        "frames": 401,
+        "custom_point_mm": [
+          0.25740170665099876,
+          0.3665040564665824,
+          0.44146530100656994
+        ],
+        "direction": [
+          2,
+          -3,
+          1
+        ],
+        "csv_matches_high_order_field": true,
+        "spectrum_matches_numpy": true
+      }
+    ],
+    "void_and_zero_direction_rejected": true,
+    "desktop_and_mobile": true,
+    "external_requests": [],
+    "javascript_errors": [],
+    "new_solves": 0,
+    "standalone_html_served_on_loopback": true,
+    "direct_file_open_tested": false
+  },
+  "browser_review_passed": {
+    "passed": true,
+    "live_reference_cases": 3,
+    "new_reference_solves": 45,
+    "old_model_acceptance_unchanged": true,
+    "six_probe_metrics_reproduced": true,
+    "arbitrary_direction_csv_matches": true,
+    "desktop_mobile_no_overflow": true,
+    "javascript_errors": [],
+    "post_requests": [],
+    "offline_external_requests": []
+  },
+  "all_solver_routing_disabled": true,
+  "public_website_deployed": false
+}

@@ -1,0 +1,109 @@
+
+> workai-workbench@0.1.0 test
+> node --test tests/*.test.mjs
+
+✔ the cited polycrystalline Al table is stored in Pa, with reported uncertainty and explicit provenance (1.874732ms)
+✔ Landau energy equals the independently evaluated Murnaghan principal-invariant energy in 3-D (5.77233ms)
+✔ all nine first Piola components equal numerical derivatives of stored energy, including shear (0.742972ms)
+✔ material response is objective under superposed rigid rotation and has a stress-free reference state (0.448317ms)
+✔ infinitesimal limit agrees with Hooke elasticity; disabling third-order energy keeps geometric nonlinearity (0.385633ms)
+✔ material contribution has the expected quadratic harmonic scaling at a point, without claiming propagation (30.080551ms)
+✔ invalid constitutive inputs and strains outside the declared reference implementation are rejected (0.501137ms)
+✔ literature provenance must match saved material; no third-order constants leak into the old linear protocol (1.066932ms)
+✔ model save preserves revisions and scientific input after stale or invalid edits (26.148962ms)
+✔ study snapshots retain the exact validated case and cannot overwrite an existing job case (8.900315ms)
+✔ unready volume model is blocked before creating a submission or invoking remote compute (52.655503ms)
+✔ plate study dispatch uses the saved immutable model and retains the job before calling the client (25.74109ms)
+✔ artifact downloads are serialized and duplicate concurrent reads share one verified operation (17.453646ms)
+✔ nonlinear transport binds five independent single-carrier controls without repurposing thermal fields (1.523361ms)
+✔ nonlinear input rejects identity, definition, sampling, reflection and aggregate export mismatches (0.964457ms)
+✔ nonlinear receipt verifies constitutive parameters, control order and all 15 strain checks (3.968095ms)
+✔ Rayleigh-Lamb S0 agrees with thin-plate limit and independent SciPy roots; reports dispersion at 2f (2.105441ms)
+✔ complex harmonic projection preserves amplitude and phase while rejecting incomplete windows (0.409579ms)
+✔ material increment is subtracted before projection; quadratic ratio and complex discretization errors stay separate (15.820389ms)
+✔ cross-job spatial validation uses actual refinement at the same time step and records tighter tolerances (0.668851ms)
+✔ spatial evidence cannot be borrowed from a different material, source, receiver/window, time step or unrefined mesh (0.903014ms)
+✔ offline HTML preserves trace values and receipt while excluding unrelated session/connection fields (20.354659ms)
+✔ offline data cannot terminate its script or inject HTML through metadata (1.983396ms)
+✔ offline export rejects unverified, mismatched, partial or nonfinite result sets (0.420044ms)
+file:///workspace/workAI/public/operator-comparison.js:27
+export function mountOperatorComparison(root,data){
+^^^^^^
+
+SyntaxError: Unexpected token 'export'
+    at compileSourceTextModule (node:internal/modules/esm/utils:318:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:89:18)
+    at #translate (node:internal/modules/esm/loader:434:20)
+    at afterLoad (node:internal/modules/esm/loader:502:29)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:507:12)
+    at #getOrCreateModuleJobAfterResolve (node:internal/modules/esm/loader:560:36)
+    at afterResolve (node:internal/modules/esm/loader:607:52)
+    at ModuleLoader.getOrCreateModuleJob (node:internal/modules/esm/loader:613:12)
+    at ModuleJob.syncLink (node:internal/modules/esm/module_job:163:33)
+    at ModuleJob.link (node:internal/modules/esm/module_job:253:17)
+
+Node.js v24.19.0
+✖ tests/operator-comparison.test.mjs (26.355674ms)
+✔ research compilation preserves units, receiver ordering and the original linear model semantics (1.552335ms)
+✔ unsupported nonlinear inputs and invalid scientific discretization cannot be submitted as linear research (12.382616ms)
+✔ research result validation binds the receipt and both serialized inputs to the requested job and source (0.868632ms)
+✔ native scene and solver parameters must agree even when both hashes are internally valid (0.419584ms)
+✔ A-scan parsing preserves signs and physical units; rejects partial, duplicated, out-of-order and nonfinite samples (1.157178ms)
+✔ a changed research source or mismatched job kind is blocked before snapshot/submission (48.633046ms)
+✔ research dispatch retains immutable input and does not retry an uncertain submission (20.154527ms)
+✔ A-scan endpoint requires a completed research job and verified, matching receipt/input files (28.470328ms)
+✔ complex harmonic extraction separates a phased material increment and checks quadratic scaling (10.248431ms)
+✔ equal magnitudes with opposite phases do not disappear in material subtraction (3.105812ms)
+✔ roundoff-dominated or incomplete harmonic records never pass acceptance (4.883287ms)
+✔ a running study blocks new standalone solves even between child jobs (42.318483ms)
+✔ study validation refuses missing controls before trusting mesh identity (0.606656ms)
+✔ a changed control mesh or internal time step cannot masquerade as a material harmonic (1.042645ms)
+✔ offline harmonic export keeps the selected window and excludes unrelated session data (46.706526ms)
+✔ numerical reference applies only to its exact receiver, direction, window and harmonic value (13.453524ms)
+✔ S0 candidate tends to the independently derived long-wave plate speed (3.353365ms)
+✔ moving windows are equal-duration, mirror with the source end, and screen short-record/echo cases (5.011871ms)
+✔ the plate candidate is never applied to holes, pipes, patches or transverse excitation (0.243568ms)
+✔ phase-consistent traveling signals pass only the candidate screen; a different speed fails it (35.238913ms)
+✔ finite-width comparisons stay bound to the original points, windows and completed controls (24.028588ms)
+✔ multi-point offline export keeps actual controls but excludes unrelated session fields and script injection (29.547045ms)
+✔ finite-width evidence cannot be borrowed from another scene, child control or window (8.167138ms)
+✔ shape failures, aliasing and unconverged dispersion cannot keep a passed candidate label (6.683366ms)
+✔ displayed dispersion must match its hashed independent eigensolver record (1.172641ms)
+✔ 3-D barycentric interpolation preserves affine displacements and arbitrary signed directions (0.936604ms)
+✔ Hann single-sided amplitude spectrum has physical units and correct Nyquist scaling (5.529573ms)
+✔ solid metadata rejects mismatched field dimensions and invalid mesh indices (0.366784ms)
+✔ verified float64 field transport preserves weak increments hidden by float32 rounding (19.791598ms)
+✔ CAD storage is content-addressed and rejects code uploads and changed geometry bytes (9.339118ms)
+✔ solid result API binds completed status, original scene and field bytes (6.916217ms)
+✔ training status is read-only, omits process/paths, and does not promote an experimental checkpoint (23.987667ms)
+✔ 3-D grouped training takes precedence without rewriting or enabling the older model (8.543426ms)
+✔ 3-D training page describes weak 3-D physics and retains failure/read-error states (0.838807ms)
+✔ malformed or path-traversing training records do not become successful training status (3.83267ms)
+✔ serves the workbench without exposing private paths or the checkout (51.417768ms)
+✔ rejects cross-origin submissions, missing CSRF, and DNS rebinding hosts (13.097145ms)
+✔ password protects HTML, API responses, and files (9.210844ms)
+✔ health failure remains visible while other services are usable; no solve is triggered (4.986644ms)
+✔ imports an existing remote job and stores its verified final status (8.059004ms)
+✔ retains a submission before sending and prevents duplicate submissions (12.654286ms)
+✔ a lost POST response stays unresolved and cannot be retried, including after reloading the store (8.618159ms)
+✔ rejects invalid IDs, extra command fields, and unsupported job types before a remote POST (8.786307ms)
+✔ returns verified result bytes and previews without executing content (7.666021ms)
+✔ frequency preview computes complex magnitudes from real outputs (3.414558ms)
+✔ CSV parser rejects missing, empty, or non-finite scientific values (0.46979ms)
+✔ bridge refuses unsigned responses and mismatched job identities (0.286253ms)
+✔ bridge refuses modified cached artifacts even if the helper reports success (2.132722ms)
+✔ discovers retained request IDs without overwriting existing records or importing arbitrary files (4.142117ms)
+ℹ tests 74
+ℹ suites 0
+ℹ pass 73
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 645.701174
+
+✖ failing tests:
+
+test at tests/operator-comparison.test.mjs:1:1
+✖ tests/operator-comparison.test.mjs (26.355674ms)
+  'test failed'

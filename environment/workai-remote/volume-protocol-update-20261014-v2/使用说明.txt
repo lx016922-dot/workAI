@@ -1,0 +1,24 @@
+﻿三维大板输入协议更新 v2（安装目录修复版）
+
+1. 等待当前 COMSOL 任务全部结束，再只关闭原 API LISTENING 窗口。
+2. 将这个新 ZIP 完整解压到一个新文件夹（例如桌面）。不要在压缩包内直接运行。
+3. 双击新文件夹里的 Update-Volume.cmd。
+   它会识别同目录、父目录或桌面上 workai-comsol-http-v1 中的原安装，
+   也支持 workai-comsol-http-v1\workai-comsol-http-v1 的双层解压目录。
+   如果找不到或找到多个安装，会显示 Installation folder：
+   粘贴原 settings.json 所在文件夹的完整路径，按 Enter。
+   支持中文、空格和资源管理器“复制为路径”得到的带双引号路径。
+4. 看到 Installation: 后显示的是原接口安装目录。
+   出现 VOLUME PROTOCOL UPDATE COMPLETE 和 API LISTENING 后保持窗口打开。
+
+也可以在 PowerShell 中手动指定原安装目录：
+  .\Update-Volume.ps1 -Root 'C:\实际的接口安装目录'
+
+旧包在 GetFullPath 处退出时还未开始改写安装文件，使用本包重试即可。
+无需重新运行 Setup、重新配对或修改密钥。若提示旧版本不符，保留错误信息供检查。
+脚本核对旧版本与新文件校验值，解析 PowerShell 语法，备份后更新；写入失败时回滚。
+
+这一步只补齐 200 × 100 × 2 mm、1 × 1 mm 面外位移源、两端吸波、内部接收点的数据协议。
+密钥、配对身份、现有 Java 模型、任务和结果均保留。
+兼容的新 COMSOL 模型仍须通过签名修订接口单独安装、求解和收敛验收；旧模型不会接受新工况。
+新的签名健康检查为 GET /v1/volume/health，model_ready 不等于求解成功或精度已验收。

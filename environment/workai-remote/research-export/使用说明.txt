@@ -1,0 +1,30 @@
+WorkAI 研究模型源码导出（只读）
+
+用途：取回现有 COMSOL 服务中的研究模型源码，核对非线性导波本构和任务协议。
+不需要登录旧 GPT 账号，不运行 COMSOL，不更新模型，不修改安装目录或配对身份。
+
+1. 在 Windows 服务器上把整个工具 ZIP 解压到一个新文件夹。
+2. 双击 Export-WorkAIResearch.cmd。不要直接在 ZIP 内运行，也不用手工粘贴多行命令。
+3. 正常结束会显示 SOURCE EXPORT COMPLETE，并在桌面生成 workai-research-source-日期-编号.zip。
+4. 将桌面上新生成的源码 ZIP 上传到当前对话，不是这个工具 ZIP。
+
+默认安装目录：
+C:\Users\Administrator\Desktop\workai-comsol-http-v1\workai-comsol-http-v1
+
+只读取以下明确命名的文件（部分运行脚本可能只存在于其中一个位置）：
+research-template/UltraResearch.java
+Research.Common.ps1
+research-manifest.json
+Run-ResearchJob.ps1
+research-template/Run-ResearchJob.ps1
+
+工具不会遍历整个目录，不会读取 settings.json、private 目录、密钥文件、浏览器信息或计算结果。
+输出 export-manifest.json 包含本次导出文件的 SHA-256 和缺失文件清单。
+Matches observed research source=False 表示源码与之前接口报告的版本不同；请仍上传源码包以便核对，不要更改原文件或摘要。
+
+启动器中的 ExecutionPolicy Bypass 只作用于这一 PowerShell 进程，用于运行随包提供的导出脚本，不修改系统或用户的永久脚本策略。组织组策略仍可能阻止运行；若出现错误，请发错误文字。
+
+若实际安装路径已经移动，可在工具解压目录打开 PowerShell，单行执行并替换末尾路径：
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File .\Export-WorkAIResearch.ps1 -InstallationFolder '你的实际安装目录'
+
+测试范围：已在本云环境 PowerShell 7.6.7 上用临时目录验证；未在你的 Windows 终端实际运行。脚本采用兼容 Windows PowerShell 5.1 的语法和 .NET API。

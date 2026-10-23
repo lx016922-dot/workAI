@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#122c39">
+  <title>workAI · 超声研究工作台</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="#model" aria-label="workAI 建模"><span class="brand-icon">∿</span><span>work<span class="brand-ai">AI</span><small>超声研究工作台</small></span></a>
+    <div class="nav-label">研究空间</div>
+    <nav aria-label="主导航">
+      <a href="#model" data-view="model"><span aria-hidden="true">◇</span>建模</a>
+      <a href="#physics" data-view="physics"><span aria-hidden="true">∿</span>物理场</a>
+      <a href="#study" data-view="study"><span aria-hidden="true">▷</span>研究</a>
+      <a href="#results" data-view="results"><span aria-hidden="true">▤</span>结果</a>
+      <a href="#solid" data-view="solid"><span aria-hidden="true">⬡</span>三维超弹性</a>
+      <div class="nav-divider"></div>
+      <a href="#overview" data-view="overview"><span aria-hidden="true">◫</span>研究总览</a>
+      <a href="#training" data-view="training"><span aria-hidden="true">∂</span>AI 训练</a>
+      <a href="#connection" data-view="connection"><span aria-hidden="true">⌁</span>服务连接</a>
+    </nav>
+    <div class="sidebar-bottom"><span class="dot" id="sidebar-dot"></span><div id="sidebar-status">正在检查服务<small>远程 COMSOL</small></div></div>
+    <div class="sidebar-foot">WORKAI RESEARCH WORKSPACE</div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><div><span class="crumb">研究空间</span><span class="slash">/</span><span id="page-name">研究总览</span></div><div class="topbar-right"><span class="version">恢复工作区</span><button class="button secondary small" id="refresh"><span aria-hidden="true">↻</span> 刷新状态</button></div></header>
+    <main id="main" tabindex="-1"><div class="loading">正在载入工作台…</div></main>
+    <footer>workAI · 超声研究<span>COMSOL 与三维超弹性数值计算</span></footer>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <dialog id="new-job-dialog" aria-labelledby="new-job-title">
+    <div class="dialog-header"><h2 id="new-job-title">新建连接验证任务</h2><button class="icon-button" data-close="new-job-dialog" aria-label="关闭">×</button></div>
+    <p>在远程 COMSOL 上运行固定的一维算例，验证求解、导出和结果回传。</p>
+    <div class="spec-grid"><div><span>频率</span><strong>3 / 6 MHz</strong></div><div><span>网格</span><strong>8 / 16 单元</strong></div></div>
+    <div class="notice">两个频率分别计算，不代表非线性二次谐波。该算例验证连接与导出流程；任务会占用远程 COMSOL 计算资源。</div>
+    <p class="muted small-text">提交后将保存任务编号；如果网络中断，可按同一编号查询状态。</p>
+    <div class="dialog-actions"><button class="button secondary" data-close="new-job-dialog">取消</button><button class="button primary" id="submit-job">开始验证</button></div>
+  </dialog>
+  <dialog id="preview-dialog" class="preview-dialog" aria-labelledby="preview-title">
+    <div class="dialog-header"><h2 id="preview-title">结果预览</h2><button class="icon-button" data-close="preview-dialog" aria-label="关闭">×</button></div>
+    <p id="preview-meta" class="muted small-text"></p><pre id="preview-content"></pre>
+  </dialog>
+  <dialog id="study-dialog" aria-labelledby="study-title">
+    <div class="dialog-header"><h2 id="study-title">开始研究计算</h2><button class="icon-button" data-close="study-dialog" aria-label="关闭">×</button></div>
+    <p id="study-description"></p><div class="notice">将使用已保存的模型本构和参数运行真实计算。计算会占用 COMSOL 资源；请保持服务器服务运行。结果精度需根据对应任务的数值检查判断。</div>
+    <div class="dialog-actions"><button class="button secondary" data-close="study-dialog">取消</button><button class="button primary" id="submit-study">开始计算</button></div>
+  </dialog>
+</body>
+</html>

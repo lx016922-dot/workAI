@@ -1,0 +1,11 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {createHash} from 'node:crypto';
+import {SolidService} from '../server/solid.mjs';
+import {validateWaveguideReference,validateWaveguideDispersion,readWaveguideReference} from '../server/solid-waveguide.mjs';
+const [root,comparisonFile,dispersionFile]=process.argv.slice(2);if(!root||!comparisonFile||!dispersionFile)throw Error('Usage: node tools/link-waveguide-reference.mjs ROOT COMPARISON.json DISPERSION.json');
+const bytes=await readFile(comparisonFile),record=JSON.parse(bytes),dispersion=await readFile(dispersionFile),service=new SolidService(root);await service.init();const {study}=await service.studies.result(record.study_id),path=service.studies.path(record.study_id);
+if(createHash('sha256').update(await readFile(join(path,'result.json'))).digest('hex')!==record.study_result_sha256)throw Error('Completed study identity changed.');
+validateWaveguideReference(record,study);validateWaveguideDispersion(record,JSON.parse(dispersion),dispersion);
+await writeFile(join(path,'waveguide-dispersion.json'),dispersion,{flag:'wx'});await writeFile(join(path,'waveguide-validation.json'),bytes,{flag:'wx'});await readWaveguideReference(path,study);
+console.log(JSON.stringify({study_id:record.study_id,attached:true,original_solver_records_changed:false}));

@@ -1,0 +1,11 @@
+export function createMaterialUI({ state, e, section }) {
+  function render() {
+    const entry = state.materials?.aluminum;
+    if (!entry) return '';
+    const r = entry.record, t = r.third_order, d = entry.derived;
+    const linked = state.model.case.material_reference?.record_sha256 === entry.record_sha256;
+    const rows = [['密度 ρ', r.rho_kg_m3, 'kg/m³', '名义值'], ['λ', r.lambda_pa / 1e9, 'GPa', '未列出'], ['μ', r.mu_pa / 1e9, 'GPa', '未列出'], ...['l', 'm', 'n'].map(k => [k, t[k + '_pa'] / 1e9, 'GPa', '± ' + t.reported_uncertainty_pa[k] / 1e9])];
+    return section('铝 · 文献材料预设', `<p class="material-reference-state">${linked ? '已关联：多晶铝参考参数，保存后与场景一同保留。' : '当前为自定义材料数值，未关联此文献预设。'}</p><div class="row-actions material-actions"><button class="button secondary small" data-model-action="apply-aluminum" ${linked ? 'disabled' : ''}>应用文献铝参数</button><button class="button secondary small" data-model-action="export-material">导出材料卡</button></div><div class="table-scroll"><table class="material-table"><caption>多晶铝参考组 · 牌号、热处理及精确温度未指定</caption><thead><tr><th>参数</th><th>值</th><th>单位</th><th>原表不确定度</th></tr></thead><tbody>${rows.map(row => `<tr>${row.map((v, i) => `<${i ? 'td' : 'th'}>${e(v)}</${i ? 'td' : 'th'}>`).join('')}</tr>`).join('')}</tbody></table></div><p class="section-note">由 ρ、λ、μ 换算：cL = ${entry.linear.cl_m_s.toFixed(2)} m/s，cT = ${entry.linear.ct_m_s.toFixed(2)} m/s；E = ${(d.young_modulus_pa / 1e9).toFixed(3)} GPa，ν = ${d.poisson_ratio.toFixed(5)}。导出和保存保留完整数值。</p><details class="material-details"><summary>三阶本构定义与来源</summary><p>Murnaghan 定义：E = (FᵀF − I)/2；i₁ = tr(E)，i₂ = ((tr E)² − tr(E²))/2，i₃ = det(E)。</p><p class="material-equation">W = ½(λ + 2μ)i₁² − 2μi₂ + ⅓(l + 2m)i₁³ − 2mi₁i₂ + ni₃</p><p>W 按参考体积计，单位 J/m³；应力由 S = ∂W/∂E、P = FS 得到。这里 i₂ 不是 tr(E²)，i₃ 不是 tr(E³)。</p><p>同一能量定义下，Landau A = ${d.landau_pa.A / 1e9}、B = ${d.landau_pa.B / 1e9}、C = ${d.landau_pa.C / 1e9} GPa。</p>${r.sources.map(s => `<p><a href="${e(s.url)}" target="_blank" rel="noopener noreferrer">${e(s.title)}</a><br><small>${e(s.location)}</small></p>`).join('')}<p>弹性常数来自文献汇总，密度为另一来源的普通铝名义值；没有同批试样一致测量的证据。原表的 ± 范围未指定置信水平。此组用于参考算例，不代表特定铝合金实测标定。</p></details>`, state.model.case.schema === 'workai.murnaghan.guided_plate.scene.v1' ? '此模板将二阶和三阶常数用于 COMSOL 有限应变求解，材料版本与场景和回执绑定。' : '此线性模板仅使用密度与二阶常数；三阶常数在材料非线性模板中启用。应用材料不会修改板厚。');
+  }
+  return { render };
+}
