@@ -51,3 +51,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload v0.2.0-recovery.1 portable/*.zip portable/SHA256SUMS-${{ matrix.platform }}.txt --repo "$GITHUB_REPOSITORY" --clobber
+  checksums:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the combined checksum file
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v0.2.0-recovery.1 --repo "$GITHUB_REPOSITORY" --pattern 'SHA256SUMS-*.txt' --dir checksums
+          cat checksums/SHA256SUMS-*.txt > SHA256SUMS.txt
+          gh release upload v0.2.0-recovery.1 SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
