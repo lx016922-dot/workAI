@@ -90,3 +90,5 @@ python -m graphwave.modal_calibration --action train \
 ```
 
 训练运行时及核心方程的 7 项测试见 [检查记录](diagnostics/continuation-v7-unit-validation.json)。长记录 CI 固定 NumPy 2.2.6、SciPy 1.15.3，与训练运行时分别记录。[本轮决策](diagnostics/v7-decision.json)为拒绝晋升：`accepted_for_offline_release=false`、`scientific_accuracy_certified=false`；完整 v6、预试验和失败记录均保留。
+
+[下载第 7 轮离线证据包](https://github.com/lx016922-dot/workAI/releases/download/v0.3.0/WorkAI-COMSOL-physics-evidence-0.3.0-training-v7.zip)，523,479,455 字节，包含原始 COMSOL 文件、训练权重与场、20 组完整接收点记录及复核结果。包内 2586 个文件均逐项读回校验；归档 SHA-256 为 `9382706bf022cce9763d219765051faf1350eab7f8404f0ea82c836e1fca165b`。来源提交为 `d694a5002824d0812963ece818f070aa59138d18`，发布回执见 [六个 ZIP 的核验](../release-validation/v0.3.0-training-v7-assets.json)。此包用于复查，不作为新默认模型的软件升级。
