@@ -1,0 +1,323 @@
+{
+ "schema": "workai.coarsegraph.model.v1",
+ "degree": 3,
+ "h_mm": 3.0,
+ "cfl": 0.3,
+ "axes": "shared",
+ "parameter_count": 5,
+ "theta": [
+  -0.012519112672436751,
+  -0.010597878027690227,
+  -0.31024358348629105,
+  -0.17617915681471985,
+  0.47963936519838773
+ ],
+ "initialized_from": "/tmp/claude-0/-home-user-workAI/a8080271-e0bb-5475-85f4-4c8080899b16/scratchpad/coarse/models/p3-h3/model.json",
+ "operators": {
+  "derivative": [
+   [
+    -2.8783319834760173,
+    3.9915987587603623,
+    -1.8452552671393385,
+    0.7319884918549933
+   ],
+   [
+    -0.8777197518040221,
+    0.06949958367309213,
+    1.1846506279890037,
+    -0.37643045985807383
+   ],
+   [
+    0.3764304598580739,
+    -1.1846506279890037,
+    -0.06949958367309218,
+    0.8777197518040221
+   ],
+   [
+    -0.7319884918549934,
+    1.8452552671393385,
+    -3.9915987587603623,
+    2.878331983476017
+   ]
+  ],
+  "quadrature_weights": [
+   0.16040711033044827,
+   0.8395928896695517,
+   0.8395928896695516,
+   0.16040711033044827
+  ],
+  "mass_weights": [
+   0.16136772765282154,
+   0.8386322723471785,
+   0.8386322723471784,
+   0.16136772765282154
+  ],
+  "gll_weights": [
+   0.16666666666666666,
+   0.8333333333333334,
+   0.8333333333333333,
+   0.16666666666666666
+  ],
+  "gll_nodes": [
+   -1.0,
+   -0.4472135954999581,
+   0.44721359549995804,
+   1.0
+  ]
+ },
+ "constraints": {
+  "reflection": 4.440892098500626e-16,
+  "constants": 4.440892098500626e-16,
+  "linear": 0.0,
+  "summation_by_parts": 1.1102230246251565e-16,
+  "quadrature_sum": 2.220446049250313e-16,
+  "mass_sum": 0.0,
+  "symmetric_weights": 1.1102230246251565e-16,
+  "positive": true
+ },
+ "selected_iteration": 1,
+ "validation_loss": 0.14906334484372982,
+ "energy_network": "frozen graph network quadratic/cubic tensors and state weights (offline/model/weights.npz)",
+ "training": {
+  "increment_weight": 1.0,
+  "harmonic_weight": 1.0,
+  "iterations_requested": 25,
+  "function_evaluations": 32,
+  "elapsed_s": 645.449778447,
+  "labels": [
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=1.6,source.frequency_mhz=0.2",
+    "split": "train",
+    "label_sha256": {
+     "linear": "bfaa2c438aaa1d966d81b71e63d82bbab29029215907cfeebb8ad1b33cc10d4f",
+     "murnaghan": "617d1f78566c0d0f60ed6a00071ebf5582f940d7dbe71b81d3342e07198e458e"
+    }
+   },
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=2.0,source.frequency_mhz=0.2",
+    "split": "validation",
+    "label_sha256": {
+     "linear": "291499ec52de2af57a93a920ec7fdf90fe6be2be42e7db1b4fa4a94573fefc9a",
+     "murnaghan": "7c94485586cf615d78f15410f0345c07cdf760270b407223c43628d786560a0a"
+    }
+   },
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=2.4,source.frequency_mhz=0.2",
+    "split": "train",
+    "label_sha256": {
+     "linear": "eaf2d7d0819a56e842fc7547886cd8f481def0195e17755e2a2830fd43d0b070",
+     "murnaghan": "3e1fbeebe2c63cd97bf3d9cdf8d920939d0a5a1105af589aad4f6ad00b8f955c"
+    }
+   },
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=1.6,source.frequency_mhz=0.3",
+    "split": "validation",
+    "label_sha256": {
+     "linear": "3da409ca3d17aa19290a05c861f7b13568e1d97ed89d9c9f4f42a71060b797e5",
+     "murnaghan": "418cdca51ed6d019f33d8a3911c667bd3455b4179faa9d2d6581cbc6b8cbd387"
+    }
+   },
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=2.0,source.frequency_mhz=0.3",
+    "split": "train",
+    "label_sha256": {
+     "linear": "92de2e0bf22d132f492812595d8ef689e05776c83fbae1ba66b454f1bad710a5",
+     "murnaghan": "0eaecb9b6f688902f838852c56e38690d25f7ea8e1a239eef04ad28fc3a05fcc"
+    }
+   },
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=2.4,source.frequency_mhz=0.3",
+    "split": "test",
+    "label_sha256": {
+     "linear": "20ee35fa2785c7afecd001a34b73f3612a44898cd1dd0446bd04ee59e27c7dfd",
+     "murnaghan": "72d058271983786e5f2f74827d05c37893c4cf4f591acaa06bfcb7599cd04af7"
+    }
+   },
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=1.6,source.frequency_mhz=0.4",
+    "split": "train",
+    "label_sha256": {
+     "linear": "4ecffe1335365279b022a96c0fb6eb07f165c4b85c0a776c1b151a293e97e821",
+     "murnaghan": "95852c67b1272b3a941e072eddc4f82b04325c960872bcd6fe9c1ad389a6d5ba"
+    }
+   },
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=2.0,source.frequency_mhz=0.4",
+    "split": "test",
+    "label_sha256": {
+     "linear": "26ad6b63269896e2e0628630dce860d17be9c601b0fb94566c82f6434a4f4419",
+     "murnaghan": "64cd96bad5048c00955c3fe9172d8a77f0243565ea3135c4c5a4534c842bcd0a"
+    }
+   },
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=2.4,source.frequency_mhz=0.4",
+    "split": "train",
+    "label_sha256": {
+     "linear": "955c4d2643fbd1acda062e11bdbe95d8ea29d80756a0032b309dbc7251f2d240",
+     "murnaghan": "9ea95deb6d74573f4dc6378964ea0c4f49ae277cb2091a07bf57aac48dee625c"
+    }
+   },
+   {
+    "key": "labels-b-end-axial:geometry.thickness_mm=1.6,source.frequency_mhz=0.2",
+    "split": "train",
+    "label_sha256": {
+     "linear": "30ae0b1ccde7728fdd7167a0a2daef7639598f05c822cecc78751b6a48c84aac",
+     "murnaghan": "2fe0c887b1d169e71aaf18cfa9aa1d52f81b6fc6dc6710771d86bbc0fcc4fc12"
+    }
+   },
+   {
+    "key": "labels-b-end-axial:geometry.thickness_mm=2.4,source.frequency_mhz=0.2",
+    "split": "train",
+    "label_sha256": {
+     "linear": "2e169a45d5d8b5b01ef82e5885d9baf1c8c7231b05dda96a384af22c4bcbcc75",
+     "murnaghan": "a36d716ba4b95f615e34b52579eb466b86add79c256fae10535ed8730f6b6f39"
+    }
+   },
+   {
+    "key": "labels-b-end-axial:geometry.thickness_mm=1.6,source.frequency_mhz=0.3",
+    "split": "validation",
+    "label_sha256": {
+     "linear": "2328c25b8d719e600d0279016ba63434d8bfdee2a6e8922480f0216daa877da6",
+     "murnaghan": "991cfe497fdb2b0ebbc25a405a2e0f92d46eaeb8191248f8b3a9ea90e378761f"
+    }
+   },
+   {
+    "key": "labels-b-end-axial:geometry.thickness_mm=2.4,source.frequency_mhz=0.3",
+    "split": "test",
+    "label_sha256": {
+     "linear": "4cb0ba1781fbd5ff45ff2425a88ec517ba13f7e2f15f82da17f4780ff1e99bfb",
+     "murnaghan": "2e7bbce96d09d68dbfc50cf99884183947717bf8ae283b76a7ce8c031d1ce8b5"
+    }
+   },
+   {
+    "key": "labels-b-end-axial:geometry.thickness_mm=1.6,source.frequency_mhz=0.4",
+    "split": "test",
+    "label_sha256": {
+     "linear": "cfdeef6de335be0b83b73c0a12c7fccbc3bb167e64ffdb0750122f0191ba9df3",
+     "murnaghan": "086c3db86bae0b2854fe7b5831aa9610b1e7e5302cfca2232f215f4ab93e73a3"
+    }
+   },
+   {
+    "key": "labels-b-end-axial:geometry.thickness_mm=2.4,source.frequency_mhz=0.4",
+    "split": "train",
+    "label_sha256": {
+     "linear": "a1d3dc36cea82c40206f5d62b23696a557a79453f99d08093cd8fcfe5335b2e3",
+     "murnaghan": "dd83597ec4da9177fe97f34048df3692cd5afcf0f37a238b7986a6b842cddcce"
+    }
+   },
+   {
+    "key": "labels-c-two-patch:geometry.thickness_mm=2.0,source.frequency_mhz=0.25",
+    "split": "test",
+    "label_sha256": {
+     "linear": "094095888b849bb3928cb2f50b20ef6ae92c97f23821d92f65317f13c57e40c9",
+     "murnaghan": "2c26d34e94ad40924630ecce5f8e4df4d3d653307737f74d7f88edcd241302a8"
+    }
+   },
+   {
+    "key": "labels-c-two-patch:geometry.thickness_mm=2.0,source.frequency_mhz=0.35",
+    "split": "test",
+    "label_sha256": {
+     "linear": "aae7b742f1dcc12074b243867af87a9c0af340fb5697e489275a58497ee2cb87",
+     "murnaghan": "d9ea24ff10984e6ce9713739301058b3e526b22123872694d4440ecc0ce0ea9a"
+    }
+   }
+  ],
+  "test_used_for_selection": false
+ },
+ "cost": {
+  "coarse_nodes": 784,
+  "coarse_layers": 2400,
+  "fine_nodes_layers_examples": [
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=1.6,source.frequency_mhz=0.2",
+    "nodes": 10449,
+    "layers": 5400,
+    "elapsed_s": 76.37458565
+   },
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=2.0,source.frequency_mhz=0.2",
+    "nodes": 10449,
+    "layers": 4200,
+    "elapsed_s": 60.11097914100003
+   },
+   {
+    "key": "labels-a-top-gaussian:geometry.thickness_mm=2.4,source.frequency_mhz=0.2",
+    "nodes": 10449,
+    "layers": 4200,
+    "elapsed_s": 60.240636763
+   }
+  ]
+ },
+ "summary": {
+  "baseline_gll": {
+   "train": {
+    "pairs": 8,
+    "passed": 2,
+    "invalid": 0,
+    "worst_record_l2": 0.08474801310903976,
+    "worst_waveform_l2": 0.21265487184516305,
+    "worst_a2": 0.8531021427845377,
+    "worst_increment_a2": 0.6698830265963598
+   },
+   "validation": {
+    "pairs": 3,
+    "passed": 0,
+    "invalid": 0,
+    "worst_record_l2": 0.09416863521612913,
+    "worst_waveform_l2": 0.1575251713522789,
+    "worst_a2": 0.34153399158952275,
+    "worst_increment_a2": 0.38895453384524065
+   },
+   "test": {
+    "pairs": 6,
+    "passed": 0,
+    "invalid": 0,
+    "worst_record_l2": 0.1480956620511897,
+    "worst_waveform_l2": 0.18686367458634098,
+    "worst_a2": 0.3540107089319182,
+    "worst_increment_a2": 0.7551617268663834
+   }
+  },
+  "learned": {
+   "train": {
+    "pairs": 8,
+    "passed": 2,
+    "invalid": 0,
+    "worst_record_l2": 0.026613373126543084,
+    "worst_waveform_l2": 0.04700338422127721,
+    "worst_a2": 0.42845596753887616,
+    "worst_increment_a2": 0.41220817511829655
+   },
+   "validation": {
+    "pairs": 3,
+    "passed": 0,
+    "invalid": 0,
+    "worst_record_l2": 0.025903605788900087,
+    "worst_waveform_l2": 0.03989936631076313,
+    "worst_a2": 0.04618026467492912,
+    "worst_increment_a2": 0.5087668773668852
+   },
+   "test": {
+    "pairs": 6,
+    "passed": 0,
+    "invalid": 0,
+    "worst_record_l2": 0.03952470096420532,
+    "worst_waveform_l2": 0.04355934475434802,
+    "worst_a2": 0.24979562966182076,
+    "worst_increment_a2": 1.1098886690196281
+   }
+  }
+ },
+ "source_sha256": {
+  "coarsegraph/__init__.py": "5f5e04c5a4eef4d33fcd9ade4f3ffaf49c00c2b4a18efa4193a2af688af5f78b",
+  "coarsegraph/evaluate.py": "96de9a5d3252199566a1152f2451e98ad02564a0e217e1b4894f4722d1ec7777",
+  "coarsegraph/kernel.py": "fbc1ad281dc1966c6c71c4f49c23ae9579167462889ed17d3d72a2fa5f39003f",
+  "coarsegraph/operator.py": "a1a95ce0afee4d54919bae52ab1103bb96b4e0c2ed32d8576db335d7708a43ca",
+  "coarsegraph/run.py": "2a99b328ac4552f85dbbf9d066b8c0ef71aec3578b4b6338c1a8ac4e1cc2e1b4",
+  "coarsegraph/simulate.py": "f1a442eb53b9513ed87d1da36c0f5e5474abc0eeb5d05b3bfcfc59ec52fdc62b",
+  "coarsegraph/test_coarse.py": "871a4ded065de75630c86d2bd7a3b1e95a19bd3e94d222b016a71aa914f2bcef",
+  "coarsegraph/train.py": "6fddc5e4f79ae7de04215d2d360e619c461707187bd3a407717783c722d92bb9"
+ },
+ "created_at_utc": "2026-10-24T09:12:28.129532+00:00",
+ "accepted_for_solver_routing": false
+}
