@@ -1,0 +1,208 @@
+{
+  "schema": "workai.comsol_paired_training_comparison.v1",
+  "baseline_kind": "independently audited complete baseline rollout",
+  "baseline_weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+  "candidate_weights_sha256": "da596ce8f7fe04990abb97a836e2b24daa62993e16cd7c8575f77c55ee4e0008",
+  "reference_identity": {
+    "job_id": "comsol-7dad39c427024efbad336549f45d2b78",
+    "source_sha256": "65e5633102be85ab21b670386c880dd9e75816634013b60e4a66c43e7f5ee529",
+    "scene_sha256": "6dd82cf9dea1ef8bb7f1f6a2682f88285626786bc6f5742cb87701af9a8d08b5",
+    "parameters_sha256": "51da08755b5254f39b81342246eda7bf2411fb67d14baf2387a7a536f8be572b",
+    "purpose": "reference_convergence",
+    "uses_test_data_for_training": false
+  },
+  "baseline_summary_sha256": "2bd94306f26b0f7b003b9b33cc5c50dc06c521a816271b4013990e9eca0e6203",
+  "candidate_summary_sha256": "b7a01ae5c2a8146951a59e39ae796ee677dc3fba4ee2f53f509f26cc1938d3b6",
+  "completed_cases": 20,
+  "cases_with_lower_maximum_vector_difference": 20,
+  "minimum_change_for_direction_count_relative_l2": 1e-10,
+  "direction_count_roundoff_scope": "Ignore CPU replay roundoff only when counting improvement; preserve raw metrics and every original 5% verdict",
+  "receivers_with_lower_vector_difference": 160,
+  "receiver_comparisons": 160,
+  "baseline_comparison_passes": 0,
+  "candidate_comparison_passes": 0,
+  "scope": "Actual complete 5 ms predictions against the same COMSOL linear modal reference; neither a native nonlinear comparison nor certification",
+  "scientific_accuracy_certified": false,
+  "rows": [
+    {
+      "case_id": "hann-01",
+      "baseline_max_vector_relative_l2": 1.4841097260101972,
+      "candidate_max_vector_relative_l2": 1.426396212888243,
+      "change_percentage_points": -5.771351312195416,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "hann-03",
+      "baseline_max_vector_relative_l2": 1.4844163407066275,
+      "candidate_max_vector_relative_l2": 1.426491252999627,
+      "change_percentage_points": -5.7925087707000555,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "hann-05",
+      "baseline_max_vector_relative_l2": 1.4857398165242077,
+      "candidate_max_vector_relative_l2": 1.4274373293373954,
+      "change_percentage_points": -5.83024871868123,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "hann-10",
+      "baseline_max_vector_relative_l2": 0.8930169645369783,
+      "candidate_max_vector_relative_l2": 0.8526712200184214,
+      "change_percentage_points": -4.034574451855688,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "hann-20",
+      "baseline_max_vector_relative_l2": 0.3605697213711187,
+      "candidate_max_vector_relative_l2": 0.344186116997478,
+      "change_percentage_points": -1.6383604373640726,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "gaussian-01",
+      "baseline_max_vector_relative_l2": 1.4840274927542487,
+      "candidate_max_vector_relative_l2": 1.4262098472806444,
+      "change_percentage_points": -5.781764547360435,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "gaussian-03",
+      "baseline_max_vector_relative_l2": 1.484209947526954,
+      "candidate_max_vector_relative_l2": 1.4263095311418141,
+      "change_percentage_points": -5.790041638513976,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "gaussian-05",
+      "baseline_max_vector_relative_l2": 1.485088075330073,
+      "candidate_max_vector_relative_l2": 1.4268768087774513,
+      "change_percentage_points": -5.8211266552621765,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "gaussian-10",
+      "baseline_max_vector_relative_l2": 1.4829772004667143,
+      "candidate_max_vector_relative_l2": 1.4239130437306047,
+      "change_percentage_points": -5.906415673610965,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "gaussian-20",
+      "baseline_max_vector_relative_l2": 0.27247286485853955,
+      "candidate_max_vector_relative_l2": 0.2612949375296827,
+      "change_percentage_points": -1.1177927328856863,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "rectangular-01",
+      "baseline_max_vector_relative_l2": 1.4839799496735786,
+      "candidate_max_vector_relative_l2": 1.4263080455085673,
+      "change_percentage_points": -5.767190416501133,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "rectangular-03",
+      "baseline_max_vector_relative_l2": 1.48626344711383,
+      "candidate_max_vector_relative_l2": 1.4280977946567963,
+      "change_percentage_points": -5.816565245703376,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "rectangular-05",
+      "baseline_max_vector_relative_l2": 1.3060204283304726,
+      "candidate_max_vector_relative_l2": 1.2471945283577799,
+      "change_percentage_points": -5.882589997269272,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "rectangular-10",
+      "baseline_max_vector_relative_l2": 1.4249065876420892,
+      "candidate_max_vector_relative_l2": 1.3605415888637973,
+      "change_percentage_points": -6.436499877829194,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "rectangular-20",
+      "baseline_max_vector_relative_l2": 1.4978079996212792,
+      "candidate_max_vector_relative_l2": 1.4300007164459576,
+      "change_percentage_points": -6.780728317532159,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "chirp-01",
+      "baseline_max_vector_relative_l2": 1.483944881257796,
+      "candidate_max_vector_relative_l2": 1.4260150051265086,
+      "change_percentage_points": -5.792987613128742,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "chirp-03",
+      "baseline_max_vector_relative_l2": 1.484999565400448,
+      "candidate_max_vector_relative_l2": 1.427034906713607,
+      "change_percentage_points": -5.7964658686840975,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "chirp-05",
+      "baseline_max_vector_relative_l2": 1.4856426384371975,
+      "candidate_max_vector_relative_l2": 1.4275282912084142,
+      "change_percentage_points": -5.811434722878328,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "chirp-10",
+      "baseline_max_vector_relative_l2": 1.4715599675052797,
+      "candidate_max_vector_relative_l2": 1.4139858798199028,
+      "change_percentage_points": -5.757408768537697,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    },
+    {
+      "case_id": "chirp-20",
+      "baseline_max_vector_relative_l2": 1.2406853745809536,
+      "candidate_max_vector_relative_l2": 1.1919748250327329,
+      "change_percentage_points": -4.871054954822074,
+      "improved_receivers": 8,
+      "baseline_case_passed": false,
+      "candidate_case_passed": false
+    }
+  ]
+}
