@@ -1,8 +1,16 @@
 name: Publish offline release assets
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Prepared draft release tag
+        required: true
+        default: v0.3.0
+        type: string
 permissions:
   contents: write
+env:
+  WORKAI_RELEASE_TAG: ${{ inputs.tag }}
 jobs:
   package:
     strategy:
@@ -14,7 +22,7 @@ jobs:
           - os: ubuntu-latest
             platform: linux
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 25
+    timeout-minutes: 100
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -43,14 +51,17 @@ jobs:
                   assert len(data)==row['bytes'] and hashlib.sha256(data).hexdigest()==row['sha256'],row['path']
               status=json.loads(z.read(prefix+'offline/examples/local-20261024000000000000000000000001/status.json'))
               assert status['phase']=='completed'
-          digest=hashlib.sha256(package.read_bytes()).hexdigest()
+              record=json.loads(z.read(prefix+'offline/examples/local-20261024000000000000000000000001/record/recording.json'))
+              assert record['phase']=='completed' and record['duration_us']==5000 and record['frame_count']==25001
+          with package.open('rb') as stream:
+              digest=hashlib.file_digest(stream,'sha256').hexdigest()
           Path('portable/SHA256SUMS-'+platform+'.txt').write_text(digest+'  '+package.name+'\n')
           print(json.dumps({'platform':platform,'bytes':package.stat().st_size,'sha256':digest,'manifest_files':len(manifest['files'])}))
       - name: Upload to the prepared draft release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload v0.2.0 portable/*.zip portable/SHA256SUMS-${{ matrix.platform }}.txt --repo "$GITHUB_REPOSITORY" --clobber
+        run: gh release upload "$WORKAI_RELEASE_TAG" portable/*.zip portable/SHA256SUMS-${{ matrix.platform }}.txt --repo "$GITHUB_REPOSITORY" --clobber
   checksums:
     needs: package
     runs-on: ubuntu-latest
@@ -59,6 +70,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download v0.2.0 --repo "$GITHUB_REPOSITORY" --pattern 'SHA256SUMS-*.txt' --dir checksums
+          gh release download "$WORKAI_RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern 'SHA256SUMS-*.txt' --dir checksums
           cat checksums/SHA256SUMS-*.txt > SHA256SUMS.txt
-          gh release upload v0.2.0 SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
+          gh release upload "$WORKAI_RELEASE_TAG" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --clobber
