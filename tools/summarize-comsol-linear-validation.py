@@ -37,7 +37,7 @@ def main():
     plan=json.loads(args.plan.read_text());reference=read_modes(args.reference);refined=read_modes(args.check_reference)
     rows=[];args.output.mkdir(parents=True,exist_ok=True);(args.output/'metrics').mkdir(exist_ok=True)
     for case in plan['cases']:
-        choices=[args.input/case['id']/case['id'],args.input/('comsol-linear-'+case['id'])/case['id']]
+        choices=[args.input/case['id']/case['id'],args.input/('comsol-linear-'+case['id'])/case['id'],args.input/case['id']]
         present=[path for path in choices if (path/'metrics.json').exists()]
         if len(present)!=1:raise ValueError('Missing or ambiguous completed case: '+case['id'])
         folder=present[0];report=json.loads((folder/'metrics.json').read_text())
