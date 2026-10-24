@@ -8,7 +8,7 @@ on:
         default: v0.3.0
         type: string
       evidence_only:
-        description: Refresh supplemental research evidence without rebuilding the frozen software
+        description: Add supplemental COMSOL evidence while preserving the original release archives
         required: true
         default: false
         type: boolean
@@ -74,6 +74,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$WORKAI_RELEASE_TAG" portable/*.zip portable/SHA256SUMS-${{ matrix.platform }}.txt --repo "$GITHUB_REPOSITORY" --clobber
   evidence:
+    if: ${{ !inputs.evidence_only }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -123,14 +124,14 @@ jobs:
       - name: Verify and archive COMSOL and nonlinear physics evidence
         env:
           WORKAI_EVIDENCE_COMMIT: ${{ github.sha }}
-        run: python tools/package-comsol-evidence.py --input comsol-artifacts --output comsol-evidence
+        run: python tools/package-comsol-evidence.py --input comsol-artifacts --output comsol-evidence ${{ inputs.evidence_only && '--supplement' || '' }}
       - name: Upload scientific evidence to the prepared draft
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$WORKAI_RELEASE_TAG" comsol-evidence/*.zip comsol-evidence/SHA256SUMS-comsol.txt --repo "$GITHUB_REPOSITORY" --clobber
+        run: gh release upload "$WORKAI_RELEASE_TAG" comsol-evidence/*.zip comsol-evidence/SHA256SUMS-comsol*.txt --repo "$GITHUB_REPOSITORY" --clobber
   checksums:
     needs: [package, evidence, comsol-evidence]
-    if: ${{ always() && (needs.package.result == 'success' || needs.package.result == 'skipped') && needs.evidence.result == 'success' && needs.comsol-evidence.result == 'success' }}
+    if: ${{ always() && (needs.package.result == 'success' || needs.package.result == 'skipped') && (needs.evidence.result == 'success' || needs.evidence.result == 'skipped') && needs.comsol-evidence.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Publish the combined checksum file

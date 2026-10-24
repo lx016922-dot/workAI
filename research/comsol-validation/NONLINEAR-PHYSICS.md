@@ -54,6 +54,25 @@ r_{T2}=e_{T2}\cdot[\rho_0\ddot u-\operatorname{Div}P-b].
 
 三个方程共用完整三维应力，不能用互不耦合的一维波方程替代。这里的“纵向/横向”指所选坐标方向的投影；有限宽板中的投影不是自动识别出的纯传播模态。
 
+为明确各方向实际包含的项，记位移为 \((u,v,w)\)，参考坐标为 \((X,Y,Z)\)，令 \(N_i=\operatorname{Div}(P_{\rm geo}+P_{\rm mat})_i\)。沿 X 定义纵向时，完整三维分量方程也可写为
+
+\[
+\rho_0u_{tt}=(\lambda+2\mu)u_{XX}+\mu(u_{YY}+u_{ZZ})
++(\lambda+\mu)(v_{XY}+w_{XZ})+N_1+b_1,
+\]
+
+\[
+\rho_0v_{tt}=\mu(v_{XX}+v_{ZZ})+(\lambda+2\mu)v_{YY}
++(\lambda+\mu)(u_{XY}+w_{YZ})+N_2+b_2,
+\]
+
+\[
+\rho_0w_{tt}=\mu(w_{XX}+w_{YY})+(\lambda+2\mu)w_{ZZ}
++(\lambda+\mu)(u_{XZ}+v_{YZ})+N_3+b_3.
+\]
+
+下面定义的 \(N_i\) 保留完整有限应变与三阶材料项，不将其截成只含一个方向的平方项。
+
 同时分开检查五个本构分支。令 \(\mathcal L(A)=\lambda\operatorname{tr}A\,I+2\mu A\)，\(S_N\) 是上式中由 \(a,b,c\) 产生的部分：
 
 \[
@@ -76,6 +95,40 @@ P_{\rm full}=P_{\rm lin}+P_{\rm geo}+P_{\rm mat}.
 \]
 
 因此仅训练横向线性剪切方程会漏掉实际的纵向非线性驱动。测试直接检查了这个非零项。
+
+另一个可直接核算的特例允许三个分量均随 X 和 t 变化。令
+
+\[
+g=u_X,\quad h=v_X,\quad k=w_X,\quad r^2=h^2+k^2,\quad
+e=g+\tfrac12(g^2+r^2),\quad A=\lambda+2\mu,\quad B=l+2m.
+\]
+
+上述完整三维本构精确约化为相互耦合的三式：
+
+\[
+\rho_0u_{tt}=\partial_X\{(1+g)[Ae+Be^2+\tfrac m2r^2]\}+b_1,
+\]
+
+\[
+\rho_0v_{tt}=\partial_X\{h[\mu+(A+m)e+Be^2+\tfrac m2r^2]\}+b_2,
+\]
+
+\[
+\rho_0w_{tt}=\partial_X\{k[\mu+(A+m)e+Be^2+\tfrac m2r^2]\}+b_3.
+\]
+
+这组式子同时展示纵向自非线性、横向到纵向驱动、纵向调制横向，以及两个横向分量经 \(r^2\) 的耦合。在本仓库的常数约定下，n 在这个特殊一维依赖场的三个通量中抵消；一般三维场仍完整保留 n。它们是三维方程的核对特例，不取代薄板的侧向边界条件或三维训练约束。
+
+若再令 \(h=k=0\)，纵向式的弹性部分为
+
+\[
+\rho_0u_{tt}=\left\{A(1+3g+\tfrac32g^2)
++B(2g+6g^2+5g^3+\tfrac54g^4)\right\}u_{XX}+b_1.
+\]
+
+即使应变能仅保留到 Green 应变的三阶，换成位移梯度后仍含更高次项；实现没有擅自丢弃这些有限应变项。
+
+[分量方程核对记录](diagnostics/component-equation-check.json)以 60 组固定种子梯度，比较这些通量与三维本构及其散度，归一化差异分别为 1.49e-16、1.27e-16。该项核对代数恒等关系，不是瞬态波形精度检查。
 
 ## 实际进入训练的残差
 
