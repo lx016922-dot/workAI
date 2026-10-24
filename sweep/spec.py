@@ -11,8 +11,10 @@ from physics.scene import validate_scene, is_plane_strain, is_v2, spectral_admis
 SCHEMA = 'workai.sweep.v1'
 MAX_CASES = 5000
 SAMPLING = ('latin_hypercube', 'uniform')
-ENGINES = {'2d_plane_strain': 'spectral2d.run', '3d_spectral': 'spectral3d.run', '3d_tetra': 'solid.run'}
-ENGINE_IDS = {'2d_plane_strain': 'workai_spectral_plane_strain_2d', '3d_spectral': 'workai_spectral_reference_3d', '3d_tetra': 'workai_explicit_hyperelastic_3d'}
+ENGINES = {'2d_plane_strain': 'spectral2d.run', '3d_spectral': 'spectral3d.run', '3d_tetra': 'solid.run', '3d_graph': 'graphnet.run'}
+ENGINE_IDS = {'2d_plane_strain': 'workai_spectral_plane_strain_2d', '3d_spectral': 'workai_spectral_reference_3d', '3d_tetra': 'workai_explicit_hyperelastic_3d', '3d_graph': 'workai_graphwave_v2_input'}
+# Extra command-line arguments per engine: the graph network computes only the case's own law in sweeps.
+ENGINE_ARGS = {'3d_graph': ['--laws', 'scene']}
 
 
 def get_path(obj, path):
@@ -51,8 +53,9 @@ def validate_spec(spec):
     base = s.get('base_scene'); require(isinstance(base, dict) and base.get('schema') in (V1, V2), '基准场景需为 v1 或 v2 场景。')
     plane = base.get('schema') == V2 and base.get('dimension') == '2d_plane_strain'
     s['engine'] = s.get('engine') or ('2d_plane_strain' if plane else '3d_spectral'); require(s['engine'] in ENGINES, f'engine 需为 {list(ENGINES)}。')
-    require((s['engine'] == '2d_plane_strain') == plane, '二维基准场景必须用 2d_plane_strain 引擎，三维场景必须用 3d_spectral 或 3d_tetra。')
+    require((s['engine'] == '2d_plane_strain') == plane, '二维基准场景必须用 2d_plane_strain 引擎，三维场景必须用 3d_spectral、3d_tetra 或 3d_graph。')
     s['degree'] = s.get('degree', 4 if plane else 3); require(type(s['degree']) is int and 2 <= s['degree'] <= 6, '阶次需为 2–6 的整数。')
+    require(s['engine'] != '3d_graph' or 3 <= s['degree'] <= 5, '冻结图网络的图阶次为 3、4 或 5。')
     s['substeps'] = s.get('substeps', 4); require(type(s['substeps']) is int and 1 <= s['substeps'] <= 32, 'Newmark 子步需为 1–32 的整数。')
     convergence = s.get('convergence')
     if convergence is not None:
@@ -118,6 +121,10 @@ def build_scene(spec, parameters):
         set_path(scene, target, get_path(scene, link['path']) * link['scale'] + link['offset'])
     if spec['engine'] == '3d_tetra':
         validated = validate_scene(scene); require(not is_plane_strain(validated) and validated['geometry']['kind'] != 'cad', '四面体扫描需要三维参数化场景。'); return validated
+    if spec['engine'] == '3d_graph':
+        from graphnet.model import load
+        from graphnet.inputs import network_scene
+        return network_scene(scene, spec['degree'], load(spec['degree'])['material'])
     h = scene['numerics']['h_mm']; probe = copy.deepcopy(scene); probe['numerics']['h_mm'] = max(.02, h / spec['degree'])
     validated = validate_scene(probe); validated['numerics']['h_mm'] = h
     if spec['engine'] == '2d_plane_strain': require(is_plane_strain(validated), '用例必须保持二维平面应变。')

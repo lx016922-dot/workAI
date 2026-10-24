@@ -63,6 +63,7 @@ def variants(spec, scene, degree, substeps, conv):
         elif level == 'degree':
             if engine == '3d_tetra': rows.append({'level': level, 'skipped': 'linear tetrahedra have no degree'}); continue
             if degree >= 6: rows.append({'level': level, 'skipped': 'degree 6 is the maximum'}); continue
+            if engine == '3d_graph' and degree >= 5: rows.append({'level': level, 'skipped': 'the frozen graph network has layers up to degree 5'}); continue
             setting['degree'] = degree + 1
         else:
             if engine == '3d_spectral' and scene['geometry']['kind'] == 'hole':

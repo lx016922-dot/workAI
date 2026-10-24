@@ -1,0 +1,160 @@
+{
+ "schema": "workai.sweep.v1",
+ "name": "图网络 · 顶面高斯激励 · 吸收层 · 收敛复核",
+ "base_scene": {
+  "schema": "workai.hyperelastic.solid.v2",
+  "name": "铝板 · 顶面高斯分布激励 · 两端吸收 · 半宽对称 · 图网络",
+  "geometry": {
+   "kind": "plate",
+   "length_mm": 40.0,
+   "width_mm": 2.0,
+   "thickness_mm": 2.0,
+   "outer_radius_mm": 3.0,
+   "inner_radius_mm": 2.0,
+   "hole_radius_mm": 0.7,
+   "hole_x_mm": 6.0,
+   "hole_y_mm": 2.0,
+   "notch_x_mm": 6.0,
+   "notch_width_mm": 1.0,
+   "notch_depth_mm": 0.6
+  },
+  "material": {
+   "rho_kg_m3": 2700.0,
+   "lambda_pa": 58100000000.0,
+   "mu_pa": 26100000000.0,
+   "l_pa": -143000000000.0,
+   "m_pa": -297000000000.0,
+   "n_pa": -345000000000.0
+  },
+  "constitutive": "murnaghan",
+  "source": {
+   "face": "zmax",
+   "center_mm": [
+    14.0,
+    1.0,
+    2.0
+   ],
+   "radius_mm": 0.0,
+   "direction": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "amplitude_mpa": 1.0,
+   "frequency_mhz": 0.3,
+   "cycles": 5.0,
+   "delay_us": 0.0,
+   "phase_deg": 0.0,
+   "signal": {
+    "type": "tone_burst",
+    "window": "hann"
+   },
+   "profile": {
+    "type": "gaussian",
+    "sigma_mm": 2.0
+   }
+  },
+  "boundary": {
+   "fixed_face": "none"
+  },
+  "acquisition": {
+   "duration_us": 30.0,
+   "sample_step_us": 0.05
+  },
+  "numerics": {
+   "h_mm": 1.5,
+   "cfl": 0.3,
+   "max_elements": 40000
+  },
+  "receivers": [
+   {
+    "name": "P_top",
+    "point_mm": [
+     28.0,
+     1.0,
+     2.0
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   }
+  ],
+  "boundaries": [
+   {
+    "type": "absorbing",
+    "face": "xmin",
+    "length_mm": 8.0,
+    "ramp": "cubic",
+    "attenuation_db": 60.0
+   },
+   {
+    "type": "absorbing",
+    "face": "xmax",
+    "length_mm": 8.0,
+    "ramp": "cubic",
+    "attenuation_db": 60.0
+   },
+   {
+    "type": "symmetry",
+    "face": "ymax"
+   }
+  ],
+  "receiver_lines": [
+   {
+    "name": "top",
+    "from_mm": [
+     20.0,
+     1.0,
+     2.0
+    ],
+    "to_mm": [
+     30.0,
+     1.0,
+     2.0
+    ],
+    "count": 6,
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   }
+  ]
+ },
+ "engine": "3d_graph",
+ "degree": 4,
+ "grid": {
+  "constitutive": [
+   "linear",
+   "murnaghan"
+  ],
+  "source.amplitude_mpa": [
+   1.0,
+   2.0
+  ]
+ },
+ "analysis": {
+  "window": {
+   "mode": "fixed",
+   "start_us": 0.0,
+   "end_us": 30.0
+  }
+ },
+ "budget": {
+  "seconds_per_case": 3600,
+  "workers": 2
+ },
+ "convergence": {
+  "levels": [
+   "space",
+   "degree",
+   "time"
+  ],
+  "cases": {
+   "constitutive": "murnaghan",
+   "source.amplitude_mpa": 2.0
+  }
+ }
+}

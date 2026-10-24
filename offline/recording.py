@@ -67,7 +67,8 @@ def preview(directory):
         for law,name in enumerate(('linear','stvk','murnaghan')):
             fields[law,selected] = data[name][local]
             energy = data['energies'][law]
-            total = energy[:,1]+energy[:,2]
+            # v2 records carry a fifth column with the energy taken out by absorbing layers.
+            total = energy[:,1]+energy[:,2]+(energy[:,4] if energy.shape[1] > 4 else 0.)
             energy_scale[law] = max(energy_scale[law],float(np.max(abs(total))),float(np.max(abs(energy[:,3]))))
             energy_error[law] = max(energy_error[law],float(np.max(abs(total-energy[:,3]))))
     diagnostics = [dict(law=name, layer_step_us=m['layer_step_us'], internal_step_us=m['layer_step_us'],

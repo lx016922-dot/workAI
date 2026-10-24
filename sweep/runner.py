@@ -11,10 +11,10 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from pathlib import Path
 from solid.schema import require
-from .spec import SCHEMA, ENGINES, ENGINE_IDS, plan
+from .spec import SCHEMA, ENGINES, ENGINE_IDS, ENGINE_ARGS, plan
 
 REPO = Path(__file__).resolve().parents[1]
-SNAPSHOT_MODULES = ('physics', 'spectral2d', 'spectral3d', 'solid', 'dispersion', 'sweep')
+SNAPSHOT_MODULES = ('physics', 'spectral2d', 'spectral3d', 'solid', 'dispersion', 'sweep', 'graphnet', 'graphwave')
 
 
 def now(): return datetime.now(timezone.utc).isoformat()
@@ -67,6 +67,7 @@ class Campaign:
         """One isolated solver process; returns the exit code (or 'timeout')."""
         if out.exists(): shutil.rmtree(out)
         command = [sys.executable, '-m', ENGINES[spec['engine']], '--scene', str(scene_path), '--output', str(out), '--degree', str(settings['degree']), '--substeps', str(settings.get('substeps', spec['substeps']))]
+        command += ENGINE_ARGS.get(spec['engine'], [])
         if fields: command.append('--fields')
         if write_csv: command.append('--csv')
         env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', PYTHONUTF8='1')

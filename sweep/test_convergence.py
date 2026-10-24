@@ -127,4 +127,22 @@ class ConvergenceCampaignTests(unittest.TestCase):
                 header = (root / 'summary.csv').read_text().splitlines()[0]; self.assertIn('convergence_pass', header)
 
 
+    def test_graph_network_engine_sweeps_and_converges(self):
+        base = plate(h=1.5); base['schema'] = 'workai.hyperelastic.solid.v2'
+        s = validate_spec(spec('3d_graph', base_scene=base, degree=3, grid={'constitutive': ['linear', 'murnaghan']}, convergence={'levels': ['degree', 'time'], 'cases': {'constitutive': 'murnaghan'}}))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / 'campaign'; campaign = Campaign.create(s, root); result = campaign.run(s)
+            self.assertEqual(result['completed'], 2, [c.get('error') for c in campaign.manifest['cases']]); self.assertEqual(campaign.manifest['engine'], 'workai_graphwave_v2_input')
+            linear, nonlinear = (c['case_id'] for c in campaign.manifest['cases'])
+            record = json.loads((root / 'cases' / nonlinear / 'out' / 'result.json').read_text())
+            self.assertEqual(record['route'], 'v2_input_layer'); self.assertEqual([c['law'] for c in record['controls']], ['murnaghan']); self.assertTrue(record['neural_model']['neural_forward_only'])
+            checked = campaign.converge(s); self.assertEqual(checked['cases'], 2); self.assertEqual(checked['increment_pairs'], 1)
+            report = json.loads((root / 'cases' / nonlinear / 'convergence' / 'report.json').read_text()); rows = {r['level']: r for r in report['levels']}
+            self.assertEqual(rows['degree']['settings']['degree'], 4); self.assertIsNone(rows['degree'].get('error')); self.assertIsNone(rows['time'].get('error'))
+            self.assertLess(rows['time']['comparison']['refined_diagnostics']['internal_step_us'], rows['time']['comparison']['base_diagnostics']['internal_step_us'])
+            increment = json.loads((root / 'cases' / nonlinear / 'convergence' / 'increment.json').read_text()); self.assertEqual(increment['linear_control'], linear)
+        degree5 = validate_spec(spec('3d_graph', base_scene=base, degree=5)); self.assertIn('degree 5', {r['level']: r for r in variants(degree5, build_scene(degree5, {}), 5, 4, settings({}))}['degree']['skipped'])
+        with self.assertRaises(ValueError): validate_spec(spec('3d_graph', base_scene=base, degree=2))
+
+
 if __name__ == '__main__': unittest.main()

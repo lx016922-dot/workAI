@@ -9,7 +9,7 @@ import numpy as np
 from graphwave.predict import predict
 from spectral3d.mesh import make_mesh, boundary_data, interpolation
 from spectral3d.result import result_record, surface_triangles
-from .domain import MODEL, PARTS, digest, model_info, validate_request
+from .domain import MODEL, PARTS, V2, digest, model_info, validate_request
 from graphwave.long_rollout import rollout
 from .recording import preview
 
@@ -20,7 +20,7 @@ def write_json(path, value):
     temp.replace(path)
 
 
-def export_results(directory, scene, mesh, fields, diagnostics, info, times=None, recording=None):
+def export_results(directory, scene, mesh, fields, diagnostics, info, times=None, recording=None, extra=None):
     if times is None:
         times = np.arange(fields[0].shape[0]) * scene['acquisition']['sample_step_us']
     exports = {}
@@ -35,6 +35,8 @@ def export_results(directory, scene, mesh, fields, diagnostics, info, times=None
                       neural_model={'weights_sha256': info['weights_sha256'], 'numerical_correction': False,
                                     'neural_forward_only': True, 'original_acceptance_restored': info['original_acceptance_restored']},
                       controls=diagnostics)
+        if extra:
+            record.update(extra)
         if recording:
             record['recording'] = {k: recording[k] for k in ('schema','duration_us','sample_step_us','frame_count','fingerprint','mesh_sha256')}
             record['recording'].update(animation_only=True, analysis_source='complete_float64_chunks')
@@ -54,18 +56,27 @@ def run(directory):
     try:
         request = validate_request(json.loads((directory / 'request.json').read_text(encoding='utf-8')))
         info = model_info()
-        is_long = request['scene']['acquisition']['duration_us'] >= 5000
+        scene = request['scene']
+        network_v2 = scene.get('schema') == V2
+        is_long = network_v2 or scene['acquisition']['duration_us'] >= 5000
         if is_long and 'long_model' not in info:
             raise ValueError('软件包缺少长记录模型，请使用完整的新版本。')
         weight_path = MODEL / (info['long_model']['weights_file'] if is_long else 'weights.npz')
         with np.load(weight_path, allow_pickle=False) as saved:
             weights = dict(saved)
-        scene = request['scene']
         publish(phase='meshing', message='正在生成几何连接图')
         mesh = make_mesh(scene, request['degree'], scene['numerics']['h_mm'])
         if len(mesh['points']) > 30000 or mesh['elements'].size > 100000 or len(mesh['points']) * 281 * 24 > 192 * 1024**2 or len(surface_triangles(mesh['elements'])) > 50000:
             raise ValueError('网格超过离线显示预算，请增大网格尺寸。')
-        boundary_data(mesh, scene)
+        extra = None
+        if network_v2:
+            from spectral3d.loads import prepare_excitation, loaded_surface_faces
+            from physics.scene import summary
+            excitation = prepare_excitation(mesh, scene)
+            extra = {'loaded_faces': loaded_surface_faces(surface_triangles(mesh['elements']), excitation['loads']), 'excitation': summary(scene),
+                     'input_layer': 'v2_multi_source', 'engine_scope': 'graph_network_v2_input_layer_record'}
+        else:
+            boundary_data(mesh, scene)
         for rx in scene['receivers']:
             interpolation(mesh, rx['point_mm'])
         publish(phase='running', nodes=len(mesh['points']), controls_completed=0,
@@ -83,9 +94,17 @@ def run(directory):
                         message=f"已保存 {m['completed_time_us']/1000:.3f} / {m['duration_us']/1000:g} ms 完整记录")
                 if (directory / 'pause.request').exists() and m['phase'] != 'completed':
                     raise InterruptedError('已保存检查点，可继续计算。')
-            rollout(scene, mesh, weights, temporal, directory / 'record',
-                {'weights_sha256':digest(weight_path),'time_weights_sha256':digest(temporal_path),
-                 'input_sha256':digest(directory/'request.json')},callback=long_progress)
+            identity = {'weights_sha256':digest(weight_path),'time_weights_sha256':digest(temporal_path),
+                        'input_sha256':digest(directory/'request.json')}
+            if network_v2:
+                from graphnet.model import load as load_network
+                from graphnet.rollout import rollout as network_rollout
+                network = load_network(request['degree'], long_record=True)
+                if network['weights_sha256'] != identity['weights_sha256'] or network['time_weights_sha256'] != identity['time_weights_sha256']:
+                    raise ValueError('v2 输入层读取的权重与软件包长记录模型不一致。')
+                network_rollout(scene, mesh, network, directory / 'record', identity, callback=long_progress)
+            else:
+                rollout(scene, mesh, weights, temporal, directory / 'record', identity, callback=long_progress)
             recording,times,fields,diagnostics = preview(directory/'record')
             if not all(d['energy_balance_within_1_percent'] for d in diagnostics):
                 raise ValueError('长记录能量收支未通过 1% 检查；完整原始记录已保留供检查。')
@@ -97,7 +116,7 @@ def run(directory):
         if any(name in sys.modules for name in forbidden):
             raise RuntimeError('预测进程意外加载了数值求解模块。')
         publish(phase='exporting', message='正在保存动画及五种响应')
-        export_results(directory, scene, mesh, fields, diagnostics, info, times, recording)
+        export_results(directory, scene, mesh, fields, diagnostics, info, times, recording, extra)
         publish(phase='completed', message='本机预测完成', controls_completed=3,
                 weights_sha256=info['weights_sha256'], numerical_correction=False)
     except InterruptedError as error:

@@ -74,7 +74,7 @@ export function validateDisplacementLayout(r) {
   const step=r.scene.acquisition.sample_step_us;
   if(r.recording){
     const m=r.recording;
-    if(m.schema!=='workai.long_record.v1'||m.animation_only!==true||m.analysis_source!=='complete_float64_chunks'||!Number.isInteger(m.frame_count)||m.frame_count<2||m.frame_count>200001||m.sample_step_us!==step||Math.abs((m.frame_count-1)*step-m.duration_us)>1e-7||Math.abs(r.times_us.at(-1)-m.duration_us)>1e-7||r.times_us[0]!==0||r.times_us.some((v,i)=>i&&v<=r.times_us[i-1]))throw new Error('完整记录与动画时间信息不一致。');
+    if(!['workai.long_record.v1','workai.graphnet.long_record.v1'].includes(m.schema)||m.animation_only!==true||m.analysis_source!=='complete_float64_chunks'||!Number.isInteger(m.frame_count)||m.frame_count<2||m.frame_count>200001||m.sample_step_us!==step||Math.abs((m.frame_count-1)*step-m.duration_us)>1e-7||Math.abs(r.times_us.at(-1)-m.duration_us)>1e-7||r.times_us[0]!==0||r.times_us.some((v,i)=>i&&v<=r.times_us[i-1]))throw new Error('完整记录与动画时间信息不一致。');
   }else if(!r.times_us.every((x,i)=>Math.abs(x-i*step)<1e-7))throw new Error('时间网格不均匀，不能生成频谱。');
   return r;
 }
