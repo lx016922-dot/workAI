@@ -1,0 +1,89 @@
+{
+  "scene": {
+    "schema": "workai.hyperelastic.solid.v1",
+    "name": "spectral-plate-3",
+    "geometry": {
+      "kind": "plate",
+      "length_mm": 8.413251637637627,
+      "width_mm": 3.0212822176095946,
+      "thickness_mm": 1.8475435477214421,
+      "outer_radius_mm": 2.729938130113758,
+      "inner_radius_mm": 1.7872821690749912,
+      "hole_radius_mm": 0.6559789379838123,
+      "hole_x_mm": 4.003255058139812,
+      "hole_y_mm": 1.4524068071600593,
+      "notch_x_mm": 4.273211797417286,
+      "notch_width_mm": 1.1397487289228088,
+      "notch_depth_mm": 0.5678586532007592
+    },
+    "material": {
+      "rho_kg_m3": 2700.0,
+      "lambda_pa": 58100000000.0,
+      "mu_pa": 26100000000.0,
+      "l_pa": -143000000000.0,
+      "m_pa": -297000000000.0,
+      "n_pa": -345000000000.0
+    },
+    "constitutive": "murnaghan",
+    "source": {
+      "face": "xmin",
+      "center_mm": [
+        0.0,
+        1.5106411088047973,
+        0.9237717738607211
+      ],
+      "radius_mm": 0.0,
+      "direction": [
+        0.9994749556345285,
+        -0.0320426731581066,
+        0.004804181120676444
+      ],
+      "amplitude_mpa": 1.2267704994663569,
+      "frequency_mhz": 0.2716280239367838,
+      "cycles": 1.5249570050844075,
+      "delay_us": 0.24873043634723602,
+      "phase_deg": 46.942530967269064
+    },
+    "boundary": {
+      "fixed_face": "xmax"
+    },
+    "acquisition": {
+      "duration_us": 14.0,
+      "sample_step_us": 0.05
+    },
+    "numerics": {
+      "h_mm": 1.4,
+      "cfl": 0.3,
+      "max_elements": 40000
+    },
+    "receivers": [
+      {
+        "name": "P1",
+        "point_mm": [
+          1.9350478766566543,
+          1.5106411088047973,
+          0.9237717738607211
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P2",
+        "point_mm": [
+          6.6464687937337255,
+          1.5106411088047973,
+          0.9237717738607211
+        ],
+        "direction": [
+          0.7071067811865475,
+          0.7071067811865475,
+          0.0
+        ]
+      }
+    ]
+  },
+  "degree": 3
+}

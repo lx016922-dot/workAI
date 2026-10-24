@@ -1,0 +1,53 @@
+name: Publish offline release assets
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: ubuntu-latest
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch pinned runtime and dependencies
+        run: python tools/download-offline.py --cache build-cache --platform ${{ matrix.platform }}
+      - name: Compute example and assemble the offline archive
+        env:
+          WORKAI_BUILD_COMMIT: ${{ github.sha }}
+        run: python tools/build-offline.py --cache build-cache --output portable --platform ${{ matrix.platform }} --example --archive
+      - name: Verify archive and write its checksum
+        env:
+          WORKAI_PACKAGE_PLATFORM: ${{ matrix.platform }}
+        shell: python
+        run: |
+          import hashlib,json,os,zipfile
+          from pathlib import Path
+          platform=os.environ['WORKAI_PACKAGE_PLATFORM']
+          package=next(Path('portable').glob('*.zip'))
+          with zipfile.ZipFile(package) as z:
+              prefix='WorkAI-Offline-'+platform+'-x64/'
+              manifest=json.loads(z.read(prefix+'MANIFEST.json'))
+              for row in manifest['files']:
+                  data=z.read(prefix+row['path'])
+                  assert len(data)==row['bytes'] and hashlib.sha256(data).hexdigest()==row['sha256'],row['path']
+              status=json.loads(z.read(prefix+'offline/examples/local-20261024000000000000000000000001/status.json'))
+              assert status['phase']=='completed'
+          digest=hashlib.sha256(package.read_bytes()).hexdigest()
+          Path('portable/SHA256SUMS-'+platform+'.txt').write_text(digest+'  '+package.name+'\n')
+          print(json.dumps({'platform':platform,'bytes':package.stat().st_size,'sha256':digest,'manifest_files':len(manifest['files'])}))
+      - name: Upload to the prepared draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload v0.2.0-recovery.1 portable/*.zip portable/SHA256SUMS-${{ matrix.platform }}.txt --repo "$GITHUB_REPOSITORY" --clobber

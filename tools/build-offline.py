@@ -5,6 +5,8 @@ import json
 import os
 import shutil
 import stat
+import subprocess
+import time
 import tarfile
 import zipfile
 from pathlib import Path
@@ -15,6 +17,7 @@ parser.add_argument('--cache', type=Path, required=True)
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--platform', choices=['linux', 'windows'], required=True)
 parser.add_argument('--archive', action='store_true')
+parser.add_argument('--example', action='store_true', help='Compute the pinned example using the bundled runtime.')
 args = parser.parse_args()
 target = args.output / ('WorkAI-Offline-' + args.platform + '-x64')
 if target.exists():
@@ -77,11 +80,25 @@ for wheel in sorted((args.cache / 'wheels' / args.platform).glob('*.whl')):
                 raise SystemExit('Unsafe wheel path')
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(z.read(item))
+if args.example:
+    example = target / 'offline/examples/local-20261024000000000000000000000001'
+    if example.exists():
+        raise SystemExit('--example requires a source tree without precomputed examples.')
+    example.mkdir(parents=True)
+    shutil.copyfile(target / 'offline/example-request.json', example / 'request.json')
+    (example / 'status.json').write_text(json.dumps({'job_id': example.name, 'name': '内置示例 · 铝板网络预测',
+        'phase': 'starting', 'started_at_utc': '2026-10-24T00:00:00+00:00', 'controls_completed': 0}), encoding='utf-8')
+    python = target / ('runtime/python.exe' if args.platform == 'windows' else 'runtime/bin/python3')
+    env = dict(os.environ, NUMBA_CACHE_DIR=str((args.cache / ('compile-' + args.platform)).resolve()),
+               OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1')
+    subprocess.run([str(python.resolve()), '-X', 'utf8', '-m', 'offline.worker', '--job-dir', str(example.resolve())],
+                   cwd=target, env=env, check=True, timeout=900)
+    if json.loads((example / 'status.json').read_text(encoding='utf-8'))['phase'] != 'completed':
+        raise SystemExit('Packaged example did not complete.')
 # Relocated CPython can regenerate its upstream bytecode on first startup.
 # Ship verified source and let Python create caches, outside the immutable manifest.
-if args.platform == 'linux':
-    for cache_file in (target / 'runtime').rglob('*.pyc'):
-        cache_file.unlink()
+for cache_file in target.rglob('*.pyc'):
+    cache_file.unlink()
 rows = [{'path': str(p.relative_to(target)).replace(os.sep, '/'), 'bytes': p.stat().st_size, 'sha256': sha(p)}
         for p in sorted(target.rglob('*')) if p.is_file()]
 (target / 'MANIFEST.json').write_text(json.dumps({'schema': 'workai.offline.bundle.v1', 'platform': args.platform,
