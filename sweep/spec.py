@@ -6,11 +6,13 @@ import math
 from pathlib import Path
 import numpy as np
 from solid.schema import require, exact
-from physics.scene import validate_scene, is_plane_strain, V2
+from physics.scene import validate_scene, is_plane_strain, is_v2, spectral_admissible, V1, V2
 
 SCHEMA = 'workai.sweep.v1'
 MAX_CASES = 5000
 SAMPLING = ('latin_hypercube', 'uniform')
+ENGINES = {'2d_plane_strain': 'spectral2d.run', '3d_spectral': 'spectral3d.run', '3d_tetra': 'solid.run'}
+ENGINE_IDS = {'2d_plane_strain': 'workai_spectral_plane_strain_2d', '3d_spectral': 'workai_spectral_reference_3d', '3d_tetra': 'workai_explicit_hyperelastic_3d'}
 
 
 def get_path(obj, path):
@@ -43,11 +45,18 @@ def load_spec(path):
 def validate_spec(spec):
     require(isinstance(spec, dict) and spec.get('schema') == SCHEMA, f'扫描规格 schema 需为 {SCHEMA}。')
     s = copy.deepcopy(spec); s.pop('base_scene_path', None)
-    allowed = ['schema', 'name', 'base_scene', 'degree', 'grid', 'cases', 'sampling', 'links', 'outputs', 'analysis', 'split', 'budget']
+    allowed = ['schema', 'name', 'base_scene', 'engine', 'degree', 'substeps', 'grid', 'cases', 'sampling', 'links', 'outputs', 'analysis', 'split', 'budget', 'convergence']
     require(all(k in allowed for k in s), f'扫描规格只接受字段 {allowed}。')
     require(isinstance(s.get('name'), str) and 1 <= len(s['name']) <= 120, '扫描需要 1–120 字符的名称。')
-    require(isinstance(s.get('base_scene'), dict) and s['base_scene'].get('schema') == V2 and s['base_scene'].get('dimension') == '2d_plane_strain', '目前只支持 dimension 为 2d_plane_strain 的 v2 基准场景。')
-    s['degree'] = s.get('degree', 4); require(type(s['degree']) is int and 2 <= s['degree'] <= 6, '阶次需为 2–6 的整数。')
+    base = s.get('base_scene'); require(isinstance(base, dict) and base.get('schema') in (V1, V2), '基准场景需为 v1 或 v2 场景。')
+    plane = base.get('schema') == V2 and base.get('dimension') == '2d_plane_strain'
+    s['engine'] = s.get('engine') or ('2d_plane_strain' if plane else '3d_spectral'); require(s['engine'] in ENGINES, f'engine 需为 {list(ENGINES)}。')
+    require((s['engine'] == '2d_plane_strain') == plane, '二维基准场景必须用 2d_plane_strain 引擎，三维场景必须用 3d_spectral 或 3d_tetra。')
+    s['degree'] = s.get('degree', 4 if plane else 3); require(type(s['degree']) is int and 2 <= s['degree'] <= 6, '阶次需为 2–6 的整数。')
+    s['substeps'] = s.get('substeps', 4); require(type(s['substeps']) is int and 1 <= s['substeps'] <= 32, 'Newmark 子步需为 1–32 的整数。')
+    convergence = s.get('convergence')
+    if convergence is not None:
+        require(isinstance(convergence, dict) and all(k in ('levels', 'space_factor', 'time_factor', 'tolerance', 'window_us', 'cases') for k in convergence), '收敛设置只接受 levels、space_factor、time_factor、tolerance、window_us、cases。')
     grid = s.get('grid', {}); require(isinstance(grid, dict) and all(isinstance(k, str) and isinstance(v, list) and 1 <= len(v) <= 200 for k, v in grid.items()), '网格轴需为 路径 → 取值列表。')
     for k, v in grid.items():
         for value in v: _scalar(value, k)
@@ -64,6 +73,11 @@ def validate_spec(spec):
     analysis = s.get('analysis', {}); require(isinstance(analysis, dict), '分析设置需为字典。')
     s['analysis'] = {'frequency_mhz': analysis.get('frequency_mhz'), 'line': analysis.get('line'), 'window': analysis.get('window', {'mode': 'moving'}), 'point_window_us': analysis.get('point_window_us'), 'mode_for_window': analysis.get('mode_for_window', 'S0')}
     require(s['analysis']['window'].get('mode') in ('moving', 'fixed'), '分析时间窗 mode 需为 moving 或 fixed。')
+    require(plane or not base.get('receiver_lines') or s['analysis']['window'].get('mode') == 'fixed' or s['analysis']['window'].get('group_velocity_m_s'),
+            '三维场景没有 Lamb 理论群速度：接收线分析请用固定窗（window.mode = fixed）或给出 window.group_velocity_m_s。')
+    if convergence is not None:
+        from .convergence import settings as convergence_settings
+        convergence_settings(s)
     split = s.get('split')
     if split is not None:
         exact(split, ['train', 'validation', 'test', 'group_by', 'seed'], '划分设置')
@@ -102,9 +116,14 @@ def build_scene(spec, parameters):
     for path, value in parameters.items(): set_path(scene, path, value)
     for target, link in (spec.get('links') or {}).items():
         set_path(scene, target, get_path(scene, link['path']) * link['scale'] + link['offset'])
+    if spec['engine'] == '3d_tetra':
+        validated = validate_scene(scene); require(not is_plane_strain(validated) and validated['geometry']['kind'] != 'cad', '四面体扫描需要三维参数化场景。'); return validated
     h = scene['numerics']['h_mm']; probe = copy.deepcopy(scene); probe['numerics']['h_mm'] = max(.02, h / spec['degree'])
     validated = validate_scene(probe); validated['numerics']['h_mm'] = h
-    require(is_plane_strain(validated), '用例必须保持二维平面应变。')
+    if spec['engine'] == '2d_plane_strain': require(is_plane_strain(validated), '用例必须保持二维平面应变。')
+    else:
+        from spectral3d.run import admissible
+        admissible(validated)
     return validated
 
 

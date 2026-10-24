@@ -41,13 +41,4 @@ def prepare_excitation(mesh, scene):
             'summary': {'excitation_model': 'multi_source_v2', 'dimension': '2d_plane_strain', 'sources': rows, 'constraints': constraint_rows, 'damping': damping_rows}}
 
 
-def receiver_points(scene):
-    """Named receiver points: scene receivers followed by the expanded receiver lines."""
-    rows = [dict(rx, group=None, index=None, distance_mm=None) for rx in scene['receivers']]
-    for line in scene_v2.receiver_lines(scene):
-        start = np.asarray(line['from_mm']); end = np.asarray(line['to_mm'])
-        for i in range(line['count']):
-            point = start + (end - start) * i / (line['count'] - 1)
-            rows.append({'name': f"{line['name']}[{i}]", 'point_mm': point.tolist(), 'direction': line['direction'], 'group': line['name'], 'index': i,
-                         'distance_mm': float(np.linalg.norm(point - start))})
-    return rows
+from physics.receivers import receiver_points  # noqa: E402  (kept as a re-export for callers)

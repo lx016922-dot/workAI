@@ -26,7 +26,7 @@ def make_mesh(scene,asset=None):
                 slot=o.addBox(g['notch_x_mm']-g['notch_width_mm']/2,-.01,g['thickness_mm']-g['notch_depth_mm'],g['notch_width_mm'],g['width_mm']+.02,g['notch_depth_mm']+.01)
                 o.cut([(3,box)],[(3,slot)])
         if g['kind']!='cad':o.synchronize()
-        gmsh.option.setNumber('General.NumThreads',2)
+        gmsh.option.setNumber('General.NumThreads',1)
         gmsh.option.setNumber('Mesh.MeshSizeMin',h*.5);gmsh.option.setNumber('Mesh.MeshSizeMax',h)
         gmsh.option.setNumber('Mesh.MeshSizeFromCurvature',12)
         gmsh.option.setNumber('Mesh.ElementOrder',1)

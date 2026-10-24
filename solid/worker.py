@@ -68,6 +68,7 @@ def run(directory,mesh_reference=None,mesh_scope='time',output_precision='float3
             require(np.array_equal(points*1000,record['nodes_mm']) and np.array_equal(tetra,record['tetra']),'参考网格与结果记录不匹配。')
             mesh=prepare_mesh(points,tetra)
         for rx in scene['receivers']:locate(mesh,rx['point_mm'])
+        if scene.get('receiver_lines'):raise ValueError('网页三维任务暂不支持接收线；请使用 spectral3d.run、solid.run 或 sweep。')
         excitation=prepare_excitation(mesh,scene)
         if excitation is None:
             load,selected=nodal_load(mesh,scene['source'])

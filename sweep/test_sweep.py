@@ -56,7 +56,7 @@ class SweepTests(unittest.TestCase):
     def test_specification_rejections(self):
         for mutate, message in [(lambda s: s.update(schema='x'), 'schema'), (lambda s: s.update(degree=9), '阶次'), (lambda s: s.update(grid={'a': 'not-a-list'}), '网格'),
                                 (lambda s: s.update(sampling={'method': 'sobol', 'count': 2, 'seed': 1, 'ranges': {'a': [0, 1]}}), '采样方法'), (lambda s: s.update(links={'x': {'path': 'y'}}), '联动'),
-                                (lambda s: s.update(split={'train': .5, 'validation': .5, 'test': .5, 'group_by': [], 'seed': 1}), '划分比例'), (lambda s: s['base_scene'].update(dimension='3d'), '2d_plane_strain'),
+                                (lambda s: s.update(split={'train': .5, 'validation': .5, 'test': .5, 'group_by': [], 'seed': 1}), '划分比例'), (lambda s: s.update(engine='3d_spectral'), '2d_plane_strain 引擎'), (lambda s: s.update(engine='fdtd'), 'engine 需为'), (lambda s: s.update(convergence={'levels': ['space'], 'h': 1}), '收敛设置'),
                                 (lambda s: s.update(unknown=1), '只接受字段')]:
             bad = spec(); mutate(bad)
             with self.assertRaises(ValueError) as caught: validate_spec(bad)

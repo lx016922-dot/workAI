@@ -103,7 +103,6 @@ def _validate_boundaries(items, core):
 def _validate_lines(items, core):
     from solid.schema import vector
     require(isinstance(items, list) and len(items) <= MAX_LINES, f'接收线最多 {MAX_LINES} 条。')
-    require(not items or is_plane_strain(core), 'receiver_lines 目前仅用于二维平面应变求解器。')
     rows = []; names = set()
     for raw in items:
         exact(raw, ['name', 'from_mm', 'to_mm', 'count', 'direction'], '接收线')

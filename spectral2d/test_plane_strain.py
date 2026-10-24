@@ -94,7 +94,8 @@ class PlaneStrainTests(unittest.TestCase):
         rows = receiver_points(prepared_scene(lined, 2)); self.assertEqual(len(rows), 7); self.assertEqual(rows[-1]['distance_mm'], 10.); self.assertEqual(rows[3]['group'], 'L')
         for rx in rows: interpolation(mesh, rx['point_mm'])
         with self.assertRaises(ValueError): interpolation(mesh, [6., 0., 2.5])
-        for mutate, message in [(lambda s: s['source'].update(face='ymin'), 'xmin/xmax/zmin/zmax'), (lambda s: s.update(dimension='3d'), 'receiver_lines'),
+        three = copy.deepcopy(lined); three['dimension'] = '3d'; three['receiver_lines'][0]['from_mm'][1] = 1.; three['receiver_lines'][0]['to_mm'][1] = 1.; self.assertEqual(len(receiver_points(prepared_scene.__globals__['validate_scene'](dict(three, numerics=dict(three['numerics'], h_mm=.5))))), 7)
+        for mutate, message in [(lambda s: s['source'].update(face='ymin'), 'xmin/xmax/zmin/zmax'),
                                 (lambda s: s['receivers'][0].update(direction=[0., 1., 0.]), 'y 分量'), (lambda s: s['geometry'].update(kind='pipe'), '板与贯穿')]:
             bad = copy.deepcopy(lined); mutate(bad)
             with self.assertRaises(ValueError) as caught: prepared_scene(bad, 2)

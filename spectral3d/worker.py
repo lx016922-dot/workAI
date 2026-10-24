@@ -25,6 +25,7 @@ def run(directory):
         if is_v2(scene):spectral_admissible(scene)
         elif scene['source']['face'] not in ['xmin','xmax'] or scene['source']['radius_mm']!=0 or scene['boundary']['fixed_face'] not in ['none','xmin','xmax']:
             raise ValueError('当前高阶计算使用完整 X 端面加载，固定面可选另一 X 端面。')
+        if scene.get('receiver_lines'):raise ValueError('网页三维任务暂不支持接收线；请使用 spectral3d.run、solid.run 或 sweep。')
         hashes={};source=Path(__file__).resolve().parents[1]
         for module in ['solid','spectral3d']:
             target=directory/'source_snapshot'/module;target.mkdir(parents=True,exist_ok=False)

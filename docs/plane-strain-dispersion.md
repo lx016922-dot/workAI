@@ -10,7 +10,7 @@
 
 二维场景就是场景 v2 加 `"dimension": "2d_plane_strain"`。几何沿用 `plate` / `notch`（缺口贯穿宽度，在截面上是顶面的矩形切口），`width_mm` 保留但无物理作用，所有力、质量和能量按**每米宽度**计。限制：激励面、固定面、边界面只能是 `xmin/xmax/zmin/zmax`；激励与接收方向的 y 分量必须为零；梳状方向不能是 y。信号、空间分布、多源、对称/反对称面、吸收层与三维完全相同（见 `docs/solver-excitation-v2.md`）。
 
-新增 `receiver_lines`（目前仅二维）：
+新增 `receiver_lines`（二维求解器、三维命令行运行入口 `spectral3d.run`、`solid.run` 与 `sweep` 均支持；三维网页任务暂不支持）：
 
 ```json
 "receiver_lines": [

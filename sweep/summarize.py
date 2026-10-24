@@ -18,14 +18,15 @@ def _curves(cache, thickness_mm, material):
 def summarize_case(case_dir, analysis, cache):
     out = Path(case_dir) / 'out'; record = json.loads((out / 'result.json').read_text(encoding='utf-8')); scene = record['scene']; times = np.array(record['times_us'])
     frequency = analysis.get('frequency_mhz') or scene['source']['frequency_mhz']; thickness = scene['geometry']['thickness_mm']
-    curves = _curves(cache, thickness, scene['material']); mode = analysis.get('mode_for_window', 'S0'); at = mode_at(curves, mode, frequency * thickness)
+    plane = record.get('dimension') == '2d_plane_strain'; mode = analysis.get('mode_for_window', 'S0')
+    at = mode_at(_curves(cache, thickness, scene['material']), mode, frequency * thickness) if (plane and scene['geometry']['kind'] in ('plate', 'notch')) else None
     row = {'case_id': Path(case_dir).name, 'frequency_mhz': frequency, 'thickness_mm': thickness, 'fd_mhz_mm': frequency * thickness, 'theory_mode': mode,
            'theory_phase_velocity_m_s': at['phase_velocity_m_s'] if at else None, 'theory_group_velocity_m_s': at['group_velocity_m_s'] if at else None,
-           'energy_balance_relative': record['diagnostics']['external_work_balance_relative'], 'max_strain': record['diagnostics']['max_strain'], 'elapsed_s': record['diagnostics']['elapsed_s'],
-           'nodes': record['diagnostics']['nodes'], 'internal_steps': record['diagnostics']['internal_steps'], 'receivers': [], 'line': None}
+           'energy_balance_relative': record['diagnostics']['external_work_balance_relative'], 'max_strain': record['diagnostics']['max_strain'], 'elapsed_s': record['diagnostics'].get('elapsed_s'),
+           'nodes': record['diagnostics'].get('nodes', record['mesh']['nodes']), 'internal_steps': record['diagnostics']['internal_steps'], 'dimension': record.get('dimension'), 'engine': record.get('engine'), 'receivers': [], 'line': None}
     start_us, end_us = support_us(scene['source']); window = analysis.get('point_window_us') or [times[0], times[-1]]
     for rx in record['receivers']:
-        direction = np.asarray(rx['direction'])[[0, 2]]; projected = np.array(rx['u_x_m']) * direction[0] + np.array(rx['u_z_m']) * direction[1]
+        projected = np.array(rx['projected_m'])
         h = harmonic_coefficients(times, projected, frequency, window[0], window[1])['harmonics']
         row['receivers'].append({'name': rx['name'], 'point_mm': rx['point_mm'], 'a1_m': h[0]['amplitude'], 'phase1_deg': h[0]['phase_deg'], 'a2_m': h[1]['amplitude'] if h[1]['available'] else None, 'phase2_deg': h[1].get('phase_deg')})
     lines = record['receiver_lines']
@@ -34,7 +35,7 @@ def summarize_case(case_dir, analysis, cache):
         if f'line_{name}_projected_m' in z:
             distance = z[f'line_{name}_distance_mm']; traces = z[f'line_{name}_projected_m']; settings = analysis.get('window', {'mode': 'moving'})
             if settings.get('mode', 'moving') == 'moving':
-                cg = settings.get('group_velocity_m_s') or (at['group_velocity_m_s'] if at else None); require(cg, f'移动窗需要群速度：{mode} 在 fd={frequency * thickness:.3g} 处无理论值，请改用固定窗或指定 group_velocity_m_s。')
+                cg = settings.get('group_velocity_m_s') or (at['group_velocity_m_s'] if at else None); require(cg, f'移动窗需要群速度：{mode} 在 fd={frequency * thickness:.3g} 处无理论值（三维场景没有 Lamb 理论），请改用固定窗或指定 group_velocity_m_s。')
                 rows = line_harmonics(distance, times, traces, frequency, group_velocity_m_s=cg, burst_us=settings.get('burst_us') or (end_us - start_us), delay_us=scene['source']['delay_us'])
                 velocity_window = None
             else:
@@ -105,7 +106,7 @@ def summarize(campaign_dir, analysis=None):
     rows = []
     for entry in manifest['cases']:
         if entry.get('phase') != 'completed': continue
-        row = summarize_case(campaign_dir / 'cases' / entry['case_id'], analysis, cache); row['parameters'] = entry['parameters']; row['split'] = entry['split']; rows.append(row)
+        row = summarize_case(campaign_dir / 'cases' / entry['case_id'], analysis, cache); row['parameters'] = entry['parameters']; row['split'] = entry['split']; row['convergence'] = entry.get('convergence'); rows.append(row)
     controls = control_pairs(manifest, rows); pairs = scaling_pairs(manifest, rows)
     def public_line(line):
         out = {k: v for k, v in line.items() if k != 'rows'}
@@ -118,11 +119,13 @@ def summarize(campaign_dir, analysis=None):
     parameters = sorted({k for r in rows for k in r['parameters']})
     with (campaign_dir / 'summary.csv').open('w', newline='', encoding='utf-8') as handle:
         writer = csv.writer(handle)
-        writer.writerow(['case_id', 'split'] + parameters + ['frequency_mhz', 'thickness_mm', 'fd_mhz_mm', 'theory_cp_m_s', 'theory_cg_m_s', 'line_cp_m_s', 'line_phase_r2', 'line_cg_m_s', 'line_a1_first_m', 'line_a1_last_m', 'line_a2_first_m', 'line_a2_last_m', 'ratio_slope_per_m', 'ratio_r2', 'a2_fit_r2', 'increment_a2_first_m', 'increment_a2_last_m', 'increment_a2_fit_r2', 'energy_balance', 'max_strain', 'nodes', 'internal_steps', 'elapsed_s'])
+        writer.writerow(['case_id', 'split'] + parameters + ['frequency_mhz', 'thickness_mm', 'fd_mhz_mm', 'theory_cp_m_s', 'theory_cg_m_s', 'line_cp_m_s', 'line_phase_r2', 'line_cg_m_s', 'line_a1_first_m', 'line_a1_last_m', 'line_a2_first_m', 'line_a2_last_m', 'ratio_slope_per_m', 'ratio_r2', 'a2_fit_r2', 'increment_a2_first_m', 'increment_a2_last_m', 'increment_a2_fit_r2', 'convergence_pass', 'convergence_worst_waveform_l2', 'convergence_worst_a2_relative', 'convergence_increment_pass', 'convergence_increment_worst_a2_relative', 'energy_balance', 'max_strain', 'nodes', 'internal_steps', 'elapsed_s'])
         for r in rows:
             line = r['line'] or {}; inc = line.get('nonlinear_increment') or {}
             writer.writerow([r['case_id'], r['split']] + [r['parameters'].get(p, '') for p in parameters] + [r['frequency_mhz'], r['thickness_mm'], r['fd_mhz_mm'], r['theory_phase_velocity_m_s'], r['theory_group_velocity_m_s'],
                              line.get('phase_velocity_m_s'), line.get('phase_fit_r_squared'), line.get('group_velocity_m_s'), (line.get('a1_m') or [None])[0], (line.get('a1_m') or [None])[-1], (line.get('a2_m') or [None])[0], (line.get('a2_m') or [None])[-1],
                              (line.get('fit_ratio_vs_x') or {}).get('slope_per_m'), (line.get('fit_ratio_vs_x') or {}).get('r_squared'), (line.get('fit_a2_vs_x') or {}).get('r_squared'),
-                             (inc.get('a2_m') or [None])[0], (inc.get('a2_m') or [None])[-1], (inc.get('fit_a2_vs_x') or {}).get('r_squared'), r['energy_balance_relative'], r['max_strain'], r['nodes'], r['internal_steps'], r['elapsed_s']])
+                             (inc.get('a2_m') or [None])[0], (inc.get('a2_m') or [None])[-1], (inc.get('fit_a2_vs_x') or {}).get('r_squared'), (r.get('convergence') or {}).get('pass'), (r.get('convergence') or {}).get('worst_waveform_relative_l2'), (r.get('convergence') or {}).get('worst_a2_relative'),
+                             ((r.get('convergence') or {}).get('increment') or {}).get('pass'), ((r.get('convergence') or {}).get('increment') or {}).get('worst_a2_relative'),
+                             r['energy_balance_relative'], r['max_strain'], r['nodes'], r['internal_steps'], r['elapsed_s']])
     return summary
