@@ -1,0 +1,26 @@
+{
+  "schema": "workai.sweep.v1",
+  "name": "随机铝板 · 平面应变训练集（厚度、载频、幅值）",
+  "base_scene": "plate-2d-s0-line.json",
+  "degree": 4,
+  "sampling": {
+    "method": "latin_hypercube",
+    "count": 24,
+    "seed": 20261024,
+    "ranges": {
+      "geometry.thickness_mm": [1.5, 3.0],
+      "source.frequency_mhz": [0.2, 0.45],
+      "source.amplitude_mpa": [0.5, 2.0]
+    }
+  },
+  "links": {
+    "source.center_mm.2": { "path": "geometry.thickness_mm", "scale": 0.5, "offset": 0.0 },
+    "receivers.0.point_mm.2": { "path": "geometry.thickness_mm", "scale": 0.5, "offset": 0.0 },
+    "receiver_lines.0.from_mm.2": { "path": "geometry.thickness_mm", "scale": 1.0, "offset": 0.0 },
+    "receiver_lines.0.to_mm.2": { "path": "geometry.thickness_mm", "scale": 1.0, "offset": 0.0 },
+    "receiver_lines.1.to_mm.2": { "path": "geometry.thickness_mm", "scale": 1.0, "offset": 0.0 }
+  },
+  "split": { "train": 0.75, "validation": 0.125, "test": 0.125, "group_by": ["geometry.thickness_mm"], "seed": 7 },
+  "analysis": { "line": "top", "window": { "mode": "moving" } },
+  "budget": { "seconds_per_case": 2400, "workers": 2 }
+}

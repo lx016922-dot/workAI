@@ -1,0 +1,16 @@
+{
+  "schema": "workai.sweep.v1",
+  "name": "2 mm 铝板 · S0 载频扫描 · A/2A 幅值标度",
+  "base_scene": "plate-2d-s0-line.json",
+  "degree": 4,
+  "grid": {
+    "source.frequency_mhz": [0.2, 0.3, 0.4, 0.5],
+    "source.amplitude_mpa": [1.0, 2.0]
+  },
+  "links": {
+    "source.cycles": { "path": "source.frequency_mhz", "scale": 16.0, "offset": 0.0 }
+  },
+  "analysis": { "line": "top", "window": { "mode": "moving" }, "mode_for_window": "S0" },
+  "outputs": { "fields": false, "csv": false },
+  "budget": { "seconds_per_case": 1800, "workers": 2 }
+}

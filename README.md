@@ -31,6 +31,8 @@ Linux 将 `windows` 改为 `linux`。使用全新输出目录和没有预生成 
 
 当前重点为**材料非线性导波：基频与二次谐波的产生、累积**。已在恢复的线性研究引擎上新增多晶铝 Murnaghan 有限应变模型、五组本构/幅值对照、三组离散精度和材料二次谐波分析。详见[非线性 COMSOL 实现与验收记录](docs/nonlinear-comsol.md)。原始线性源码和历史结果继续保留。已完成两项非线性任务、30 次真实求解；最终空间联合对照差异 ≤0.0344%、时间步差异 ≤3.592%、双幅值比约 4，具体适用范围和跨任务证据见验收记录。
 
+新增[参数扫描与训练数据批处理框架](docs/sweep-and-datasets.md)：`python -m sweep plan|run|summarize|dataset`，支持全因子网格、显式用例、拉丁超立方/均匀采样、字段线性联动、几何分组划分；隔离进程并行、可恢复运行，manifest 记录规格与源码哈希；汇总接收线 f/2f、A₂/A₁² 拟合、相速度对理论值与 A/2A 幅值标度配对；堆叠为带划分的训练集 NPZ。示例见 `docs/examples/sweep-s0-frequency.json` 与 `dataset-random-plates.json`。
+
 新增[二维平面应变非线性谱元求解器与导波频散工具链](docs/plane-strain-dispersion.md)：`spectral2d` 在 x–z 截面上用与三维逐位同源的 Murnaghan 本构求解，支持接收线；经三维对称边界对照、半厚度对称和 S0 相速度对 Rayleigh–Lamb 核对。`dispersion` 提供频散曲线与振型、(f, 2f) 同步模态对、激励设计、沿程谐波拟合、幅值标度、相速度/群速度、f–k 与厚度向模态分解。工作台侧栏新增「二维平面应变」页面：表单与 JSON 编辑提交、截面动画、接收线沿程 f/2f、相速度与叠加理论曲线的 f–k 谱。示例见 `docs/examples/plate-2d-s0-line.json`。
 
 两套本地数值求解器新增[任意信号、多源激励、对称面与吸收层](docs/solver-excitation-v2.md)（场景 v2）：Hann/Tukey/高斯/矩形窗脉冲、高斯脉冲、Ricker、线性调频、多频与用户采样信号；最多 16 个各自带时延与空间分布（均匀、高斯、梳状）的牵引；对称/反对称面与质量比例吸收层。版本 1 场景在两套求解器上的结果逐位不变，离线冻结网络不受影响。示例见 `docs/examples/plate-v2-absorbing-comb.json`。
