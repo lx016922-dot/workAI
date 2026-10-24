@@ -119,7 +119,7 @@ public class UltraResearch {
  }
  private static void describe(SolverFeature feature,String prefix){
   System.out.println("P1_PROPERTIES "+prefix+" "+Arrays.toString(feature.properties()));
-  for(String key:feature.properties())if(key.contains("tol")||key.contains("step")||key.equals("rhoinf")||key.equals("maxiter")||key.equals("termonres")||key.equals("linsolver")){try{System.out.println("P1_PROPERTY "+prefix+" "+key+"="+feature.getString(key)+" allowed="+Arrays.toString(feature.getAllowedPropertyValues(key)));}catch(Exception ignored){}}
+  for(String key:feature.properties())if(key.contains("tol")||key.contains("step")||key.equals("rhoinf")||key.equals("maxiter")||key.equals("termonres")||key.equals("linsolver")||key.equals("jtech")){try{System.out.println("P1_PROPERTY "+prefix+" "+key+"="+feature.getString(key)+" allowed="+Arrays.toString(feature.getAllowedPropertyValues(key)));}catch(Exception ignored){}}
   for(String tag:feature.feature().tags())describe(feature.feature(tag),prefix+"/"+tag);
  }
  private static String timeSolver(Model m,boolean configure){
@@ -128,7 +128,7 @@ public class UltraResearch {
   t.set("timemethod","genalpha");t.set("rhoinf",1.0);t.set("rtol",num(cfg,"relative_tolerance"));t.set("atolglobalvaluemethod","manual");t.set("atolglobalmethod","unscaled");t.set("atolglobal",num(cfg,"absolute_tolerance_m"));t.set("reacf","off");
   if(configure){
    t.set("tstepsgenalpha","strict");t.set("initialstepgenalphaactive","on");t.set("initialstepgenalpha",f(step));t.set("maxstepconstraintgenalpha","const");t.set("maxstepgenalpha",f(step));
-   for(String tag:t.feature().tags())if(t.feature(tag).getType().equals("FullyCoupled")){t.feature(tag).set("ntolfact",.001);t.feature(tag).set("maxiter",12);t.feature(tag).set("termonres","off");}
+   for(String tag:t.feature().tags())if(t.feature(tag).getType().equals("FullyCoupled")){t.feature(tag).set("jtech","once");t.feature(tag).set("ntolfact",.001);t.feature(tag).set("maxiter",12);t.feature(tag).set("termonres","off");}
    receipt.setProperty("time_steps_mode","strict");receipt.setProperty("relative_tolerance",f(num(cfg,"relative_tolerance")));receipt.setProperty("absolute_tolerance_m",f(num(cfg,"absolute_tolerance_m")));receipt.setProperty("newton_tolerance_factor","0.001");receipt.setProperty("newton_termination","solution_change");receipt.setProperty("rho_infinity","1.0");
   }
   describe(t,"time");return solver;

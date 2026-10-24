@@ -52,6 +52,52 @@ def push(message):
     subprocess.run(['git','push','origin',f'HEAD:refs/heads/{BRANCH}'],cwd=REPO,check=True)
 
 
+def restore_template(root, plan, runs):
+    """Restore the original model only after all P1 jobs have finished.
+
+    Use the existing signed installer with an exact expected source hash. On an
+    uncertain POST, only query health; never automatically repeat the update.
+    A template installed by another operator is preserved.
+    """
+    previous=REPO/'server/comsol/UltraResearch.java'
+    previous_hash='528b3b8190866b8f1fbe05f27d093370a2e75c9288e8d91aaf654a8b39a09513'
+    if hashlib.sha256(previous.read_bytes()).hexdigest()!=previous_hash:
+        return dict(status='pending',reason='Original template source differs from its recorded digest')
+    command=[str(root/'bin/workai-pwsh'),'-NoLogo','-NoProfile','-NonInteractive']
+
+    def health():
+        proc=subprocess.run(command+['-File',str(REPO/'tools/comsol-reference.ps1'),'-Root',str(root),'-Action','health'],
+                            capture_output=True,text=True,timeout=45)
+        if proc.returncode:raise RuntimeError('Signed research health could not be read')
+        result=json.loads(proc.stdout)
+        if not result.get('server_signature_verified') or result['http_status']!=200:
+            raise RuntimeError('Research health was not verified')
+        return result
+
+    receipt=dict(previous_source_sha256=previous_hash,campaign_source_sha256=plan['source_sha256'],checked_at_utc=utc())
+    try:
+        before=health();current=before['body']['source_sha256']
+        if current==previous_hash:
+            return dict(receipt,status='already_restored',server_signature_verified=True)
+        if current!=plan['source_sha256']:
+            return dict(receipt,status='preserved_newer_template',observed_source_sha256=current,server_signature_verified=True)
+        attempt=subprocess.run(command+['-File',str(root/'Install-NonlinearResearch.ps1'),'-SourceFile',str(previous),
+                                        '-ExpectedSourceSha256',plan['source_sha256']],capture_output=True,text=True,timeout=90)
+        (runs/'template-restoration.log').write_text(attempt.stdout+'\n'+attempt.stderr)
+        after=health();observed=after['body']['source_sha256']
+        return dict(receipt,status='restored' if observed==previous_hash else 'pending',observed_source_sha256=observed,
+                    server_signature_verified=True,installer_exit_code=attempt.returncode,health=after)
+    except Exception as exc:
+        # Re-reading health is safe even if an install response was lost.
+        try:
+            observed=health()['body']['source_sha256']
+            if observed==previous_hash:
+                return dict(receipt,status='restored',observed_source_sha256=observed,server_signature_verified=True)
+        except Exception:
+            pass
+        return dict(receipt,status='pending',reason=str(exc),automatic_post_retry=False)
+
+
 def wait_old_job(root):
     command=[str(root/'bin/workai-pwsh'),'-NoLogo','-NoProfile','-NonInteractive','-File',str(REPO/'tools/comsol-reference.ps1'),
              '-Root',str(root),'-Action','status','-JobId',OLD_JOB]
@@ -104,7 +150,7 @@ def run_job(root, folder):
                         progress.update(remote_phase=body.get('phase'),solver_log_bytes=body.get('total_bytes'),last_remote_update=body.get('last_write_utc'))
                     except (ValueError,OSError):
                         pass  # The signed client may be replacing this progress file.
-                state('running',**progress)
+                state('running',active_pilot_job=None,message='COMSOL job active; awaiting verified complete outputs.',**progress)
                 last_report=time.monotonic()
             time.sleep(15)
         if proc.returncode:
@@ -163,6 +209,8 @@ def main(args):
                 if args.push:push(f"Add verified COMSOL P1 results: {name} ({result['completed_runs']}/21)")
             result=validate(data,partial=False)
             if not result['complete']:raise RuntimeError('P1 incomplete')
+            restoration=restore_template(args.root,plan,args.runs)
+            write(data/'template-restoration.json',restoration)
             output=args.runs.parent/'WorkAI_COMSOL_P1_20261024.zip'
             with zipfile.ZipFile(output,'w',compression=zipfile.ZIP_DEFLATED) as z:
                 for path in sorted(data.iterdir()):
@@ -170,7 +218,7 @@ def main(args):
                 z.write(HERE/'README.md','README.md')
                 for path in sorted((REPO/'docs/comsol').iterdir()):
                     if path.is_file() and not path.name.startswith('.'):z.write(path,'contract/'+path.name)
-            state('completed',completed_transient_runs=21,active_job=None,archive_sha256=hashlib.sha256(output.read_bytes()).hexdigest(),
+            state('completed',completed_transient_runs=21,active_job=None,template_restoration=restoration['status'],archive_sha256=hashlib.sha256(output.read_bytes()).hexdigest(),
                   message='All 21 P1 COMSOL runs collected and checked. See validation.json for convergence warnings; completion alone is not an accuracy certificate.')
             if args.push:push('Complete the 21-run COMSOL P1 dataset and convergence checks')
         except Exception as exc:

@@ -38,6 +38,8 @@ python research/comsol-p1-20261024/campaign.py --push
 
 队列每次先执行签名 GET 确认作业是否已经存在；已存在的作业只查询和收集。网络、求解器或校验错误会保留文件并停止队列，不会盲目重复 POST。云环境及 Windows API/COMSOL 服务必须持续运行；环境关闭后需要重新启动队列。
 
+全部 21 次运行收集结束后，队列通过原签名接口恢复计算前的研究模型模板。恢复前核对当前源代码指纹；如果模板已被其他操作更新，则保留该更新。结果写入 `data/template-restoration.json`。
+
 准备输入：
 
 ```sh
@@ -61,3 +63,10 @@ python research/comsol-p1-20261024/validate.py research/comsol-p1-20261024/data 
 ## 有限的服务器停止辅助
 
 现有远程接口没有取消作业入口。[Stop-OwnPilot.ps1](Stop-OwnPilot.ps1) 仅用于在 Windows 服务器上停止本次已识别的低效试算：它先核对作业 ID、worker PID、命令行和进程创建时间，再停止该 worker 的进程树，并将该作业标为失败。它保留原文件和 HTTP 服务；可以先加 `-WhatIf` 查看目标。
+
+Windows PowerShell 5.1 下载脚本时使用 `-UseBasicParsing`，避免依赖 Internet Explorer 初始化。以下命令使用固定路径，适用于本次旧试算：
+
+```powershell
+Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/lx016922-dot/workAI/8f1c10dca733bab1ea2e938413cce7f3f86f6ad1/research/comsol-p1-20261024/Stop-OwnPilot.ps1' -OutFile 'C:\Users\Administrator\Stop-WorkAI-P1.ps1'
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File 'C:\Users\Administrator\Stop-WorkAI-P1.ps1'
+```

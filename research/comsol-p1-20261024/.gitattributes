@@ -1,2 +1,4 @@
-evidence/** -text whitespace=cr-at-eol
+# Raw signed artifacts may contain COMSOL's trailing spaces and CRLF records.
+# Preserve their bytes; code-style whitespace checks do not apply to evidence.
+evidence/** -text -whitespace
 data/*.csv -text
