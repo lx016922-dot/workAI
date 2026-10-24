@@ -6,7 +6,7 @@
 
 [下载 Windows / Linux 便携包](https://github.com/lx016922-dot/workAI/releases/tag/v0.2.0)。Windows x64 解压后双击 `Start-WorkAI.bat`；Linux x64 运行 `sh start-workai.sh`。包内自带 Python、计算依赖、原始模型和实际预测示例，无需联网安装、Node、COMSOL、账号或云端身份。使用本机浏览器操作，按 Ctrl+C 正常退出并停止进行中的计算。
 
-**原始模型已完整接入。** 用户提供的 `workai-graphwave-model-20261023.zip` 与原对话记录的 SHA-256 完全一致；原权重、检查点、八例验收、加密参考场记录和核心推理代码的摘要均已核对。本次打包没有重新训练。原评估中，对照更细参考网格的最大全场误差为 **0.438%**，最大材料增量误差为 **1.118%**；微弱信号使用绝对误差门槛。详见 [模型校验记录](offline/model/validation.json)、[八例评估](offline/model/metrics.json)和[加密参考场评估](offline/model/refined-metrics.json)。
+**原始模型已完整接入。** 用户提供的 `workai-graphwave-model-20261023.zip` 与原对话记录的 SHA-256 完全一致；原权重、检查点、八例验收、更细网格参考场记录和核心推理代码的摘要均已核对。本次打包没有重新训练。原评估中，对照更细参考网格的最大全场误差为 **0.438%**，最大材料增量误差为 **1.118%**；微弱信号使用绝对误差门槛。详见 [模型校验记录](offline/model/validation.json)、[八例评估](offline/model/metrics.json)和[更细网格参考场评估](offline/model/refined-metrics.json)。
 
 这些数值是原模型的有界验证结果，不是任意 CAD、新工况、点位或方向的误差上界。本次打包核验已保存记录，没有重算八例大型参考场。该模型仍带网格并逐时传播，没有预测后的数值校正。
 

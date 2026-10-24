@@ -29,7 +29,7 @@ Windows 在 GitHub Actions 的原生 x64 runner 上实测；平台记录见 offl
 模型与证据：
 本版本使用用户提供的 workai-graphwave-model-20261023.zip 中的原始冻结权重。
 压缩包 SHA-256 与原对话记录完全一致，检查点、前向权重、八例基础评估、
-加密参考场评估和核心推理代码均已核对摘要；本次没有重新训练模型。
+更细网格参考场评估和核心推理代码均已核对摘要；本次没有重新训练模型。
 原始记录见 offline/model/metrics.json、refined-metrics.json 和 validation.json。
 原始模型包原样保留为 offline/model/original-model-package.zip。
 原评估的八个新结构均通过记录中的 5% 门槛；对照更细参考网格，
