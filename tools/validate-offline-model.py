@@ -15,11 +15,14 @@ parser.add_argument('--output', type=Path, required=True)
 args = parser.parse_args()
 torch.set_num_threads(2)
 dataset = json.loads(args.dataset.read_text())
+active_weights = model_info()['weights_sha256']
 rows = []
 for case in dataset['cases']:
     if case['split'] != 'test':
         continue
     row = evaluate_case(case, args.predictions / case['case_id'], dataset['branch_scales_in_100nm'])
+    if row['weights_sha256'] != active_weights:
+        raise ValueError('Predictions belong to a different model; refusing to relabel their validation.')
     rows.append(row)
     print(json.dumps({'case_id': row['case_id'], 'full': row['field_checks']['full_vector']['relative_l2'],
                       'material': row['field_checks']['material_vector']['relative_l2'], 'all_gates': row['all_gates_passed']}), flush=True)

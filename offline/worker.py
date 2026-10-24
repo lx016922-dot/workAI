@@ -28,9 +28,9 @@ def export_results(directory, scene, mesh, fields, diagnostics, info):
         d.update(output_dtype='float64', internal_step_us=d['layer_step_us'])
         record, packed = result_record(directory.name, scene, mesh, {'fields_m': field, 'times_us': times, 'diagnostics': d})
         record.update(schema='workai.offline.graphwave.result.v1', engine='workai_graphwave_offline',
-                      engine_scope='recovered_frozen_graph_network', response_part=part,
+                      engine_scope='original_frozen_graph_network', response_part=part,
                       neural_model={'weights_sha256': info['weights_sha256'], 'numerical_correction': False,
-                                    'neural_forward_only': True, 'original_acceptance_inherited': False},
+                                    'neural_forward_only': True, 'original_acceptance_restored': info['original_acceptance_restored']},
                       controls=diagnostics)
         (directory / (part + '.bin.gz')).write_bytes(packed)
         write_json(directory / (part + '.json'), record)

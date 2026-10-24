@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>WorkAI · 离线研究工作台</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/offline.css"></head>
-<body><header class="topbar"><a class="brand" href="/">W<span>workAI</span></a><span class="local-badge">● 本机离线运行</span><span class="version">0.2 · 恢复版</span></header>
+<body><header class="topbar"><a class="brand" href="/">W<span>workAI</span></a><span class="local-badge">● 本机离线运行</span><span class="version">0.2 · 原始模型</span></header>
 <main class="workspace"><section class="intro"><div><p class="eyebrow">ULTRASONIC WAVE LAB</p><h1>从结构到波传播</h1><p>冻结图网络 · 三维位移 · 波形与谐波分析</p></div><a class="button secondary" href="#history">查看计算记录 ↓</a></section>
 <div id="model-note" class="notice">正在检查本地模型…</div><p id="error" class="notice error-notice" role="alert" hidden></p>
 <form id="scene-form"><div class="solid-layout"><section class="panel"><div class="panel-heading"><h2>01 / 结构</h2><span class="muted">mm</span></div><div class="panel-body"><label class="field"><span>结构类型</span><select id="kind"><option value="plate">铝板</option><option value="pipe">圆管</option><option value="hole">带通孔板</option><option value="notch">带缺口板</option></select></label><div id="geometry" class="form-grid"></div><p class="section-note">板坐标从 (0,0,0) 起；管轴为 X，截面中心 Y=Z=0。材料为固定多晶铝参考参数。</p></div></section>

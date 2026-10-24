@@ -39,7 +39,8 @@ def main():
                     raw = response.read()
                     return json.loads(raw) if response.headers.get_content_type() == 'application/json' else raw
             info = request('/api/info')
-            assert info['model']['original_acceptance_inherited'] is False
+            assert info['model']['original_model_restored'] is True
+            assert info['model']['weights_sha256'] == 'abcf531d1c968786200e3a0a0bf944cd2b54000797fe7067bfef6f571b056a0d'
             scene = request('/api/templates')['plate']
             scene['geometry'].update(length_mm=8., width_mm=3., thickness_mm=1.5)
             scene['source']['center_mm'] = [0., 1.5, .75]

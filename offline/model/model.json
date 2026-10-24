@@ -1,13 +1,31 @@
 {
   "schema": "workai.offline.model.v1",
-  "version": "0.2.0-recovery.1",
-  "weights_sha256": "c4b0851370d1d5043040bdd4926d4ea50039d5cf3dc214365f57d050880e53e9",
-  "original_weights_sha256": "abcf531d1c968786200e3a0a0bf944cd2b54000797fe7067bfef6f571b056a0d",
-  "original_acceptance_inherited": false,
+  "version": "0.2.0",
+  "model_run": "aluminum-graphwave-20261023-v1",
+  "weights_sha256": "abcf531d1c968786200e3a0a0bf944cd2b54000797fe7067bfef6f571b056a0d",
+  "checkpoint_sha256": "e2c406935d6c7b9779cb41f67115d3f3e18bf136af9326e3ecca4fc058cd907c",
+  "original_model_restored": true,
+  "original_acceptance_restored": true,
   "trainable_parameters": 120,
-  "seed": 2026102401,
   "neural_forward_only": true,
   "numerical_correction": false,
-  "user_notice": "恢复版模型 · 四类历史参考结构的完整场、材料增量、保留点波形、谐波与物理检查通过。原版权重未能从云快照恢复，本版按原训练流程重新生成权重，不继承原版八例验收结论；新增工况仍需独立验证。",
-  "validation_sha256": "dcdbcf824fcad40fe14ad9e67d3349c7272f3fd7d0fd41f4fc609908858f01f9"
+  "runtime_source_sha256": {
+    "graphwave/__init__.py": "e600392a093260242e7666a292c420be8de7397b2fec77606a7de70f4a60b1e1",
+    "graphwave/inference.py": "ab7879deab1ae7893ca0fee58e68d4c882a1b6333903240a0d12fec220b4438b",
+    "graphwave/predict.py": "07b7d8ce4b7ad87225a9ea592875ee70b11523368cc7309d02d60ce1bb5b3093",
+    "spectral3d/__init__.py": "a07d5f61dba5b9dbb856f83346b4c82e036d710eab9b5296f843925d8c278ad3",
+    "spectral3d/mesh.py": "258bb3e36208aa6c20490280ab1ff256d1dbe29032f5f9ac48af2f86b556f828",
+    "spectral3d/curved_mesh.py": "549202a44b1f1acbd7eedc4fe1c565f245c305972fdf96a8d9e4cfba8d97e5e4",
+    "solid/__init__.py": "ecd0821c2d0a96f75782cdfd9e0eb1faddfc32563f4ba612f9abfeee172b414e",
+    "solid/schema.py": "1c8aed750e20d08ec372bd5e964441c90e9804c01f018de9be59b9b68308d92e"
+  },
+  "evidence_sha256": {
+    "release.json": "af62404da6069798f8afc87f442cccfd2127a490b6f240a7822acd2fadc800bb",
+    "checkpoint-freeze.json": "c7b5057c821692c21f8be06a19675b350d33d1756a1b1f77b4b0b3e9441f1869",
+    "metrics.json": "66f1938cff0049a90d7568578099320e2d3fb7911898c9ad9acc849ed3948bc0",
+    "refined-metrics.json": "d466b6067c70f7170bdf8cc71f8465dd6df388f2e173bae622af0bc27d8214c2",
+    "validation.json": "af7d9ba40ef8d99289cbefd6bbcf0e2a1de1c6abfd9e9d05dde9bf0b72bcfb86",
+    "original-model-package.zip": "46f115049c88f829b679e5e0428ebe91da9c173293efb01da3429dbd5203e72b"
+  },
+  "user_notice": "原始冻结图网络 · 原始权重、八例验收和加密参考场记录已恢复并通过摘要校验。原评估最大全场误差 0.438%、材料增量误差 1.118%；新增工况或任意点位不自动获得同等误差保证。推理不进行数值校正。"
 }

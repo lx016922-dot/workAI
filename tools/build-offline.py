@@ -104,7 +104,8 @@ rows = [{'path': str(p.relative_to(target)).replace(os.sep, '/'), 'bytes': p.sta
 (target / 'MANIFEST.json').write_text(json.dumps({'schema': 'workai.offline.bundle.v1', 'platform': args.platform,
     'source_commit': os.environ.get('WORKAI_BUILD_COMMIT', 'working-tree'), 'files': rows}, indent=2) + '\n')
 if args.archive:
-    path = args.output / (target.name + '-0.2.0-recovery.1.zip')
+    version = json.loads((target / 'offline/model/model.json').read_text(encoding='utf-8'))['version']
+    path = args.output / (target.name + '-' + version + '.zip')
     with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED, compresslevel=4) as z:
         for p in sorted(target.rglob('*')):
             if p.is_file():
