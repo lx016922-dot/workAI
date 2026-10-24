@@ -83,7 +83,7 @@ export function mountSolidPath(container, result, field, extractSeries, chart, s
     pathElement('solid-path-wave-point').value = String(Math.min(analysis.rows.length - 1, Math.max(0, selected)));
     pathElement('solid-path-analysis').hidden = false;
     pathElement('solid-path-csv').disabled = false;
-    const short = analysis.rows.some(row => row.carrier_cycles < 3);
+    const short = analysis.signal?.kind!=='chirp' && analysis.rows.some(row => row.carrier_cycles < 3);
     const alias = analysis.rows.some(row => row.harmonics.some(h => !h.available));
     pathElement('solid-path-message').textContent = `已提取 ${analysis.rows.length} 点 · 单位方向 [${analysis.direction.map(v => v.toFixed(4)).join(', ')}] · ${pathResponseNames[analysis.response_part] ?? '当前响应'} · 未重新求解。${short ? '部分时间窗不足三个基频周期，幅值易受泄漏影响。' : ''}${alias ? '有谐波超过 Nyquist，表格与 CSV 标记为不可用。' : ''}`;
     renderPlots();
@@ -112,7 +112,7 @@ export function mountSolidPath(container, result, field, extractSeries, chart, s
     } finally { if (!disposed&&token===generation) pathElement('solid-path-analyze').disabled = false; }
   }
   if(result.recording){pathElement('solid-path-count').max=8;pathElement('solid-path-message').textContent='长记录每批最多 8 点，读取完整采样数据。';}
-  if(result.scene.signal?.kind==='chirp'){const headings=container.querySelectorAll('.solid-path-charts h3');headings[0].textContent='激励频带 RMS';headings[1].textContent='二倍频带 RMS';}
+  if(result.scene.signal?.kind==='chirp'){pathElement('solid-path-panel').querySelector('.section-note').textContent='比较实体内多个接收点的激励频带和二倍频带功率，使用上方接收方向和分析窗。沿程距离按点列累计，不代表实际传播路径。';const headings=container.querySelectorAll('.solid-path-charts h3');headings[0].textContent='激励频带 RMS';headings[1].textContent='二倍频带 RMS';}
   const presets = result.scene.receivers;
   [0, 1, 2].forEach(j => {
     pathElement('solid-path-start-' + j).value = presets[0].point_mm[j];

@@ -1,0 +1,261 @@
+{
+  "schema": "workai.comsol_corrective_training_protocol.v1",
+  "created_at_utc": "2026-10-24T05:17:00Z",
+  "goal": "Independent 3D COMSOL reference, diagnose long-record phase error, then supervised corrective training without mixing reference and prediction.",
+  "reference_physics": {
+    "geometry": "3D finite plate first; no equivalence claimed with prior 2D model",
+    "material": "fixed aluminum full Murnaghan constants, unchanged by calibration",
+    "controls": [
+      "linear",
+      "St Venant-Kirchhoff geometric nonlinearity",
+      "full Murnaghan"
+    ],
+    "load": "nominal whole-face traction in the reference configuration",
+    "boundary": "xmax fixed, other faces natural and free",
+    "signals": [
+      "hann",
+      "gaussian",
+      "rectangular",
+      "chirp"
+    ],
+    "cycles": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ]
+  },
+  "comparison": {
+    "duration_us": 5000,
+    "sample_step_us": 0.2,
+    "expected_samples": 25001,
+    "threshold_relative_l2": 0.05,
+    "weak_component_absolute_floor_m": 1e-13,
+    "response_parts": [
+      "full",
+      "linear",
+      "geometric",
+      "material",
+      "total_nonlinear"
+    ],
+    "components": [
+      "x",
+      "y",
+      "z",
+      "vector"
+    ],
+    "phase_alignment_allowed": false,
+    "amplitude_rescaling_allowed": false,
+    "truncate_late_record_allowed": false,
+    "zero_padding_to_extend_record_allowed": false,
+    "experimental_accuracy_claimed": false
+  },
+  "reference_admission": {
+    "require_actual_comsol_completion": true,
+    "require_signed_output_identity_and_hash": true,
+    "require_complete_time_grid": true,
+    "spatial_time_quadrature_checks": "explicit independent refinement; completion or small energy drift alone is insufficient",
+    "strain_limit": 0.001,
+    "min_J_exclusive": 0,
+    "check_fixed_face": true,
+    "fail_action": "retain failed evidence and refine; never label unconverged reference as ground truth",
+    "signature_evidence_scope": "Signed responses verified during collection; published archive retains verification attestation and artifact hashes, not raw signature headers"
+  },
+  "training": {
+    "frozen_baseline_weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+    "focus": "learned spatial filters and dispersion; retain physical energy law and conservation constraints",
+    "admission": "only verified COMSOL development labels; held-out target waveforms never enter optimization",
+    "development_cycles": [
+      2,
+      4,
+      7,
+      12,
+      16
+    ],
+    "validation_cycles": [
+      6,
+      9,
+      15
+    ],
+    "heldout_cycles": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "split_note": "This supports a fixed-material, bounded-geometry assessment. The previously inspected numerical baseline is retained; no claim that it was unseen during algorithm design.",
+    "inference_reference_lookup": false,
+    "inference_numerical_corrector": false,
+    "promotion": "only on predeclared independent validation metrics; otherwise preserve baseline and mark candidate unqualified"
+  },
+  "publication": {
+    "report_failed_attempts": true,
+    "report_all_20_target_combinations": true,
+    "no_false_5_percent_certificate": true,
+    "raw_comsol_files_and_model_sources": "hash-addressed artifacts with convergence evidence",
+    "full_optimizer_checkpoints": "local only"
+  },
+  "modal_development": {
+    "purpose": "Separate spatial phase error from transient time integration; actual COMSOL supervision plus nonlinear physical constraints",
+    "trainable": "Centroskew P4 filter perturbations preserving constant and affine derivatives; v1 also preserves quadratics",
+    "input": "signed 3D COMSOL eigenfrequencies and mode shapes with exact-order energy postprocessing",
+    "reference_comparison": "independent h refinement; paired modes by mass-weighted modal assurance",
+    "training_mode_admission": {
+      "frequency_upper_hz": 900000,
+      "minimum_relative_load_participation": 0.01,
+      "minimum_refinement_modal_assurance": 0.99,
+      "maximum_refinement_relative_frequency_error": 0.0001
+    },
+    "long_phase_reference_admission_separate": {
+      "maximum_refinement_difference_hz": 0.5,
+      "description": "Research frequency admission alone cannot certify 5 ms waveform accuracy"
+    },
+    "test_waveforms_used": false,
+    "all_material_energy_coefficients_unchanged": true,
+    "candidate_requires_independent_transient_validation": true,
+    "experiments": [
+      {
+        "id": "v1",
+        "preserved_polynomial_order": 2,
+        "parameters": 5,
+        "description": "Constrained derivative filter trained only on admitted development eigenmodes"
+      },
+      {
+        "id": "v2",
+        "preserved_polynomial_order": 1,
+        "description": "Additional filter capacity; retain exact constant and affine derivatives, rigid motion, parity, mass and material energy; same reference admission gate"
+      },
+      {
+        "id": "v3",
+        "preserved_polynomial_order": 1,
+        "parameters": 7,
+        "physics_patches": [
+          48,
+          24
+        ],
+        "seed": 2026102413,
+        "physics_loss_weight": 30,
+        "optimizer": "least_squares",
+        "outcome": "independent nonlinear physics failed; rejected"
+      },
+      {
+        "id": "v4",
+        "preserved_polynomial_order": 1,
+        "parameters": 7,
+        "physics_patches": [
+          96,
+          48
+        ],
+        "seed": 2026102416,
+        "physics_loss_weight": 30,
+        "optimizer": "slsqp",
+        "hard_training_limit": 0.04,
+        "outcome": "5% physical checks passed, optimizer line search unsuccessful; not promoted"
+      },
+      {
+        "id": "v5",
+        "preserved_polynomial_order": 1,
+        "parameters": 7,
+        "physics_patches": [
+          96,
+          48
+        ],
+        "seed": 2026102419,
+        "physics_loss_weight": 30,
+        "optimizer": "slsqp",
+        "hard_training_limit": 0.035,
+        "constraint_form": "1-(R/limit)^2 >= 0",
+        "gradient_step": 1e-05,
+        "objective_scaling": "fixed initial value",
+        "outcome": "see immutable training result"
+      },
+      {
+        "id": "v5-feasible",
+        "parent": "v5",
+        "method": "offline parameter backtracking using training constraints only",
+        "scales": [
+          1,
+          0.999,
+          0.998001
+        ],
+        "strict_training_limit": 0.035,
+        "margin_target": 0.034965,
+        "new_validation_seed": 2026102422,
+        "optimizer_success": false,
+        "strict_training_limit_satisfied": true,
+        "physics_validation_passed": true,
+        "accepted_for_offline_release": false
+      }
+    ]
+  },
+  "transport": {
+    "original_numeric_precision": "17 significant decimal digits",
+    "compression": "explicit workai_gzip_csv_v1 CSV container when requested; decoded data SHA-256 and byte count are in the signed completion receipt",
+    "no_quantization": true,
+    "signed_original_retained": true
+  },
+  "solver_development": {
+    "bdf": "200 us engineering trial, not part of heldout 5 ms verification; retain its actual completion or failure",
+    "dopri5": "COMSOL native fifth-order Dormand-Prince 5 pilot using documented Time solver; must pass explicit step refinement before use",
+    "documentation": "https://doc.comsol.com/6.4/doc/com.comsol.help.comsol/comsol_api_solver.51.51.html"
+  },
+  "modal_postprocessing": {
+    "native_comsol_eigenpairs": true,
+    "native_comsol_time_dependent_solve": false,
+    "nonlinear_reference": false,
+    "require_direct_receiver_exports_or_exact_coordinate_match": true,
+    "require_truncation_and_mesh_refinement": true,
+    "forced_interval": "scaled DOP853 relative tolerance 1e-11, verified at 1e-12",
+    "unforced_interval": "analytic modal oscillator evolution; no padding or repeating sampled data",
+    "role": "independent linear diagnostic for all four signals and cycle counts; cannot replace nonlinear 5 ms certification"
+  },
+  "nonlinear_physical_constraints": {
+    "requested_by_user": true,
+    "equation": "rho*u_tt = Div(F*S)+b",
+    "strain": "sym(Grad u) + 0.5*(Grad u)^T*(Grad u)",
+    "projections": [
+      "longitudinal",
+      "transverse_1",
+      "transverse_2"
+    ],
+    "retain_all_mixed_derivatives_and_shear_coupling": true,
+    "branches": [
+      "linear",
+      "stvk",
+      "full",
+      "geometric",
+      "material"
+    ],
+    "soft_constraint_groups": [
+      "momentum_interior",
+      "momentum_boundary",
+      "traction",
+      "strain_energy",
+      "internal_power"
+    ],
+    "hard_constraints": [
+      "zero initial state",
+      "exact fixed displacement/velocity",
+      "constant and affine derivative consistency",
+      "conservative transpose-tied forces",
+      "objective unchanged material energy"
+    ],
+    "training_patches": 96,
+    "independent_validation_patches": 48,
+    "training_seed": 2026102419,
+    "validation_seed": 2026102420,
+    "physics_loss_weight": 30,
+    "per_case_component_maximum_normalized_residual": 0.05,
+    "manufactured_fields": "six longitudinal, transverse, torsion and mixed polynomial families; independent analytic stresses, chain-rule divergence, body forces and six-face tractions; displacement shape(X)*(1-cos(omega*t))",
+    "waveform_threshold_unchanged": 0.05,
+    "manufactured_physics_validation_is_not_comsol_transient_certification": true,
+    "initial_protocol_version": "v3 retained in training/v3/config.json",
+    "latest_training_run": "v5-feasible",
+    "training_inequality_limit": 0.035,
+    "component_gates_per_training_patch": 55,
+    "component_gates_total": 5280,
+    "final_independent_validation_seed": 2026102422
+  }
+}

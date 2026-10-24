@@ -1,0 +1,84 @@
+{
+  "schema": "workai.comsol_training_summary.v1",
+  "weights_sha256": "b756d4f76d4ee2670afbff6ad57a66af366c259c6c35a6fb42aaac197f193d3d",
+  "actual_comsol_development_jobs": [
+    "comsol-6b6cec683bd04dcfb426b1a2a123f143",
+    "comsol-c420e3febfed41b08d0323e925dd3ad0"
+  ],
+  "training_mode_indices": [
+    5,
+    11,
+    20,
+    22,
+    25,
+    28,
+    29
+  ],
+  "training_initial_frequency_error_norm_hz": 1046.7831031105895,
+  "training_final_frequency_error_norm_hz": 823.5835670725896,
+  "optimizer_success": false,
+  "feasibility_restoration": {
+    "method": "offline parameter backtracking toward the physically verified baseline",
+    "training_limit": 0.035,
+    "target_with_margin": 0.034965,
+    "trials": [
+      {
+        "scale": 1.0,
+        "maximum_training_residual": 0.035000017269404916
+      },
+      {
+        "scale": 0.999,
+        "maximum_training_residual": 0.03496505715113279
+      },
+      {
+        "scale": 0.998001,
+        "maximum_training_residual": 0.03493013201960437
+      }
+    ],
+    "validation_used_for_selection": false,
+    "inference_correction": false
+  },
+  "polynomial_consistency_order": 1,
+  "material_energy_coefficients_changed": false,
+  "transient_test_waveforms_used_for_training": false,
+  "nonlinear_longitudinal_transverse_physics_in_loss": true,
+  "physics_training_passed": true,
+  "hard_training_limit": 0.035,
+  "hard_training_limit_satisfied": true,
+  "physics_training_maxima": {
+    "momentum_interior": 0.01683711744395323,
+    "momentum_boundary": 0.03493013201960437,
+    "traction": 0.00032715860144015145,
+    "strain_energy": 0.0006568394932480986,
+    "internal_power": 0.0010949228944275092
+  },
+  "physics_validation_passed": true,
+  "physics_validation_maxima": {
+    "momentum_interior": 0.016788601927161237,
+    "momentum_boundary": 0.03618138850785103,
+    "traction": 0.00032715871108797976,
+    "strain_energy": 0.0006568322670224396,
+    "internal_power": 0.001183426319685067
+  },
+  "reference_long_phase_converged": false,
+  "accepted_for_offline_release": false,
+  "long_record_accuracy_certified": false,
+  "scope": "P4 graph filter research candidate for the fixed-end 8 x 3 x 1.5 mm aluminum plate with h=2.5 mm; not a general geometry calibration",
+  "files_sha256": {
+    "history.json": "41c0cd5af129072e45b0bc5529cfbe9648990e5baddc09ad77295d81a7692301",
+    "physics-training-patches.npz": "84bba67132276c2296f3d5692d91f62b0c8ee4412688545c1d861cd25caa8781",
+    "config.json": "3dbedcf6d22902e24e49d8454335c75188eb69e63bf5e0ae1891b149bc3a46ce",
+    "candidate-weights.npz": "b756d4f76d4ee2670afbff6ad57a66af366c259c6c35a6fb42aaac197f193d3d",
+    "physics-training.json": "babd1affd229df3f3b3a33377b5469626340871cdf27283f70c910c74b0e872c",
+    "physics-validation-patches.npz": "1fef866db3bafc1eed20cfad58cb2b284d4c19bfbbf88eab0c4ff3644e1e4687",
+    "pre-restoration-training.json": "50931b094d69e2c61080ab5dd82ad0480ca5caaab91f5bdd910d7b1cf9ec0e49",
+    "frequencies.csv": "dab018c25339a74e804877e4284ef92d3137fbc182ac76fdd0f7c9a4f690e062",
+    "physics-validation.json": "e2884ecf5942c5d826e57165dc41d7e474949bc6b1f5ca98a0f78ac16d532e3e",
+    "physics-initial.json": "a71276ca711a0c81d16ff8a60efa296eda4a4ec933dcfab34ef88de86856b399",
+    "training.json": "afc15d913594e9de55fdf7fd38a5629f631ccebd8da44427f88c503ccbe0a752",
+    "source_snapshot/nonlinear_constraints.py": "407f6c9f18aa6ce23375f68a503b6d73b01fef31b33ded80bac0c1ee32989099",
+    "source_snapshot/finalize-comsol-training.py": "e126568209c64a99d8954be7d65189a93792c9e71183d57c0cad6ff49c36f3bb",
+    "source_snapshot/modal_calibration.py": "8ee02c9df1627c9391dc9b2c33c7fb0a90bea543422cd0a6c1d947fb12df7fc7",
+    "source_snapshot/feasibility-restoration.py": "98650d0adef5ff3b74b2680ee48abf41a87a3b80a9031c330ab4c98ad62ac05a"
+  }
+}

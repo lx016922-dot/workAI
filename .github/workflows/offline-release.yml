@@ -9,6 +9,7 @@ on:
         type: string
 permissions:
   contents: write
+  actions: read
 env:
   WORKAI_RELEASE_TAG: ${{ inputs.tag }}
 jobs:
@@ -46,11 +47,15 @@ jobs:
           with zipfile.ZipFile(package) as z:
               prefix='WorkAI-Offline-'+platform+'-x64/'
               manifest=json.loads(z.read(prefix+'MANIFEST.json'))
+              assert manifest['source_commit']==os.environ['GITHUB_SHA']
               for row in manifest['files']:
                   data=z.read(prefix+row['path'])
                   assert len(data)==row['bytes'] and hashlib.sha256(data).hexdigest()==row['sha256'],row['path']
               status=json.loads(z.read(prefix+'offline/examples/local-20261024000000000000000000000001/status.json'))
               assert status['phase']=='completed'
+              extension=json.loads(z.read(prefix+'offline/model/extension.json'))
+              assert status['weights_sha256']==extension['files_sha256']['continued-weights.npz']
+              assert status['controls_completed']==3 and status['numerical_correction'] is False
               record=json.loads(z.read(prefix+'offline/examples/local-20261024000000000000000000000001/record/recording.json'))
               assert record['phase']=='completed' and record['duration_us']==5000 and record['frame_count']==25001
           with package.open('rb') as stream:
@@ -62,8 +67,29 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$WORKAI_RELEASE_TAG" portable/*.zip portable/SHA256SUMS-${{ matrix.platform }}.txt --repo "$GITHUB_REPOSITORY" --clobber
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Retrieve the completed frozen 20-case validation
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 40058525287
+          pattern: long-*
+          path: validation-artifacts
+      - name: Verify and preserve complete receiver evidence
+        run: python tools/package-validation-evidence.py --input validation-artifacts --output evidence
+      - name: Upload evidence to the prepared draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$WORKAI_RELEASE_TAG" evidence/*.zip evidence/SHA256SUMS-validation.txt --repo "$GITHUB_REPOSITORY" --clobber
   checksums:
-    needs: package
+    needs: [package, evidence]
     runs-on: ubuntu-latest
     steps:
       - name: Publish the combined checksum file

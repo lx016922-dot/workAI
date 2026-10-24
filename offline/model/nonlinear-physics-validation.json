@@ -1,0 +1,72 @@
+{
+  "schema": "workai.nonlinear_physics_release_evidence.v1",
+  "scope": "offline training research; not the default portable model",
+  "default_weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+  "candidate_weights_sha256": "b756d4f76d4ee2670afbff6ad57a66af366c259c6c35a6fb42aaac197f193d3d",
+  "comsol_training_jobs": [
+    "comsol-6b6cec683bd04dcfb426b1a2a123f143",
+    "comsol-c420e3febfed41b08d0323e925dd3ad0"
+  ],
+  "training_samples": 96,
+  "independent_validation_samples": 48,
+  "validation_seed": 2026102422,
+  "physical_constraint_gates": 5280,
+  "physical_equations": [
+    "rho*u_tt=Div(F*S)+b, all three projections and mixed derivatives",
+    "PN=traction",
+    "P=dW/dF",
+    "internal power=integral(P:Grad(v))"
+  ],
+  "hard_training_limit_satisfied": true,
+  "physics_validation_maxima": {
+    "momentum_interior": 0.016788601927161237,
+    "momentum_boundary": 0.03618138850785103,
+    "traction": 0.00032715871108797976,
+    "strain_energy": 0.0006568322670224396,
+    "internal_power": 0.001183426319685067
+  },
+  "raw_optimizer_success": false,
+  "feasibility_restoration": {
+    "method": "offline parameter backtracking toward the physically verified baseline",
+    "training_limit": 0.035,
+    "target_with_margin": 0.034965,
+    "trials": [
+      {
+        "scale": 1.0,
+        "maximum_training_residual": 0.035000017269404916
+      },
+      {
+        "scale": 0.999,
+        "maximum_training_residual": 0.03496505715113279
+      },
+      {
+        "scale": 0.998001,
+        "maximum_training_residual": 0.03493013201960437
+      }
+    ],
+    "validation_used_for_selection": false,
+    "inference_correction": false
+  },
+  "linear_comsol_modal_matrix": {
+    "cases_completed": 20,
+    "receivers": 8,
+    "samples_per_case": 25001,
+    "all_comparison_passes": 0,
+    "modal_truncation_passes": 9,
+    "time_integration_passes": 20,
+    "mesh_refinement_passes": 1,
+    "native_comsol_time_dependent": false,
+    "nonlinear_reference": false
+  },
+  "unit_tests": {
+    "completed": 6,
+    "passed": 6,
+    "suites": [
+      "tests.test_nonlinear_constraints",
+      "tests.test_comsol_modal_response"
+    ]
+  },
+  "candidate_accepted_for_offline_release": false,
+  "long_accuracy_certified": false,
+  "report_url": "https://github.com/lx016922-dot/workAI/tree/main/research/comsol-validation"
+}

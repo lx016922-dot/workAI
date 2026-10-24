@@ -79,7 +79,51 @@
   "checkpoint_corruption_rejected": true,
   "changed_identity_restart_rejected": true,
   "input_matrix_configurations": 20,
-  "native_windows_5ms_validation": "pending",
-  "native_linux_portable_5ms_validation": "pending",
-  "scientific_accuracy_certified": false
+  "native_windows_5ms_validation": {
+    "workflow_run_url": "https://github.com/lx016922-dot/workAI/actions/runs/40059321183",
+    "source_commit": "bd74e70a5fed6c986654dc7e9029d914981f9cd2",
+    "job_id": 120769184772,
+    "conclusion": "success",
+    "checks": [
+      {
+        "passed": true,
+        "checked_files": 3375,
+        "failures": []
+      },
+      {
+        "passed": true,
+        "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+        "platform": "win32",
+        "weights_sha256": "abcf531d1c968786200e3a0a0bf944cd2b54000797fe7067bfef6f571b056a0d",
+        "elapsed_s": 689.203,
+        "duration_us": 5000,
+        "full_samples": 25001,
+        "controls": 3,
+        "response_parts": 5,
+        "authentication_checks": 2,
+        "invalid_scene_rejected": true
+      }
+    ],
+    "reported_weights_note": "The smoke log labels the restored v0.2 model hash as weights_sha256; its assertions separately verify all five computed responses use continued-weights.npz (ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83). Subsequent smoke logs label both hashes explicitly."
+  },
+  "native_linux_portable_5ms_validation": {
+    "passed": true,
+    "duration_us": 5000.0,
+    "samples": 25001,
+    "elapsed_s": 903.6653532030032,
+    "controls": 3,
+    "weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+    "numerical_correction": false,
+    "manifest_files": 8181,
+    "bundle_manifest_sha256": "cb68c9e8577dd91c6b7dbd36982686a01000a3495b6e2844007ee04adb9d35bc",
+    "scope": "bundled Linux CPython actual worker prediction and package manifest verification"
+  },
+  "scientific_accuracy_certified": false,
+  "http_pause_resume": {
+    "passed": true,
+    "job_id": "local-ffd81bd2ca74679052b8f08fc4e46853",
+    "first_time_us": 51.0,
+    "second_time_us": 102.2,
+    "fields_and_probes_bit_identical_to_uninterrupted": true
+  }
 }

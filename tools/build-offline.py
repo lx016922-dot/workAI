@@ -10,6 +10,7 @@ import time
 import tarfile
 import zipfile
 from pathlib import Path
+from datetime import datetime, timezone
 
 REPO = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser()
@@ -44,9 +45,11 @@ for name in ['README-OFFLINE.txt', 'Start-WorkAI.bat', 'start-workai.sh', 'verif
     shutil.copyfile(REPO / 'offline' / name, target / name)
 (target / 'start-workai.sh').chmod(0o755)
 (target / 'training').mkdir()
-for name in ['model.py', 'train.py', 'test_network.py', 'continue_training.py', 'train_long_time.py']:
+for name in ['model.py', 'train.py', 'test_network.py', 'continue_training.py', 'train_long_time.py',
+             'nonlinear_constraints.py', 'modal_calibration.py']:
     shutil.copyfile(REPO / 'graphwave' / name, target / 'training' / name)
 shutil.copyfile(REPO / 'offline/model/training.json', target / 'training/training.json')
+shutil.copyfile(REPO / 'research/comsol-validation/NONLINEAR-PHYSICS.md', target / 'training/NONLINEAR-PHYSICS.md')
 
 if args.platform == 'windows':
     runtime = target / 'runtime'
@@ -87,7 +90,7 @@ if args.example:
     example.mkdir(parents=True)
     shutil.copyfile(target / 'offline/example-request.json', example / 'request.json')
     (example / 'status.json').write_text(json.dumps({'job_id': example.name, 'name': '内置示例 · 铝板网络预测',
-        'phase': 'starting', 'started_at_utc': '2026-10-24T00:00:00+00:00', 'controls_completed': 0}), encoding='utf-8')
+        'phase': 'starting', 'started_at_utc': datetime.now(timezone.utc).isoformat(), 'controls_completed': 0}), encoding='utf-8')
     python = target / ('runtime/python.exe' if args.platform == 'windows' else 'runtime/bin/python3')
     env = dict(os.environ, NUMBA_CACHE_DIR=str((args.cache / ('compile-' + args.platform)).resolve()),
                OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1')

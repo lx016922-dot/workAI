@@ -1,0 +1,2519 @@
+{
+  "id": "chirp-03",
+  "duration_us": 5000,
+  "samples": 25001,
+  "receiver_indices": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7
+  ],
+  "reference_identity": {
+    "job_id": "comsol-c420e3febfed41b08d0323e925dd3ad0",
+    "source_sha256": "b633d763751772196a199f46c9959c7977714252e4af0d33f0fc5a30f6ca11f8",
+    "scene_sha256": "a83e0c0c133f852bc28ae5109e361349278ed080b6f26dac781eacb8b8a7bd14",
+    "parameters_sha256": "64c5f68b6e2d70cf8a44cf663390986e5940bf051afe8d12e63d2e0e498bc5e5",
+    "purpose": "reference_convergence",
+    "uses_test_data_for_training": false
+  },
+  "method": {
+    "integrator": "DOP853 during forcing; exact modal free evolution afterward",
+    "relative_tolerance": 1e-11,
+    "absolute_tolerance_scaled": 9.999999999999999e-14,
+    "forced_steps": 367,
+    "rhs_evaluations": 5519,
+    "modes": 80,
+    "receiver_values": "direct_COMSOL_receiver_interpolation",
+    "highest_frequency_hz": 1458534.5109726114
+  },
+  "baseline_weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+  "baseline_metrics_sha256": "151306bd4065614d483f27bb614584153770f9177d58c073775b60ba7408d334",
+  "comparison": {
+    "waveform": [
+      {
+        "x": {
+          "error_rms_m": 1.4305612432222598e-07,
+          "reference_rms_m": 1.019455837873968e-07,
+          "relative_l2": 1.4032596509581374,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 1.8097214573953891e-09,
+          "reference_rms_m": 1.2892679812985544e-09,
+          "relative_l2": 1.403681378616595,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 7.594764631051977e-10,
+          "reference_rms_m": 5.416075847657878e-10,
+          "relative_l2": 1.4022633442875894,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 1.4306958657362347e-07,
+          "reference_rms_m": 1.0195517448593091e-07,
+          "relative_l2": 1.4032596903001333,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 1.358527064477576e-07,
+          "reference_rms_m": 9.682350896275124e-08,
+          "relative_l2": 1.4030962924512598,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 4.67388537225646e-19,
+          "reference_rms_m": 1.851149998766738e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 2.283856229223995e-19,
+          "reference_rms_m": 8.249700757203698e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 1.358527064477576e-07,
+          "reference_rms_m": 9.682350896275125e-08,
+          "relative_l2": 1.4030962924512598,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 1.1960180473264246e-07,
+          "reference_rms_m": 8.52599283682493e-08,
+          "relative_l2": 1.4027903497181688,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 4.8233686989049995e-09,
+          "reference_rms_m": 3.432395869005536e-09,
+          "relative_l2": 1.4052483696475455,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 2.020399920492495e-09,
+          "reference_rms_m": 1.4380264451160078e-09,
+          "relative_l2": 1.4049810609216622,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 1.1971607493043463e-07,
+          "reference_rms_m": 8.534110760247619e-08,
+          "relative_l2": 1.4027949518546095,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 9.852651115425495e-08,
+          "reference_rms_m": 7.026028417630107e-08,
+          "relative_l2": 1.402307324960808,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 4.685621105046948e-09,
+          "reference_rms_m": 3.3352008488842257e-09,
+          "relative_l2": 1.4048992301661527,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 3.3212864181690642e-09,
+          "reference_rms_m": 2.364079182523324e-09,
+          "relative_l2": 1.4048964360931664,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 9.86937657040256e-08,
+          "reference_rms_m": 7.037911599059924e-08,
+          "relative_l2": 1.4023160750869397,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 7.257974235003472e-08,
+          "reference_rms_m": 5.1791195910287644e-08,
+          "relative_l2": 1.401391512097092,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 5.584448075156513e-09,
+          "reference_rms_m": 3.976339179105816e-09,
+          "relative_l2": 1.4044194480442493,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 2.168931908804169e-09,
+          "reference_rms_m": 1.5426974162330068e-09,
+          "relative_l2": 1.4059347516769138,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 7.282657018922814e-08,
+          "reference_rms_m": 5.1966519629499336e-08,
+          "relative_l2": 1.401413269706201,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 5.389954935490521e-08,
+          "reference_rms_m": 3.8495078302144e-08,
+          "relative_l2": 1.4001672871491018,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 1.308564367301228e-18,
+          "reference_rms_m": 7.084813674537366e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 5.627210712217453e-19,
+          "reference_rms_m": 2.7051788130895487e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 5.389954935490521e-08,
+          "reference_rms_m": 3.8495078302144e-08,
+          "relative_l2": 1.4001672871491018,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 2.9007643464719494e-08,
+          "reference_rms_m": 2.0736786172568802e-08,
+          "relative_l2": 1.3988495239002663,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 8.15198153102767e-09,
+          "reference_rms_m": 5.818825368881165e-09,
+          "relative_l2": 1.4009668643132216,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 1.59264287230213e-09,
+          "reference_rms_m": 1.122782562712443e-09,
+          "relative_l2": 1.418478452724264,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 3.017341037365837e-08,
+          "reference_rms_m": 2.1566957831912843e-08,
+          "relative_l2": 1.3990573268989506,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 9.112513589941468e-09,
+          "reference_rms_m": 6.631344897864825e-09,
+          "relative_l2": 1.3741576905275332,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 4.237610893735044e-09,
+          "reference_rms_m": 3.0512247936259145e-09,
+          "relative_l2": 1.3888229089470956,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 3.86994292918285e-09,
+          "reference_rms_m": 2.8378912395034064e-09,
+          "relative_l2": 1.3636685138997924,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 1.0769016124451767e-08,
+          "reference_rms_m": 7.831879377449931e-09,
+          "relative_l2": 1.3750232358606844,
+          "passed": false
+        }
+      }
+    ],
+    "spectral": [
+      {
+        "drive_band": {
+          "error_rms_m": 4.272973016830286e-10,
+          "reference_rms_m": 3.039528588040231e-10,
+          "relative_l2": 1.405801226428119,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 7.400313177031812e-10,
+          "reference_rms_m": 5.264119839873894e-10,
+          "relative_l2": 1.405802565697116,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 9.337511026974681e-12,
+          "reference_rms_m": 6.672706503601812e-12,
+          "relative_l2": 1.3993588691387,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 3.925784393694379e-12,
+          "reference_rms_m": 2.814112256558772e-12,
+          "relative_l2": 1.3950347519167594,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 7.295546456246453e-11,
+          "reference_rms_m": 5.2153874186426324e-11,
+          "relative_l2": 1.3988503385516866,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 1.241284111762915e-10,
+          "reference_rms_m": 8.882796500503175e-11,
+          "relative_l2": 1.3974023965229883,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 2.28188718163542e-11,
+          "reference_rms_m": 1.5838825485218658e-11,
+          "relative_l2": 1.4406921673358648,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 6.239876317152596e-12,
+          "reference_rms_m": 4.336360025920318e-12,
+          "relative_l2": 1.438966386520983,
+          "passed": false
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 4.0574602994187977e-10,
+          "reference_rms_m": 2.886350472317667e-10,
+          "relative_l2": 1.4057406882265269,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 7.027727388286987e-10,
+          "reference_rms_m": 4.999305666504625e-10,
+          "relative_l2": 1.4057406882265266,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 1.9422088408685464e-21,
+          "reference_rms_m": 8.455305049360872e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 2.109547661481448e-21,
+          "reference_rms_m": 1.0304868363500422e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 3.5530621024860166e-11,
+          "reference_rms_m": 2.7280054098842533e-11,
+          "relative_l2": 1.3024395368177697,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 6.154084083953278e-11,
+          "reference_rms_m": 4.725043973242287e-11,
+          "relative_l2": 1.3024395368177695,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 8.76620138376525e-21,
+          "reference_rms_m": 1.1548812760390411e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 1.561575346655321e-21,
+          "reference_rms_m": 7.344197749493355e-24,
+          "relative_l2": null,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 3.575492657561918e-10,
+          "reference_rms_m": 2.5439116551300636e-10,
+          "relative_l2": 1.4055097590954324,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 6.187032953240926e-10,
+          "reference_rms_m": 4.401995837070991e-10,
+          "relative_l2": 1.4055063162798598,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 2.4929882439555274e-11,
+          "reference_rms_m": 1.7714848080698403e-11,
+          "relative_l2": 1.4072873967639705,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 1.044823645570097e-11,
+          "reference_rms_m": 7.423337172178821e-12,
+          "relative_l2": 1.4074850991355834,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 3.31913436749807e-11,
+          "reference_rms_m": 2.5131202458084278e-11,
+          "relative_l2": 1.3207224656416556,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 4.3911812159125664e-11,
+          "reference_rms_m": 3.50677085290721e-11,
+          "relative_l2": 1.2522007853099826,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 3.5791776234938885e-11,
+          "reference_rms_m": 2.4872555930062476e-11,
+          "relative_l2": 1.4390067645472164,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 9.782504367582574e-12,
+          "reference_rms_m": 6.807627412955408e-12,
+          "relative_l2": 1.4369917409060549,
+          "passed": false
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 2.9475285378653554e-10,
+          "reference_rms_m": 2.0977650111417402e-10,
+          "relative_l2": 1.4050804175922063,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 5.096618788062019e-10,
+          "reference_rms_m": 3.627299710285215e-10,
+          "relative_l2": 1.4050724216723935,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 2.4235053974099782e-11,
+          "reference_rms_m": 1.7218849770050415e-11,
+          "relative_l2": 1.407472293315027,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 1.718039279310307e-11,
+          "reference_rms_m": 1.2207398959628344e-11,
+          "relative_l2": 1.4073753835621452,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 7.552099116620005e-11,
+          "reference_rms_m": 5.309095748917131e-11,
+          "relative_l2": 1.4224831258996162,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 1.2955329169281864e-10,
+          "reference_rms_m": 9.10892943574979e-11,
+          "relative_l2": 1.4222669371480825,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 1.6349159648753085e-11,
+          "reference_rms_m": 1.1396814875686434e-11,
+          "relative_l2": 1.4345376166135515,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 7.675279181295553e-12,
+          "reference_rms_m": 5.366783533311182e-12,
+          "relative_l2": 1.4301451015595708,
+          "passed": false
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 2.1748407119497434e-10,
+          "reference_rms_m": 1.5488062319451428e-10,
+          "relative_l2": 1.4042045202893878,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 3.75416371988861e-10,
+          "reference_rms_m": 2.67355792194361e-10,
+          "relative_l2": 1.4041826769772867,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 2.88895488254831e-11,
+          "reference_rms_m": 2.0529385886313838e-11,
+          "relative_l2": 1.4072290805709227,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 1.1220752292212294e-11,
+          "reference_rms_m": 7.965363684089612e-12,
+          "relative_l2": 1.4086930286215489,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 9.282450056087245e-11,
+          "reference_rms_m": 6.481872161435461e-11,
+          "relative_l2": 1.4320631177075813,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 1.607660022210591e-10,
+          "reference_rms_m": 1.1225889961879126e-10,
+          "relative_l2": 1.4321002857411593,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 1.850456817264513e-12,
+          "reference_rms_m": 1.4924561454725837e-12,
+          "relative_l2": 1.2398734950289403,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 1.7903226551321095e-13,
+          "reference_rms_m": 3.3473301239553407e-13,
+          "relative_l2": 0.5348509375635147,
+          "passed": false
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 1.6095029582712606e-10,
+          "reference_rms_m": 1.1472325242444896e-10,
+          "relative_l2": 1.4029439753995812,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 2.7877408986582343e-10,
+          "reference_rms_m": 1.98706502008695e-10,
+          "relative_l2": 1.4029439753995812,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 3.0721198012392787e-21,
+          "reference_rms_m": 3.0121863484258923e-22,
+          "relative_l2": null,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 3.966823860901685e-21,
+          "reference_rms_m": 1.5729825736236378e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 8.535563238463122e-11,
+          "reference_rms_m": 5.957422919438097e-11,
+          "relative_l2": 1.432761003186961,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 1.4784029200235273e-10,
+          "reference_rms_m": 1.0318559178642094e-10,
+          "relative_l2": 1.432761003186961,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 2.3842245678510456e-21,
+          "reference_rms_m": 2.1785868843902953e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 8.503800443144825e-22,
+          "reference_rms_m": 4.684899429212684e-24,
+          "relative_l2": null,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 9.009678141900479e-11,
+          "reference_rms_m": 6.427238112244942e-11,
+          "relative_l2": 1.4017962279529623,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 1.5002281179919954e-10,
+          "reference_rms_m": 1.0703837584662798e-10,
+          "relative_l2": 1.4015796728283942,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 4.21608386682555e-11,
+          "reference_rms_m": 3.0033538879876495e-11,
+          "relative_l2": 1.4037919020094136,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 8.24073351365365e-12,
+          "reference_rms_m": 5.7956504307220664e-12,
+          "relative_l2": 1.4218824292732501,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 5.2370045852903224e-11,
+          "reference_rms_m": 3.657888137212227e-11,
+          "relative_l2": 1.4317016783573875,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 8.627500665671847e-11,
+          "reference_rms_m": 6.027658644072959e-11,
+          "relative_l2": 1.4313187217652632,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 2.7685523170956113e-11,
+          "reference_rms_m": 1.929422940438797e-11,
+          "relative_l2": 1.4349120968085805,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 4.242657308715024e-12,
+          "reference_rms_m": 2.9171091943028673e-12,
+          "relative_l2": 1.4544046952376555,
+          "passed": false
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 3.2137867761226104e-11,
+          "reference_rms_m": 2.3339638558227626e-11,
+          "relative_l2": 1.3769651008540127,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 4.710163582554827e-11,
+          "reference_rms_m": 3.4229165042269204e-11,
+          "relative_l2": 1.3760673322700978,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 2.1909530548885307e-11,
+          "reference_rms_m": 1.5748185027708647e-11,
+          "relative_l2": 1.3912416262785765,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 1.999840009598414e-11,
+          "reference_rms_m": 1.4648382604515297e-11,
+          "relative_l2": 1.3652292294590753,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 1.967074768710019e-11,
+          "reference_rms_m": 1.396265799364299e-11,
+          "relative_l2": 1.4088111086052537,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 2.779430006411125e-11,
+          "reference_rms_m": 1.975963915058185e-11,
+          "relative_l2": 1.4066198199420463,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 1.565232468418767e-11,
+          "reference_rms_m": 1.0996751311592648e-11,
+          "relative_l2": 1.4233589758174463,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 1.1970654102244669e-11,
+          "reference_rms_m": 8.572956081312086e-12,
+          "relative_l2": 1.3963274731266986,
+          "passed": false
+        }
+      }
+    ],
+    "passed": false,
+    "maximum_relative_l2": 1.4544046952376555,
+    "maximum_vector_waveform_relative_l2": 1.4032596903001333
+  },
+  "modal_truncation": {
+    "waveform": [
+      {
+        "x": {
+          "error_rms_m": 8.265167567760325e-12,
+          "reference_rms_m": 1.019455837873968e-07,
+          "relative_l2": 8.10743071028656e-05,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 2.1290655090998803e-12,
+          "reference_rms_m": 1.2892679812985544e-09,
+          "relative_l2": 0.001651375462652442,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 1.2223261915081845e-11,
+          "reference_rms_m": 5.416075847657878e-10,
+          "relative_l2": 0.022568483638144874,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 1.4908187237551257e-11,
+          "reference_rms_m": 1.0195517448593091e-07,
+          "relative_l2": 0.0001462229584002966,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 2.0552494649232254e-11,
+          "reference_rms_m": 9.682350896275124e-08,
+          "relative_l2": 0.00021226760803658707,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 1.7588460329250617e-24,
+          "reference_rms_m": 1.851149998766738e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 1.0578250976987818e-24,
+          "reference_rms_m": 8.249700757203698e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 2.0552494649232254e-11,
+          "reference_rms_m": 9.682350896275125e-08,
+          "relative_l2": 0.00021226760803658704,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 1.3850530907582644e-11,
+          "reference_rms_m": 8.52599283682493e-08,
+          "relative_l2": 0.00016245065146853403,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 5.40472048722035e-12,
+          "reference_rms_m": 3.432395869005536e-09,
+          "relative_l2": 0.0015746203798999016,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 9.158904278004657e-12,
+          "reference_rms_m": 1.4380264451160078e-09,
+          "relative_l2": 0.006369079170352666,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 1.7462352004828374e-11,
+          "reference_rms_m": 8.534110760247619e-08,
+          "relative_l2": 0.00020461829586474337,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 5.405952471989767e-12,
+          "reference_rms_m": 7.026028417630107e-08,
+          "relative_l2": 7.694179628458157e-05,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 5.174932666457812e-12,
+          "reference_rms_m": 3.3352008488842257e-09,
+          "relative_l2": 0.0015516105029144073,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 1.4903242270941493e-11,
+          "reference_rms_m": 2.364079182523324e-09,
+          "relative_l2": 0.006304036844922582,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 1.667665675182414e-11,
+          "reference_rms_m": 7.037911599059924e-08,
+          "relative_l2": 0.00023695462094254914,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 2.058377664010965e-11,
+          "reference_rms_m": 5.1791195910287644e-08,
+          "relative_l2": 0.0003974377551691358,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 3.217599319080383e-12,
+          "reference_rms_m": 3.976339179105816e-09,
+          "relative_l2": 0.000809186332993843,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 5.60897216042436e-13,
+          "reference_rms_m": 1.5426974162330068e-09,
+          "relative_l2": 0.00036358213227066094,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 2.0841291030908674e-11,
+          "reference_rms_m": 5.1966519629499336e-08,
+          "relative_l2": 0.0004010522771103166,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 9.209774453179429e-12,
+          "reference_rms_m": 3.8495078302144e-08,
+          "relative_l2": 0.00023924550512387157,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 4.574300072869931e-25,
+          "reference_rms_m": 7.084813674537366e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 1.4334549632037284e-24,
+          "reference_rms_m": 2.7051788130895487e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 9.209774453179427e-12,
+          "reference_rms_m": 3.8495078302144e-08,
+          "relative_l2": 0.0002392455051238715,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 2.2246267114077255e-11,
+          "reference_rms_m": 2.0736786172568802e-08,
+          "relative_l2": 0.0010727924244840427,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 1.2921409481016366e-12,
+          "reference_rms_m": 5.818825368881165e-09,
+          "relative_l2": 0.00022206216309771941,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 1.0171213698024027e-12,
+          "reference_rms_m": 1.122782562712443e-09,
+          "relative_l2": 0.0009058934504159188,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 2.2306962245486154e-11,
+          "reference_rms_m": 2.1566957831912843e-08,
+          "relative_l2": 0.0010343119516132368,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 9.254312489946759e-12,
+          "reference_rms_m": 6.631344897864825e-09,
+          "relative_l2": 0.0013955408190164385,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 4.371866233656739e-12,
+          "reference_rms_m": 3.0512247936259145e-09,
+          "relative_l2": 0.0014328233838390662,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 5.694150277739201e-12,
+          "reference_rms_m": 2.8378912395034064e-09,
+          "relative_l2": 0.0020064723406157036,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 1.1712337999394056e-11,
+          "reference_rms_m": 7.831879377449931e-09,
+          "relative_l2": 0.0014954696612306108,
+          "passed": true
+        }
+      }
+    ],
+    "spectral": [
+      {
+        "drive_band": {
+          "error_rms_m": 6.856606240486684e-14,
+          "reference_rms_m": 3.039528588040231e-10,
+          "relative_l2": 0.0002255812387310874,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 6.584455917548247e-14,
+          "reference_rms_m": 5.264119839873894e-10,
+          "relative_l2": 0.00012508180128562542,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 1.6942953446854873e-14,
+          "reference_rms_m": 6.672706503601812e-12,
+          "relative_l2": 0.002539142615924941,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 9.737219878696575e-14,
+          "reference_rms_m": 2.814112256558772e-12,
+          "relative_l2": 0.03460139109945707,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.0255095565552822e-14,
+          "reference_rms_m": 5.2153874186426324e-11,
+          "relative_l2": 0.00019663152019916161,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 9.85294783792553e-15,
+          "reference_rms_m": 8.882796500503175e-11,
+          "relative_l2": 0.0001109216882022165,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 2.5405220226331654e-15,
+          "reference_rms_m": 1.5838825485218658e-11,
+          "relative_l2": 0.00016039838465320986,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 1.455905635443101e-14,
+          "reference_rms_m": 4.336360025920318e-12,
+          "relative_l2": 0.0033574371748206263,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 9.450991665750149e-14,
+          "reference_rms_m": 2.886350472317667e-10,
+          "relative_l2": 0.0003274374250941619,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 1.6369597746989275e-13,
+          "reference_rms_m": 4.999305666504625e-10,
+          "relative_l2": 0.00032743742509416194,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 1.4000399567163202e-26,
+          "reference_rms_m": 8.455305049360872e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 4.6765447084058184e-27,
+          "reference_rms_m": 1.0304868363500422e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.4108476522701649e-14,
+          "reference_rms_m": 2.7280054098842533e-11,
+          "relative_l2": 0.0005171718674597592,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 2.443659815471194e-14,
+          "reference_rms_m": 4.725043973242287e-11,
+          "relative_l2": 0.0005171718674597592,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 2.1071594266012924e-27,
+          "reference_rms_m": 1.1548812760390411e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 6.981588046513131e-28,
+          "reference_rms_m": 7.344197749493355e-24,
+          "relative_l2": null,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 8.030357417264183e-14,
+          "reference_rms_m": 2.5439116551300636e-10,
+          "relative_l2": 0.0003156696656926009,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 1.1031716365644174e-13,
+          "reference_rms_m": 4.401995837070991e-10,
+          "relative_l2": 0.00025060715125492896,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 4.305227166516036e-14,
+          "reference_rms_m": 1.7714848080698403e-11,
+          "relative_l2": 0.0024302930213705243,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 7.29562703403213e-14,
+          "reference_rms_m": 7.423337172178821e-12,
+          "relative_l2": 0.009827961285895347,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.2003379998952806e-14,
+          "reference_rms_m": 2.5131202458084278e-11,
+          "relative_l2": 0.00047762855832198843,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 1.6488704942212027e-14,
+          "reference_rms_m": 3.50677085290721e-11,
+          "relative_l2": 0.00047019624702715983,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 6.441646791831909e-15,
+          "reference_rms_m": 2.4872555930062476e-11,
+          "relative_l2": 0.00025898612148846935,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 1.0902806525649038e-14,
+          "reference_rms_m": 6.807627412955408e-12,
+          "relative_l2": 0.0016015574684507864,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 7.668978835326567e-14,
+          "reference_rms_m": 2.0977650111417402e-10,
+          "relative_l2": 0.00036557854643369276,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 4.306631113194927e-14,
+          "reference_rms_m": 3.627299710285215e-10,
+          "relative_l2": 0.00011872829534828529,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 4.122643461219534e-14,
+          "reference_rms_m": 1.7218849770050415e-11,
+          "relative_l2": 0.0023942618213617546,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 1.1869980980464364e-13,
+          "reference_rms_m": 1.2207398959628344e-11,
+          "relative_l2": 0.009723595517538281,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.1470828450502763e-14,
+          "reference_rms_m": 5.309095748917131e-11,
+          "relative_l2": 0.00021605992796122408,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 6.436758826067731e-15,
+          "reference_rms_m": 9.10892943574979e-11,
+          "relative_l2": 7.066427368297971e-05,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 6.182963038029343e-15,
+          "reference_rms_m": 1.1396814875686434e-11,
+          "relative_l2": 0.0005425167562579138,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 1.7750459709765066e-14,
+          "reference_rms_m": 5.366783533311182e-12,
+          "relative_l2": 0.0033074670516501045,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 9.584467496582721e-14,
+          "reference_rms_m": 1.5488062319451428e-10,
+          "relative_l2": 0.0006188293473319517,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 1.639576104302368e-13,
+          "reference_rms_m": 2.67355792194361e-10,
+          "relative_l2": 0.0006132562496010697,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 2.5624200016948093e-14,
+          "reference_rms_m": 2.0529385886313838e-11,
+          "relative_l2": 0.0012481717747841047,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 4.461783658286714e-15,
+          "reference_rms_m": 7.965363684089612e-12,
+          "relative_l2": 0.0005601481407809273,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.433905587099176e-14,
+          "reference_rms_m": 6.481872161435461e-11,
+          "relative_l2": 0.00022121781352466946,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 2.452489995075538e-14,
+          "reference_rms_m": 1.1225889961879126e-10,
+          "relative_l2": 0.0002184673111355717,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 3.859914097753461e-15,
+          "reference_rms_m": 1.4924561454725837e-12,
+          "relative_l2": 0.002586283094121486,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 6.752150603124157e-16,
+          "reference_rms_m": 3.3473301239553407e-13,
+          "relative_l2": 0.002017174988150121,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 4.2334008219706035e-14,
+          "reference_rms_m": 1.1472325242444896e-10,
+          "relative_l2": 0.0003690098330117089,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 7.332465312456933e-14,
+          "reference_rms_m": 1.98706502008695e-10,
+          "relative_l2": 0.0003690098330117088,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 3.494674991396731e-27,
+          "reference_rms_m": 3.0121863484258923e-22,
+          "relative_l2": null,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 1.714405510808152e-27,
+          "reference_rms_m": 1.5729825736236378e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 6.33629616330165e-15,
+          "reference_rms_m": 5.957422919438097e-11,
+          "relative_l2": 0.00010635968352401761,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 1.0974786886642202e-14,
+          "reference_rms_m": 1.0318559178642094e-10,
+          "relative_l2": 0.00010635968352401761,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 5.162040705900348e-28,
+          "reference_rms_m": 2.1785868843902953e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 2.795648829461904e-28,
+          "reference_rms_m": 4.684899429212684e-24,
+          "relative_l2": null,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 1.025771491516462e-13,
+          "reference_rms_m": 6.427238112244942e-11,
+          "relative_l2": 0.0015959755552889805,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 1.771949807994287e-13,
+          "reference_rms_m": 1.0703837584662798e-10,
+          "relative_l2": 0.0016554341318979465,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 1.0125699755568214e-14,
+          "reference_rms_m": 3.0033538879876495e-11,
+          "relative_l2": 0.00033714640808955024,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 8.100837499135414e-15,
+          "reference_rms_m": 5.7956504307220664e-12,
+          "relative_l2": 0.0013977443249844435,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.533300255201539e-14,
+          "reference_rms_m": 3.657888137212227e-11,
+          "relative_l2": 0.000419176365620111,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 2.6485410229660535e-14,
+          "reference_rms_m": 6.027658644072959e-11,
+          "relative_l2": 0.0004393979784456413,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 1.5341762257673283e-15,
+          "reference_rms_m": 1.929422940438797e-11,
+          "relative_l2": 7.951477064009717e-05,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 1.2133631176259642e-15,
+          "reference_rms_m": 2.9171091943028673e-12,
+          "relative_l2": 0.000415947102698682,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 5.385394251383666e-14,
+          "reference_rms_m": 2.3339638558227626e-11,
+          "relative_l2": 0.0023074025923530083,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 7.371054922336987e-14,
+          "reference_rms_m": 3.4229165042269204e-11,
+          "relative_l2": 0.0021534428062252044,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 3.4801334190028906e-14,
+          "reference_rms_m": 1.5748185027708647e-11,
+          "relative_l2": 0.00220986317653727,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 4.5347143731815824e-14,
+          "reference_rms_m": 1.4648382604515297e-11,
+          "relative_l2": 0.0030957099466966255,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 8.056597178940405e-15,
+          "reference_rms_m": 1.396265799364299e-11,
+          "relative_l2": 0.0005770102786022879,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 1.1015902148539916e-14,
+          "reference_rms_m": 1.975963915058185e-11,
+          "relative_l2": 0.0005574951073038972,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 5.247965744629108e-15,
+          "reference_rms_m": 1.0996751311592648e-11,
+          "relative_l2": 0.00047722873746328733,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 6.770157288285449e-15,
+          "reference_rms_m": 8.572956081312086e-12,
+          "relative_l2": 0.0007897109496505527,
+          "passed": true
+        }
+      }
+    ],
+    "passed": true,
+    "maximum_relative_l2": 0.03460139109945707,
+    "maximum_vector_waveform_relative_l2": 0.0014954696612306108
+  },
+  "time_integration_refinement": {
+    "waveform": [
+      {
+        "x": {
+          "error_rms_m": 5.98898371820126e-22,
+          "reference_rms_m": 1.0194558378739689e-07,
+          "relative_l2": 5.874686764942194e-15,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 2.537860186262863e-23,
+          "reference_rms_m": 1.2892679812985556e-09,
+          "relative_l2": 1.968450487467098e-14,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 1.129415646287876e-22,
+          "reference_rms_m": 5.416075847657882e-10,
+          "relative_l2": 2.0853024921655749e-13,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 6.099828933848049e-22,
+          "reference_rms_m": 1.0195517448593101e-07,
+          "relative_l2": 5.9828537046834994e-15,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 6.067117348149786e-22,
+          "reference_rms_m": 9.682350896275134e-08,
+          "relative_l2": 6.266161403511875e-15,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 1.0516411927927444e-34,
+          "reference_rms_m": 1.85114999876674e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 2.7643367000536683e-34,
+          "reference_rms_m": 8.249700757203713e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 6.067117348149786e-22,
+          "reference_rms_m": 9.682350896275134e-08,
+          "relative_l2": 6.266161403511875e-15,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 5.197847857342001e-22,
+          "reference_rms_m": 8.525992836824937e-08,
+          "relative_l2": 6.096472231235968e-15,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 5.116679022316037e-23,
+          "reference_rms_m": 3.4323958690055393e-09,
+          "relative_l2": 1.4907018938344317e-14,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 9.216549162935262e-23,
+          "reference_rms_m": 1.438026445116009e-09,
+          "relative_l2": 6.409165279426931e-14,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 5.303666107041143e-22,
+          "reference_rms_m": 8.534110760247627e-08,
+          "relative_l2": 6.214667533664926e-15,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 4.1436168508752617e-22,
+          "reference_rms_m": 7.026028417630114e-08,
+          "relative_l2": 5.8975236144474745e-15,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 4.603857871671964e-23,
+          "reference_rms_m": 3.335200848884229e-09,
+          "relative_l2": 1.3803839949285682e-14,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 1.6060184352889527e-22,
+          "reference_rms_m": 2.364079182523326e-09,
+          "relative_l2": 6.793420656810451e-14,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 4.467752331359803e-22,
+          "reference_rms_m": 7.03791159905993e-08,
+          "relative_l2": 6.348122263934901e-15,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 3.636615545036537e-22,
+          "reference_rms_m": 5.1791195910287696e-08,
+          "relative_l2": 7.02168675798847e-15,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 3.790035197360281e-23,
+          "reference_rms_m": 3.97633917910582e-09,
+          "relative_l2": 9.531468586169669e-15,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 1.713409265158446e-23,
+          "reference_rms_m": 1.5426974162330083e-09,
+          "relative_l2": 1.1106580247877032e-14,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 3.6603243030465197e-22,
+          "reference_rms_m": 5.196651962949938e-08,
+          "relative_l2": 7.043620256163346e-15,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 2.468807602261845e-22,
+          "reference_rms_m": 3.849507830214403e-08,
+          "relative_l2": 6.413307132107696e-15,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 3.7330918700108983e-34,
+          "reference_rms_m": 7.084813674537371e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 4.653249016666271e-34,
+          "reference_rms_m": 2.7051788130895523e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 2.468807602261845e-22,
+          "reference_rms_m": 3.849507830214403e-08,
+          "relative_l2": 6.413307132107696e-15,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 2.649381175593085e-22,
+          "reference_rms_m": 2.0736786172568822e-08,
+          "relative_l2": 1.2776238099507231e-14,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 5.850083698850286e-23,
+          "reference_rms_m": 5.81882536888117e-09,
+          "relative_l2": 1.0053719312726388e-14,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 1.0886474774598338e-23,
+          "reference_rms_m": 1.122782562712444e-09,
+          "relative_l2": 9.69597777533928e-15,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 2.7153833872446686e-22,
+          "reference_rms_m": 2.1566957831912867e-08,
+          "relative_l2": 1.2590479419525204e-14,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 1.0735788540589158e-22,
+          "reference_rms_m": 6.631344897864832e-09,
+          "relative_l2": 1.6189458859312055e-14,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 4.000860527875524e-23,
+          "reference_rms_m": 3.0512247936259174e-09,
+          "relative_l2": 1.31123099688801e-14,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 7.069570893625863e-23,
+          "reference_rms_m": 2.8378912395034093e-09,
+          "relative_l2": 2.4911352469106384e-14,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 1.3462647331478303e-22,
+          "reference_rms_m": 7.83187937744994e-09,
+          "relative_l2": 1.71895488715529e-14,
+          "passed": true
+        }
+      }
+    ],
+    "spectral": [
+      {
+        "drive_band": {
+          "error_rms_m": 1.985835129010436e-24,
+          "reference_rms_m": 3.0395285880402344e-10,
+          "relative_l2": 6.533365525246869e-15,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 3.4392233110160334e-24,
+          "reference_rms_m": 5.264119839873899e-10,
+          "relative_l2": 6.533330196940234e-15,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 4.366144369034409e-26,
+          "reference_rms_m": 6.672706503601819e-12,
+          "relative_l2": 6.543288494222899e-15,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 2.1451669736317e-26,
+          "reference_rms_m": 2.814112256558776e-12,
+          "relative_l2": 7.622890553253577e-15,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.250456300094212e-24,
+          "reference_rms_m": 5.2153874186426835e-11,
+          "relative_l2": 2.397628785206615e-14,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 2.1540705959905362e-24,
+          "reference_rms_m": 8.882796500503263e-11,
+          "relative_l2": 2.424991494366099e-14,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 2.1386849838041175e-25,
+          "reference_rms_m": 1.583882548521882e-11,
+          "relative_l2": 1.3502800354735841e-14,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 7.18540759136338e-26,
+          "reference_rms_m": 4.336360025920362e-12,
+          "relative_l2": 1.657013612433697e-14,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 1.935094416039903e-24,
+          "reference_rms_m": 2.8863504723176695e-10,
+          "relative_l2": 6.704294695321836e-15,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 3.3516818460239386e-24,
+          "reference_rms_m": 4.99930566650463e-10,
+          "relative_l2": 6.7042946953218354e-15,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 5.9513601333599145e-37,
+          "reference_rms_m": 8.45530504936088e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 5.3936649327270276e-36,
+          "reference_rms_m": 1.0304868363500424e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.1182475440000519e-24,
+          "reference_rms_m": 2.7280054098842756e-11,
+          "relative_l2": 4.099139759578002e-14,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 1.9368615616472036e-24,
+          "reference_rms_m": 4.7250439732423254e-11,
+          "relative_l2": 4.099139759578003e-14,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 5.162722955622912e-37,
+          "reference_rms_m": 1.1548812760390605e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 2.4087525005487175e-37,
+          "reference_rms_m": 7.344197749493436e-24,
+          "relative_l2": null,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 1.6377501378354727e-24,
+          "reference_rms_m": 2.5439116551300667e-10,
+          "relative_l2": 6.437920650792949e-15,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 2.8336691068309734e-24,
+          "reference_rms_m": 4.401995837070995e-10,
+          "relative_l2": 6.437237134500435e-15,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 1.2001095801697582e-25,
+          "reference_rms_m": 1.771484808069842e-11,
+          "relative_l2": 6.7745970764342176e-15,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 5.0924501842759e-26,
+          "reference_rms_m": 7.423337172178828e-12,
+          "relative_l2": 6.8600550751774785e-15,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 8.813958754315582e-25,
+          "reference_rms_m": 2.5131202458084484e-11,
+          "relative_l2": 3.5071774894241916e-14,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 1.4843406934072355e-24,
+          "reference_rms_m": 3.506770852907235e-11,
+          "relative_l2": 4.2327849627718487e-14,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 3.4238342997518473e-25,
+          "reference_rms_m": 2.4872555930062728e-11,
+          "relative_l2": 1.3765510506355156e-14,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 1.0041095785343248e-25,
+          "reference_rms_m": 6.807627412955476e-12,
+          "relative_l2": 1.4749772830155502e-14,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 1.3534841370573083e-24,
+          "reference_rms_m": 2.097765011141742e-10,
+          "relative_l2": 6.452029325823549e-15,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 2.339915303044319e-24,
+          "reference_rms_m": 3.627299710285218e-10,
+          "relative_l2": 6.450846331802919e-15,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 1.188732055081837e-25,
+          "reference_rms_m": 1.7218849770050435e-11,
+          "relative_l2": 6.903667033261741e-15,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 8.014651201718675e-26,
+          "reference_rms_m": 1.2207398959628355e-11,
+          "relative_l2": 6.565404496260254e-15,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.0041901609246427e-24,
+          "reference_rms_m": 5.309095748917185e-11,
+          "relative_l2": 1.8914523459657926e-14,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 1.7290956587136918e-24,
+          "reference_rms_m": 9.108929435749884e-11,
+          "relative_l2": 1.8982424563829608e-14,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 1.6665537314425473e-25,
+          "reference_rms_m": 1.1396814875686548e-11,
+          "relative_l2": 1.4622977995351122e-14,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 8.745185826036748e-26,
+          "reference_rms_m": 5.3667835333112364e-12,
+          "relative_l2": 1.6295022468776712e-14,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 1.0227436210242513e-24,
+          "reference_rms_m": 1.5488062319451443e-10,
+          "relative_l2": 6.603431726509704e-15,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 1.765302598263331e-24,
+          "reference_rms_m": 2.673557921943613e-10,
+          "relative_l2": 6.6028215950526265e-15,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 1.3723677867251184e-25,
+          "reference_rms_m": 2.0529385886313857e-11,
+          "relative_l2": 6.6848944937998495e-15,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 5.372472598084305e-26,
+          "reference_rms_m": 7.96536368408962e-12,
+          "relative_l2": 6.744792593482613e-15,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.0282652907417286e-24,
+          "reference_rms_m": 6.481872161435527e-11,
+          "relative_l2": 1.586370827952276e-14,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 1.7789532163389248e-24,
+          "reference_rms_m": 1.1225889961879241e-10,
+          "relative_l2": 1.58468791550592e-14,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 7.960333815450095e-26,
+          "reference_rms_m": 1.4924561454725932e-12,
+          "relative_l2": 5.3337137172157363e-14,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 3.1261590883539025e-26,
+          "reference_rms_m": 3.347330123955341e-13,
+          "relative_l2": 9.33926135931853e-14,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 7.482466240880523e-25,
+          "reference_rms_m": 1.1472325242444908e-10,
+          "relative_l2": 6.522188033161016e-15,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 1.2960011695123971e-24,
+          "reference_rms_m": 1.9870650200869518e-10,
+          "relative_l2": 6.522188033161016e-15,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 2.0401645312860466e-36,
+          "reference_rms_m": 3.0121863484258956e-22,
+          "relative_l2": null,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 8.239898749173376e-36,
+          "reference_rms_m": 1.5729825736236384e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 8.834139957471794e-25,
+          "reference_rms_m": 5.957422919438158e-11,
+          "relative_l2": 1.482879439135897e-14,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 1.5301179247515508e-24,
+          "reference_rms_m": 1.03185591786422e-10,
+          "relative_l2": 1.482879439135897e-14,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 1.3303144730975139e-36,
+          "reference_rms_m": 2.1785868843903032e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 6.096860539488062e-37,
+          "reference_rms_m": 4.6848994292126885e-24,
+          "relative_l2": null,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 4.146348944983279e-25,
+          "reference_rms_m": 6.427238112244947e-11,
+          "relative_l2": 6.451214149175213e-15,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 6.874067600766374e-25,
+          "reference_rms_m": 1.0703837584662809e-10,
+          "relative_l2": 6.4220589544594814e-15,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 2.0438851795086806e-25,
+          "reference_rms_m": 3.003353887987653e-11,
+          "relative_l2": 6.805342479564244e-15,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 3.825659600260745e-26,
+          "reference_rms_m": 5.795650430722071e-12,
+          "relative_l2": 6.600915024103882e-15,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 5.309377460110048e-25,
+          "reference_rms_m": 3.6578881372122655e-11,
+          "relative_l2": 1.4514871042930277e-14,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 8.728059508875408e-25,
+          "reference_rms_m": 6.02765864407302e-11,
+          "relative_l2": 1.4480016245541185e-14,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 2.8610237445821394e-25,
+          "reference_rms_m": 1.929422940438817e-11,
+          "relative_l2": 1.482839083447118e-14,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 4.516496255291922e-26,
+          "reference_rms_m": 2.917109194302897e-12,
+          "relative_l2": 1.548278091239307e-14,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 1.5677860390282922e-25,
+          "reference_rms_m": 2.333963855822765e-11,
+          "relative_l2": 6.717267857927556e-15,
+          "passed": true
+        },
+        "drive_band_x": {
+          "error_rms_m": 2.289494489401352e-25,
+          "reference_rms_m": 3.4229165042269237e-11,
+          "relative_l2": 6.688724327847551e-15,
+          "passed": true
+        },
+        "drive_band_y": {
+          "error_rms_m": 1.0756363385046318e-25,
+          "reference_rms_m": 1.574818502770866e-11,
+          "relative_l2": 6.830224159876635e-15,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 9.874617171340149e-26,
+          "reference_rms_m": 1.464838260451531e-11,
+          "relative_l2": 6.74109725144422e-15,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 2.0666994687430992e-25,
+          "reference_rms_m": 1.3962657993643132e-11,
+          "relative_l2": 1.4801619216656447e-14,
+          "passed": true
+        },
+        "second_band_x": {
+          "error_rms_m": 2.9324955745676114e-25,
+          "reference_rms_m": 1.9759639150582052e-11,
+          "relative_l2": 1.484083566617779e-14,
+          "passed": true
+        },
+        "second_band_y": {
+          "error_rms_m": 1.6099002670535584e-25,
+          "reference_rms_m": 1.0996751311592763e-11,
+          "relative_l2": 1.4639780617357448e-14,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 1.273746802779612e-25,
+          "reference_rms_m": 8.57295608131217e-12,
+          "relative_l2": 1.485773157704843e-14,
+          "passed": true
+        }
+      }
+    ],
+    "passed": true,
+    "maximum_relative_l2": 2.0853024921655749e-13,
+    "maximum_vector_waveform_relative_l2": 1.71895488715529e-14
+  },
+  "modal_truncation_counts": [
+    48,
+    80
+  ],
+  "native_comsol_time_dependent_solve": false,
+  "nonlinear_reference": false,
+  "long_record_accuracy_certified": false,
+  "mesh_refinement": {
+    "waveform": [
+      {
+        "x": {
+          "error_rms_m": 1.5405840095991333e-08,
+          "reference_rms_m": 1.0196293961433369e-07,
+          "relative_l2": 0.15109254552941134,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 1.9788916517145534e-10,
+          "reference_rms_m": 1.2896132615651811e-09,
+          "relative_l2": 0.1534484570446187,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 8.224594190231011e-11,
+          "reference_rms_m": 5.417527820307982e-10,
+          "relative_l2": 0.1518145261645089,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 1.54073305143982e-08,
+          "reference_rms_m": 1.019725338178742e-07,
+          "relative_l2": 0.15109294569375048,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 1.4630218793896156e-08,
+          "reference_rms_m": 9.683947449489014e-08,
+          "relative_l2": 0.15107701554770558,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 1.4737656367992478e-20,
+          "reference_rms_m": 1.611419105976154e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 2.2468897893404005e-20,
+          "reference_rms_m": 1.4419573912265183e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 1.4630218793896156e-08,
+          "reference_rms_m": 9.683947449489014e-08,
+          "relative_l2": 0.15107701554770558,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 1.2882260366891819e-08,
+          "reference_rms_m": 8.527277723807866e-08,
+          "relative_l2": 0.1510711951004597,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 5.217621423840462e-10,
+          "reference_rms_m": 3.433326006667116e-09,
+          "relative_l2": 0.15196988033494208,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 2.1784589301877367e-10,
+          "reference_rms_m": 1.4384096034763858e-09,
+          "relative_l2": 0.15144913694421813,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 1.2894662644936551e-08,
+          "reference_rms_m": 8.53539881174302e-08,
+          "relative_l2": 0.1510727609727626,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 1.0617227527175771e-08,
+          "reference_rms_m": 7.026912436681699e-08,
+          "relative_l2": 0.15109377870929494,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 5.046441250410258e-10,
+          "reference_rms_m": 3.3361036882114914e-09,
+          "relative_l2": 0.15126751810030492,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 3.5745858480304517e-10,
+          "reference_rms_m": 2.3647009660536846e-09,
+          "relative_l2": 0.15116439242615423,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 1.0635222738457655e-08,
+          "reference_rms_m": 7.038800492808805e-08,
+          "relative_l2": 0.1510942489323733,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 7.828497336665398e-09,
+          "reference_rms_m": 5.1795193699172434e-08,
+          "relative_l2": 0.15114331615658153,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 6.008167885197009e-10,
+          "reference_rms_m": 3.977317847500727e-09,
+          "relative_l2": 0.1510607931164574,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 2.33111407703454e-10,
+          "reference_rms_m": 1.5431062863233208e-09,
+          "relative_l2": 0.1510663327403561,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 7.854978821864885e-09,
+          "reference_rms_m": 5.19705909587887e-08,
+          "relative_l2": 0.1511427651090917,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 5.820066013586258e-09,
+          "reference_rms_m": 3.8495687947477554e-08,
+          "relative_l2": 0.15118747901133742,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 4.261942980241975e-20,
+          "reference_rms_m": 1.1055551784770024e-19,
+          "relative_l2": null,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 6.691885603369813e-20,
+          "reference_rms_m": 4.0148323453986495e-20,
+          "relative_l2": null,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 5.820066013586258e-09,
+          "reference_rms_m": 3.8495687947477554e-08,
+          "relative_l2": 0.15118747901133742,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 3.135345124500543e-09,
+          "reference_rms_m": 2.073290895374518e-08,
+          "relative_l2": 0.1512255290126172,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 8.800938232734774e-10,
+          "reference_rms_m": 5.818594951287877e-09,
+          "relative_l2": 0.1512553856457527,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 1.6975549478691539e-10,
+          "reference_rms_m": 1.1229722185397204e-09,
+          "relative_l2": 0.15116624613177018,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 3.2609463527485095e-09,
+          "reference_rms_m": 2.1563177583441912e-08,
+          "relative_l2": 0.15122754242178799,
+          "passed": false
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 1.002246700181991e-09,
+          "reference_rms_m": 6.623879984651714e-09,
+          "relative_l2": 0.15130810076636517,
+          "passed": false
+        },
+        "y": {
+          "error_rms_m": 4.614537944593019e-10,
+          "reference_rms_m": 3.0490992116465755e-09,
+          "relative_l2": 0.1513410231771722,
+          "passed": false
+        },
+        "z": {
+          "error_rms_m": 4.2922204567639603e-10,
+          "reference_rms_m": 2.838749501940125e-09,
+          "relative_l2": 0.1512010994217866,
+          "passed": false
+        },
+        "vector": {
+          "error_rms_m": 1.183921288321655e-09,
+          "reference_rms_m": 7.825042542267656e-09,
+          "relative_l2": 0.15129902258378788,
+          "passed": false
+        }
+      }
+    ],
+    "spectral": [
+      {
+        "drive_band": {
+          "error_rms_m": 4.674263049642817e-11,
+          "reference_rms_m": 3.043185087215792e-10,
+          "relative_l2": 0.15359772461027985,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 8.09530080679307e-11,
+          "reference_rms_m": 5.270452317692597e-10,
+          "relative_l2": 0.15359783788608852,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 1.0230260237100375e-12,
+          "reference_rms_m": 6.681885414168777e-12,
+          "relative_l2": 0.1531043949871896,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 4.294411312487664e-13,
+          "reference_rms_m": 2.8178587929201034e-12,
+          "relative_l2": 0.15239980524494032,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 2.131591572168608e-11,
+          "reference_rms_m": 5.214161782338559e-11,
+          "relative_l2": 0.40880810016074837,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 3.627173829030068e-11,
+          "reference_rms_m": 8.880876825029572e-11,
+          "relative_l2": 0.408425192747563,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 6.645136197648489e-12,
+          "reference_rms_m": 1.5826426721258297e-11,
+          "relative_l2": 0.4198759653512085,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 1.8187785672556577e-12,
+          "reference_rms_m": 4.332646630168927e-12,
+          "relative_l2": 0.4197846541629324,
+          "passed": false
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 4.438374439772968e-11,
+          "reference_rms_m": 2.88979865933308e-10,
+          "relative_l2": 0.15358767038798737,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 7.687490032701833e-11,
+          "reference_rms_m": 5.005278101609319e-10,
+          "relative_l2": 0.15358767038798737,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 6.093513794551405e-23,
+          "reference_rms_m": 3.875352883084099e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 2.410685707199729e-21,
+          "reference_rms_m": 1.4460852170974516e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 1.0438813107541504e-11,
+          "reference_rms_m": 2.733306264322329e-11,
+          "relative_l2": 0.38191157880105353,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 1.8080554672977846e-11,
+          "reference_rms_m": 4.734225322452561e-11,
+          "relative_l2": 0.3819115788010536,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 7.876288326905812e-24,
+          "reference_rms_m": 1.7553151575958854e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 2.966182793992241e-23,
+          "reference_rms_m": 2.7437668755453104e-23,
+          "relative_l2": null,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 3.911098004596504e-11,
+          "reference_rms_m": 2.546901064456974e-10,
+          "relative_l2": 0.1535630126814679,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 6.767760810342457e-11,
+          "reference_rms_m": 4.4071672824425814e-10,
+          "relative_l2": 0.15356260329178079,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 2.728014303235749e-12,
+          "reference_rms_m": 1.7738770752658705e-11,
+          "relative_l2": 0.15378823827614274,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 1.142619721625933e-12,
+          "reference_rms_m": 7.433197281337902e-12,
+          "relative_l2": 0.15371847112071707,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 9.704486943359449e-12,
+          "reference_rms_m": 2.5213246073115162e-11,
+          "relative_l2": 0.3848963721377917,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 1.2866536907572628e-11,
+          "reference_rms_m": 3.526047770986258e-11,
+          "relative_l2": 0.36489967644351495,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 1.043259627712943e-11,
+          "reference_rms_m": 2.4850861405796452e-11,
+          "relative_l2": 0.4198082354882085,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 2.8538331110978755e-12,
+          "reference_rms_m": 6.801230160239535e-12,
+          "relative_l2": 0.4196054307618617,
+          "passed": false
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 3.2244635523782684e-11,
+          "reference_rms_m": 2.1001646839291267e-10,
+          "relative_l2": 0.15353384318156085,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 5.5754843105129834e-11,
+          "reference_rms_m": 3.631446931088229e-10,
+          "relative_l2": 0.1535334101341855,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 2.649608043079871e-12,
+          "reference_rms_m": 1.7241597675564873e-11,
+          "relative_l2": 0.15367532017261643,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 1.8779264429596285e-12,
+          "reference_rms_m": 1.2223345089894911e-11,
+          "relative_l2": 0.15363441260544283,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 2.2017664759052835e-11,
+          "reference_rms_m": 5.3092466427981727e-11,
+          "relative_l2": 0.41470412358633046,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 3.776925108328723e-11,
+          "reference_rms_m": 9.109374968081385e-11,
+          "relative_l2": 0.41461956737567673,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 4.773478033790633e-12,
+          "reference_rms_m": 1.138495191119613e-11,
+          "relative_l2": 0.419279595647332,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 2.2428250922969283e-12,
+          "reference_rms_m": 5.361120525419584e-12,
+          "relative_l2": 0.41835005977997397,
+          "passed": false
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 2.3801243056411622e-11,
+          "reference_rms_m": 1.5504941568039372e-10,
+          "relative_l2": 0.15350746697087575,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 4.108569943837908e-11,
+          "reference_rms_m": 2.676468312976003e-10,
+          "relative_l2": 0.15350713938658708,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 3.156382636092106e-12,
+          "reference_rms_m": 2.0555452390970512e-11,
+          "relative_l2": 0.15355452052607826,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 1.2247707560600624e-12,
+          "reference_rms_m": 7.975649305917208e-12,
+          "relative_l2": 0.15356376754822879,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 2.7082511505781347e-11,
+          "reference_rms_m": 6.478516632411585e-11,
+          "relative_l2": 0.41803568690847154,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 4.6905248841760265e-11,
+          "reference_rms_m": 1.1220059107522503e-10,
+          "relative_l2": 0.41804814388466616,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 5.309458490576172e-13,
+          "reference_rms_m": 1.5047414638699896e-12,
+          "relative_l2": 0.352848553592786,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 5.491794108817258e-14,
+          "reference_rms_m": 3.412366145485693e-13,
+          "relative_l2": 0.16093800825220628,
+          "passed": false
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 1.7627367809382523e-11,
+          "reference_rms_m": 1.1484069113833442e-10,
+          "relative_l2": 0.15349409372805853,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 3.053149664955463e-11,
+          "reference_rms_m": 1.9890991182792016e-10,
+          "relative_l2": 0.1534940937280585,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 1.668381234585445e-22,
+          "reference_rms_m": 4.563027556365934e-22,
+          "relative_l2": null,
+          "passed": true
+        },
+        "drive_band_z": {
+          "error_rms_m": 3.68020808222663e-21,
+          "reference_rms_m": 2.20722533879258e-21,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band": {
+          "error_rms_m": 2.4927561337004483e-11,
+          "reference_rms_m": 5.953215307444964e-11,
+          "relative_l2": 0.4187243371801219,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 4.317580274448134e-11,
+          "reference_rms_m": 1.031127138089145e-10,
+          "relative_l2": 0.418724337180122,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 1.16001306698249e-23,
+          "reference_rms_m": 3.186900148194939e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "second_band_z": {
+          "error_rms_m": 2.709110120016793e-23,
+          "reference_rms_m": 2.792461696576578e-23,
+          "relative_l2": null,
+          "passed": true
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 9.873994219546461e-12,
+          "reference_rms_m": 6.432576722597101e-11,
+          "relative_l2": 0.1534998282237342,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 1.6444018407193757e-11,
+          "reference_rms_m": 1.071260525479937e-10,
+          "relative_l2": 0.15350158076464776,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 4.613934754407719e-12,
+          "reference_rms_m": 3.006248734528217e-11,
+          "relative_l2": 0.15347814375485477,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 8.905898319946437e-13,
+          "reference_rms_m": 5.802474276432731e-12,
+          "relative_l2": 0.15348449464254485,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 1.5311066190980308e-11,
+          "reference_rms_m": 3.654353552457602e-11,
+          "relative_l2": 0.4189815235770882,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 2.5228876629877344e-11,
+          "reference_rms_m": 6.021734781133742e-11,
+          "relative_l2": 0.41896359681798173,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 8.080865841186034e-12,
+          "reference_rms_m": 1.9278478799975612e-11,
+          "relative_l2": 0.4191651180069382,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 1.2205060282202938e-12,
+          "reference_rms_m": 2.915689221291748e-12,
+          "relative_l2": 0.4185994924656506,
+          "passed": false
+        }
+      },
+      {
+        "drive_band": {
+          "error_rms_m": 3.5842106626892698e-12,
+          "reference_rms_m": 2.334270256612146e-11,
+          "relative_l2": 0.15354737321167047,
+          "passed": false
+        },
+        "drive_band_x": {
+          "error_rms_m": 5.255911334027569e-12,
+          "reference_rms_m": 3.422502206748228e-11,
+          "relative_l2": 0.15356926063230478,
+          "passed": false
+        },
+        "drive_band_y": {
+          "error_rms_m": 2.418337808975191e-12,
+          "reference_rms_m": 1.5752975371760787e-11,
+          "relative_l2": 0.15351625657400375,
+          "passed": false
+        },
+        "drive_band_z": {
+          "error_rms_m": 2.2509412507055734e-12,
+          "reference_rms_m": 1.4667546512225185e-11,
+          "relative_l2": 0.15346406086590192,
+          "passed": false
+        },
+        "second_band": {
+          "error_rms_m": 5.8436489913855625e-12,
+          "reference_rms_m": 1.3938858904939963e-11,
+          "relative_l2": 0.41923438864242757,
+          "passed": false
+        },
+        "second_band_x": {
+          "error_rms_m": 8.267350238533943e-12,
+          "reference_rms_m": 1.9720498140684666e-11,
+          "relative_l2": 0.4192262375704326,
+          "passed": false
+        },
+        "second_band_y": {
+          "error_rms_m": 4.605419661877929e-12,
+          "reference_rms_m": 1.0980024198991715e-11,
+          "relative_l2": 0.419436203273654,
+          "passed": false
+        },
+        "second_band_z": {
+          "error_rms_m": 3.589669953486729e-12,
+          "reference_rms_m": 8.56833615051845e-12,
+          "relative_l2": 0.4189459762581241,
+          "passed": false
+        }
+      }
+    ],
+    "passed": false,
+    "maximum_relative_l2": 0.4198759653512085,
+    "maximum_vector_waveform_relative_l2": 0.15129902258378788
+  },
+  "refinement_identity": {
+    "job_id": "comsol-6b6cec683bd04dcfb426b1a2a123f143",
+    "source_sha256": "b633d763751772196a199f46c9959c7977714252e4af0d33f0fc5a30f6ca11f8",
+    "scene_sha256": "b72e068b9aee8ff531022543572356729316335d4105cdc2c6156db11ccf133d",
+    "parameters_sha256": "87357f15abeb1102298608f03c5d3dab886cfd4507f8733b1ef06bbb287a2436",
+    "purpose": "training",
+    "uses_test_data_for_training": false
+  },
+  "traces_sha256": "f80336caf5e5b86f5c17e6e0dbf90af35121eb51fdca1fe42d51a793966ee4cf"
+}

@@ -1,0 +1,68 @@
+name: COMSOL sourced linear comparison of actual 5 ms neural records
+on:
+  workflow_dispatch:
+    inputs:
+      candidate:
+        description: Research candidate folder under research/comsol-validation/training
+        required: true
+        type: string
+      reference:
+        description: Verified COMSOL eigenpair folder under research/comsol-validation/data
+        required: true
+        type: string
+      refinement:
+        description: Independently meshed COMSOL eigenpair folder under the same data root
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  compare:
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        signal: [hann, gaussian, rectangular, chirp]
+        cycles: ['01', '03', '05', '10', '20']
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      NUMBA_NUM_THREADS: '3'
+      WORKAI_CANDIDATE: ${{ inputs.candidate }}
+      WORKAI_REFERENCE: ${{ inputs.reference }}
+      WORKAI_REFINEMENT: ${{ inputs.refinement }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned numerical validation runtime
+        run: python -m pip install numpy==2.2.6 scipy==1.15.3 numba==0.63.1 llvmlite==0.46.0
+      - name: Validate selected local dataset names
+        run: |
+          python - <<'PY'
+          import os,re
+          from pathlib import Path
+          for name,parent in [('WORKAI_CANDIDATE','training'),('WORKAI_REFERENCE','data'),('WORKAI_REFINEMENT','data')]:
+              value=os.environ[name]
+              assert re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}',value), 'Invalid dataset name'
+              assert (Path('research/comsol-validation')/parent/value).is_dir(), 'Dataset must already be committed'
+          PY
+      - name: Predict full 5 ms before loading COMSOL modal labels
+        run: >-
+          python tools/run-comsol-linear-case.py
+          --case '${{ matrix.signal }}-${{ matrix.cycles }}'
+          --weights "research/comsol-validation/training/$WORKAI_CANDIDATE/candidate-weights.npz"
+          --reference "research/comsol-validation/data/$WORKAI_REFERENCE"
+          --check-reference "research/comsol-validation/data/$WORKAI_REFINEMENT"
+          --output validation
+      - name: Preserve completed or failed records without asserting accuracy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comsol-linear-${{ matrix.signal }}-${{ matrix.cycles }}
+          path: validation/
+          compression-level: 0
+          retention-days: 30

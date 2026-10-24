@@ -1,27 +1,35 @@
 # workAI · 超声研究工作台
 
-## 离线软件（0.2.0，原始冻结图网络）
+## 离线软件 0.3.0 · 5 ms 长记录研究版
 
-**WorkAI Offline** 可在本机预测板、圆管、通孔和缺口的三维波传播，查看完整、线性、StVK、几何增量、材料增量五种响应的动画，提取任意实体内点位/方向的波形、时间窗频谱、f/2f 和沿程谐波，导出 CSV、配置及完整结果。
+**真实 5 ms 记录和离线软件已实现；本轮长时程验证未达到 5% 精度要求。** 软件将计算完成、能量检查和波形精度分别记录，不以计算成功代替精度验收。
 
-[下载 Windows / Linux 便携包](https://github.com/lx016922-dot/workAI/releases/tag/v0.2.0)。Windows x64 解压后双击 `Start-WorkAI.bat`；Linux x64 运行 `sh start-workai.sh`。包内自带 Python、计算依赖、原始模型和实际预测示例，无需联网安装、Node、COMSOL、账号或云端身份。使用本机浏览器操作，按 Ctrl+C 正常退出并停止进行中的计算。
+[下载 Windows / Linux 便携包及验证证据](https://github.com/lx016922-dot/workAI/releases/tag/v0.3.0)。Windows x64 解压后双击 `Start-WorkAI.bat`；Linux x64 运行 `sh start-workai.sh`。包内自带 Python、计算依赖、冻结模型和实际计算的 5 ms 示例；预测、分析与导出无需联网、Node、COMSOL 或账号。使用本机浏览器操作。
 
-**原始模型已完整接入。** 用户提供的 `workai-graphwave-model-20261023.zip` 与原对话记录的 SHA-256 完全一致；原权重、检查点、八例验收、更细网格参考场记录和核心推理代码的摘要均已核对。本次打包没有重新训练。原评估中，对照更细参考网格的最大全场误差为 **0.438%**，最大材料增量误差为 **1.118%**；微弱信号使用绝对误差门槛。详见 [模型校验记录](offline/model/validation.json)、[八例评估](offline/model/metrics.json)和[更细网格参考场评估](offline/model/refined-metrics.json)。
+默认 5 ms = 5000 μs，0.2 μs 采样对应 **25001 个真实时间点**；可设置 5–20 ms。完整 float64 场分块保存，支持暂停与续算、求解后任意实体内点位和方向、五种响应、全分辨率波形与频谱、CSV 和完整结果 ZIP。动画最多 281 帧，仅用于显示。原有 14 μs 结果保留实际时长，需要长窗口时重新计算。
 
-这些数值是原模型的有界验证结果，不是任意 CAD、新工况、点位或方向的误差上界。本次打包核验已保存记录，没有重算八例大型参考场。该模型仍带网格并逐时传播，没有预测后的数值校正。
+支持 Hann 窗正弦、Gaussian 窗正弦（6σ 截断）、矩形窗正弦、Hann 窗线性扫频，以及 1–20 周期。本轮固定 **4 种信号 × 1、3、5、10、20 周期**，每组实际计算 5 ms；验证对象为一个固定端 8 × 3 × 1.5 mm 铝板、2.5 mm 单元、四阶预测与五阶独立数值参考。它不代表任意几何、默认 1.4 mm 网格或实验精度。详见 [20 组数值验证与误差诊断](research/long-validation/README.md) 和 [逐组 CSV](research/long-validation/cases.csv)。
 
-详细操作见 [离线说明](offline/README-OFFLINE.txt)。软件包不含云端私钥或连接身份。下面的章节保留早期云工作台历史，其 `/workspace` 路径与远程连接要求不适用于便携包。
+另已完成真实 COMSOL 三维模态求解，并将纵向、两个横向的完整 Murnaghan 运动方程、边界牵引、能量与内功率加入修正训练。新候选在 48 个独立制造场上的最大物理残差为 3.618%，但这不等于 5 ms 仿真精度。20 组 COMSOL 线性模态诊断仍未通过，参考的空间与模态截断收敛也不充分；原生 COMSOL 瞬态任务另行记录。新候选暂不替换默认模型。见 [COMSOL 与训练报告](research/comsol-validation/README.md) 和 [非线性方程](research/comsol-validation/NONLINEAR-PHYSICS.md)。
+
+继续训练保留原有 120 个参数，新增 36 个五阶空间导数系数，并训练四阶时间组合系数。独立的八个新结构只验证 **14 μs**，其结果与 5 ms 矩阵分开报告：[继续训练与八例检查](research/continued-training/README.md)。模型仍依赖网格并逐时传播，不进行预测后的数值校正。长记录作为研究功能发布，`long_accuracy_certified=false`。
+
+Windows 和 Linux 自带运行时均已完成真实 5 ms 计算。浏览器提取、五种响应、FFT、CSV、全记录导出及检查点续算均已检查，见 [软件验证记录](offline/model/long-software-validation.json)。详细操作、资源需求和使用范围见 [离线说明](offline/README-OFFLINE.txt)。完整示例包含全部节点时域数据，便携包体积较大；额外的验证证据 ZIP 用于复查研究结果。
+
+原始用户模型、检查点与八例历史验收保留在 `offline/model`，可另下载 [0.2.0 原始冻结版](https://github.com/lx016922-dot/workAI/releases/tag/v0.2.0)。其原 14 μs 最大全场误差 0.438%、最大材料增量误差 1.118% 不能延伸到当前 5 ms 或其他工况。[原模型核验](offline/model/validation.json)
 
 ### 从源码构建
 
-构建时联网下载 SHA-256 固定的依赖；`--example` 使用自带运行时实际计算铝板示例。完成后运行软件无需网络：
+构建时下载 SHA-256 固定的依赖；`--example` 使用自带运行时实际计算 5 ms 铝板示例。完成后运行软件无需网络：
 
 ```sh
 python tools/download-offline.py --cache build-cache --platform windows
 python tools/build-offline.py --cache build-cache --output portable --platform windows --example --archive
 ```
 
-Linux 将 `windows` 改为 `linux`。使用全新输出目录和没有预生成 `offline/examples` 的源码检出。软件包内可运行 `runtime/python.exe -m offline.smoke` 或 `runtime/bin/python3 -m offline.smoke`，验证原模型身份、实际预测、能量、五种响应、文件摘要和 API。
+Linux 将 `windows` 改为 `linux`，使用全新输出目录。包内运行 `runtime/python.exe -m offline.smoke` 或 `runtime/bin/python3 -m offline.smoke`，可重新执行完整 5 ms API 检查。普通文件完整性核验使用 `verify-package.py`。源码环境的再训练需要另装 PyTorch，便携运行时用于预测与分析。
+
+下面保留早期云工作台历史；其 `/workspace` 路径和远程连接要求不适用于便携包。
 
 ## 早期云工作台与历史记录
 

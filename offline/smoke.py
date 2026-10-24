@@ -102,7 +102,8 @@ def main():
                 assert len([n for n in archive.namelist() if n.startswith('record/fields/')])>1
                 assert archive.testzip() is None
             print(json.dumps({'passed': True, 'python': sys.version, 'platform': sys.platform,
-                              'weights_sha256': info['model']['weights_sha256'], 'elapsed_s': status['elapsed_s'],
+                              'weights_sha256': result['neural_model']['weights_sha256'],
+                              'original_weights_sha256': info['model']['weights_sha256'], 'elapsed_s': status['elapsed_s'],
                               'duration_us':5000,'full_samples':25001,'controls': 3, 'response_parts': 5, 'authentication_checks': 2, 'invalid_scene_rejected': True}), flush=True)
         finally:
             server.terminate()

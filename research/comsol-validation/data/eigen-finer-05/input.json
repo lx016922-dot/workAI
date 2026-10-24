@@ -1,0 +1,172 @@
+{
+  "scene": {
+    "schema": "workai.hyperelastic.solid.v1",
+    "name": "5 ms \u957f\u8bb0\u5f55\u9a8c\u8bc1 \u00b7 \u56fa\u5b9a\u7aef\u94dd\u677f",
+    "geometry": {
+      "kind": "plate",
+      "length_mm": 8.0,
+      "width_mm": 3.0,
+      "thickness_mm": 1.5,
+      "outer_radius_mm": 2.5,
+      "inner_radius_mm": 1.5,
+      "hole_radius_mm": 0.55,
+      "hole_x_mm": 5.0,
+      "hole_y_mm": 1.75,
+      "notch_x_mm": 5.0,
+      "notch_width_mm": 0.8,
+      "notch_depth_mm": 0.45
+    },
+    "material": {
+      "rho_kg_m3": 2700.0,
+      "lambda_pa": 58100000000.0,
+      "mu_pa": 26100000000.0,
+      "l_pa": -143000000000.0,
+      "m_pa": -297000000000.0,
+      "n_pa": -345000000000.0
+    },
+    "constitutive": "murnaghan",
+    "source": {
+      "face": "xmin",
+      "center_mm": [
+        0.0,
+        1.5,
+        0.75
+      ],
+      "radius_mm": 0.0,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "amplitude_mpa": 1.0,
+      "frequency_mhz": 0.22,
+      "cycles": 2,
+      "delay_us": 0.2,
+      "phase_deg": 0.0
+    },
+    "boundary": {
+      "fixed_face": "xmax"
+    },
+    "acquisition": {
+      "duration_us": 8.0,
+      "sample_step_us": 0.2
+    },
+    "numerics": {
+      "h_mm": 2.5,
+      "cfl": 0.3,
+      "max_elements": 40000
+    },
+    "receivers": [
+      {
+        "name": "P1",
+        "point_mm": [
+          1.1,
+          0.7,
+          0.4
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P2",
+        "point_mm": [
+          2.0,
+          1.5,
+          0.75
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P3",
+        "point_mm": [
+          3.1,
+          2.3,
+          1.1
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P4",
+        "point_mm": [
+          4.2,
+          0.9,
+          1.2
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P5",
+        "point_mm": [
+          5.3,
+          2.1,
+          0.5
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P6",
+        "point_mm": [
+          6.0,
+          1.5,
+          0.75
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P7",
+        "point_mm": [
+          6.9,
+          0.6,
+          0.9
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P8",
+        "point_mm": [
+          7.6,
+          2.4,
+          0.3
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "signal": {
+      "kind": "hann",
+      "end_frequency_mhz": 0.22
+    }
+  },
+  "degree": 4,
+  "h_mm": 0.4
+}
