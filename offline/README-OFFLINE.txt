@@ -12,7 +12,8 @@ Linux x86_64（glibc）：
 系统无需预装 Python。Alpine/musl、macOS、ARM 不属于本包支持平台。
 
 整个启动、预测及结果分析过程均使用本机文件，无需网络。
-Windows 运行时已打包；此发布的 Windows 原生启动与计算尚未在真实 Windows 上实测。
+Windows 与 Linux 便携运行时均已完成真实网络预测及五种响应检查。
+Windows 在 GitHub Actions 的原生 x64 runner 上实测；平台记录见 offline/model/software-validation.json。
 推荐 8 GB 以上内存、2 GB 以上空闲磁盘；计算任务和缓存会继续占用空间。
 首次计算会编译 Numba 网络。小板通常较快，孔结构可能耗时数十分钟。
 任务上限 90 分钟。避免在同一个数据目录同时启动多个实例。

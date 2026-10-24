@@ -8,6 +8,8 @@
 
 **模型来源：**原聊天完成后的云快照未恢复最新权重与八例验收文件。本次从聊天记录恢复图网络代码，按相同种子和流程重新生成权重；SHA-256 不同，因此不继承原版的八例验收结论。恢复版自己的检查记录见 [validation.json](offline/model/validation.json)，训练来源见 [model.json](offline/model/model.json)。它是带网格、逐时计算的物理图网络，不是任意 CAD 的瞬时通用模型。
 
+Windows 与 Linux 便携运行时均通过真实预测、能量与五种响应检查；[Windows 原生测试](https://github.com/lx016922-dot/workAI/actions/runs/40051912601)和[平台记录](offline/model/software-validation.json)可查看。
+
 打包只选择本地推理所需源码、固定权重、运行时和示例，原云端私钥与连接身份不在包内。详细使用方法见 [离线说明](offline/README-OFFLINE.txt)。下面的章节保留早期云工作台的功能与历史记录，其 `/workspace` 路径和远程连接要求不适用于离线便携包。
 
 ### 从源码构建便携包
