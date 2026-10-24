@@ -236,6 +236,21 @@ def train(args):
     shutil.copyfile(Path(physics.__file__),output/'source_snapshot/nonlinear_constraints.py')
     physical_training=physics.make_dataset(scene['material'],args.physics_samples,args.physics_seed)
     physical_validation=physics.make_dataset(scene['material'],args.physics_validation_samples,args.physics_seed+1)
+    initial_restoration=None
+    if args.optimizer=='slsqp':
+        # A previously valid candidate may violate a newly expanded training
+        # set. Restore a feasible starting point using training fields only;
+        # post-fit backtracking must not head toward an infeasible parent.
+        _,starting_report=physics.evaluate(baseline,weights,physical_training,details=True)
+        if max(starting_report['maximum_normalized_residual'].values())>args.physics_limit*(1-1e-3):
+            exact=project_filter_consistency(mesh['derivative'],mesh['gll'],args.consistency_order)
+            coefficients=np.einsum('aij,ij->a',basis,baseline-exact)
+            if np.linalg.norm(exact+np.einsum('a,aij->ij',coefficients,basis)-baseline)>1e-12:
+                raise ValueError('Parent filter cannot be represented in the declared consistent basis')
+            coefficients,initial_restoration=restore_physical_feasibility(coefficients,exact,basis,weights,physical_training,args.physics_limit)
+            initial_restoration['parent_maximum_training_residual']=max(starting_report['maximum_normalized_residual'].values())
+            initial_restoration['scope']='Warm-start feasibility on the declared training set; independent validation is not consulted'
+            baseline=exact+np.einsum('a,aij->ij',coefficients,basis)
     rigid_parent=physics.rigid_motion_checks(weights['derivative_4'],weights)
     rigid_initial=physics.rigid_motion_checks(baseline,weights)
     if not rigid_initial['passed']:raise ValueError('Projected starting filter fails rigid-motion objectivity')
@@ -245,13 +260,20 @@ def train(args):
         np.savez_compressed(output/('physics-'+split+'-patches.npz'),**numeric)
     physical_weight=np.sqrt((participation/participation.max())*(target.min()/target)**2)
     physical_weight/=physical_weight[indices].max()
+    dominant_index=int(indices[np.argmax(participation[indices])])
+    physical_weight[dominant_index]*=args.dominant_phase_weight
     config={'schema':'workai.comsol_modal_training.v1','reference_job_id':reference['receipt']['job_id'],
             'refinement_job_id':check['receipt']['job_id'],'reference_identity':reference['identity'],
             'refinement_identity':check['identity'],'baseline_weights_sha256':digest(args.weights),
             'training_mode_indices':indices.tolist(),'mode_refinement_uncertainty_hz':uncertainty.tolist(),
             'mode_refinement_mac':ref_mac.tolist(),'frequency_admission_relative':1e-4,
             'long_phase_reference_verified':bool(np.max(uncertainty[indices])<=.5),
-            'training_parameters':len(basis),'parameter_bounds':[-.25,.25],
+            'training_parameters':len(basis),'parameter_bounds':[-args.parameter_bound,args.parameter_bound],
+            'dominant_phase_mode_index':dominant_index,
+            'dominant_phase_residual_multiplier':args.dominant_phase_weight,
+            'phase_residual_weights':physical_weight.tolist(),
+            'dominant_mode_selection':'largest load participation among admitted COMSOL development modes; no test trajectory selection',
+            'initial_physics_feasibility_restoration':initial_restoration,
             'polynomial_consistency_order':args.consistency_order,
             'initial_filter_consistency_projection':{
                 'frobenius_correction':float(np.linalg.norm(baseline-weights['derivative_4'])),
@@ -271,6 +293,7 @@ def train(args):
                 'optimizer':args.optimizer,'hard_training_limit':args.physics_limit if args.optimizer=='slsqp' else None,
                 'constraint_form':'1 - (per-sample component RMS / hard_training_limit)^2 >= 0',
                 'finite_difference_step':args.gradient_step,'objective_scaling':'fixed initial objective; never candidate-dependent',
+                'slsqp_tolerance':args.optimizer_tolerance,'maximum_optimizer_iterations':args.max_iterations,
                 'postfit_feasibility':'re-evaluate training constraints after parameter backtracking; 0.1% interior margin; preserve raw optimizer status',
                 'physical_equations_source_sha256':digest(Path(physics.__file__)),
                 'training_patches_sha256':digest(output/'physics-training-patches.npz'),
@@ -292,6 +315,9 @@ def train(args):
         return frequency[mapping],mac,derivative
 
     initial,initial_mac,_=evaluate(np.zeros(len(basis)))
+    parent_frequency,parent_fields=modes(mesh,scene,weights['derivative_4'],weights['quadratic_tensor'],count)
+    parent_mapping,_=match(reference['fields'],parent_fields,mesh['mass'])
+    parent_frequency=parent_frequency[parent_mapping]
     _,initial_physical=physics.evaluate(baseline,weights,physical_training,details=True)
     save(output/'physics-initial.json',initial_physical)
     def objective(theta):
@@ -309,7 +335,7 @@ def train(args):
         if len(history)%20==0:print(json.dumps(row),flush=True)
         return np.r_[residual,args.physics_weight*physical_residual,.01*theta]
     if args.optimizer=='least_squares':
-        fitted=least_squares(objective,np.zeros(len(basis)),bounds=(-.25,.25),jac='3-point',
+        fitted=least_squares(objective,np.zeros(len(basis)),bounds=(-args.parameter_bound,args.parameter_bound),jac='3-point',
                              x_scale='jac',max_nfev=100,ftol=1e-12,xtol=1e-12,gtol=1e-10)
     else:
         # Enforce every sample/branch/projection gate, so an average physics
@@ -346,10 +372,10 @@ def train(args):
             return np.stack(columns,axis=-1)
         objective_scale=max(1.,constrained(np.zeros(len(basis)))[0])
         fitted=minimize(lambda theta:constrained(theta)[0]/objective_scale,np.zeros(len(basis)),
-                        jac=lambda theta:jacobian(theta,0)/objective_scale,method='SLSQP',bounds=[(-.25,.25)]*len(basis),
+                        jac=lambda theta:jacobian(theta,0)/objective_scale,method='SLSQP',bounds=[(-args.parameter_bound,args.parameter_bound)]*len(basis),
                         constraints=[{'type':'ineq','fun':lambda theta:constrained(theta)[1],
                                       'jac':lambda theta:jacobian(theta,1)}],
-                        options={'maxiter':150,'ftol':1e-10})
+                        options={'maxiter':args.max_iterations,'ftol':args.optimizer_tolerance})
     optimized_theta=fitted.x.copy();restoration=None
     if args.optimizer=='slsqp':
         fitted.x,restoration=restore_physical_feasibility(fitted.x,baseline,basis,weights,physical_training,args.physics_limit)
@@ -370,6 +396,8 @@ def train(args):
         'parameters':fitted.x.tolist(),'weights_sha256':digest(output/'candidate-weights.npz'),
         'raw_optimizer_parameters':optimized_theta.tolist(),'feasibility_restoration':restoration,
         'initial_frequency_errors_hz':(initial-target).tolist(),'final_frequency_errors_hz':(final-target).tolist(),
+        'unmodified_parent_frequency_errors_hz':(parent_frequency-target).tolist(),
+        'initial_physics_feasibility_restoration':initial_restoration,
         'training_mode_indices':indices.tolist(),'initial_training_error_norm_hz':float(np.linalg.norm((initial-target)[indices])),
         'final_training_error_norm_hz':float(np.linalg.norm((final-target)[indices])),
         'initial_mode_mac':initial_mac.tolist(),'final_mode_mac':final_mac.tolist(),
@@ -404,6 +432,10 @@ if __name__=='__main__':
     p.add_argument('--optimizer',choices=['least_squares','slsqp'],default='slsqp')
     p.add_argument('--physics-limit',type=float,default=.04)
     p.add_argument('--gradient-step',type=float,default=1e-5)
+    p.add_argument('--dominant-phase-weight',type=float,default=1.,help='Residual multiplier for the largest admitted load participation mode')
+    p.add_argument('--parameter-bound',type=float,default=.25,help='Bound on each affine-consistent filter increment; physical gates remain unchanged')
+    p.add_argument('--optimizer-tolerance',type=float,default=1e-10,help='SLSQP stopping tolerance; exported parameters still require exact physical rechecks')
+    p.add_argument('--max-iterations',type=int,default=150)
     args=p.parse_args()
     if args.action=='train':
         if not args.check_reference:p.error('--check-reference is required for training')
@@ -411,5 +443,9 @@ if __name__=='__main__':
             p.error('Nonlinear physics constraints require at least six patches per split and positive finite loss weight')
         if not 0<args.physics_limit<=.05:p.error('Hard training limit must be positive and no looser than the 5% physical validation gate')
         if not np.isfinite(args.gradient_step) or not 0<args.gradient_step<=1e-3:p.error('Gradient stencil must be finite and in (0, 1e-3]')
+        if not np.isfinite(args.dominant_phase_weight) or not 1<=args.dominant_phase_weight<=100:p.error('Dominant phase weight must be finite and in [1, 100]')
+        if not np.isfinite(args.parameter_bound) or not 0<args.parameter_bound<=1:p.error('Parameter bound must be finite and in (0, 1]')
+        if not np.isfinite(args.optimizer_tolerance) or not 1e-12<=args.optimizer_tolerance<=1e-5:p.error('Optimizer tolerance must be finite and in [1e-12, 1e-5]')
+        if not 1<=args.max_iterations<=500:p.error('Optimizer iterations must be in [1, 500]')
         train(args)
     else:audit(args)
