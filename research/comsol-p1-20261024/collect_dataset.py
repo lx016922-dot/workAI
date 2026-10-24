@@ -19,7 +19,9 @@ def digest(path):
 
 
 def write(path, obj):
-    path.write_text(json.dumps(obj, indent=2, ensure_ascii=False, allow_nan=False)+'\n')
+    temporary=path.with_suffix(path.suffix+'.tmp')
+    temporary.write_text(json.dumps(obj, indent=2, ensure_ascii=False, allow_nan=False)+'\n')
+    temporary.replace(path)
 
 
 def properties(path):

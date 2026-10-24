@@ -99,8 +99,11 @@ def run_job(root, folder):
                 progress=dict(active_job=ident['job_id'],active_case=ident['case_id'],active_laws=ident['laws'],active_variant=ident['variant'])
                 live=folder/'solver-live.json'
                 if live.exists():
-                    body=json.loads(live.read_text())['body']
-                    progress.update(remote_phase=body.get('phase'),solver_log_bytes=body.get('total_bytes'),last_remote_update=body.get('last_write_utc'))
+                    try:
+                        body=json.loads(live.read_text())['body']
+                        progress.update(remote_phase=body.get('phase'),solver_log_bytes=body.get('total_bytes'),last_remote_update=body.get('last_write_utc'))
+                    except (ValueError,OSError):
+                        pass  # The signed client may be replacing this progress file.
                 state('running',**progress)
                 last_report=time.monotonic()
             time.sleep(15)
