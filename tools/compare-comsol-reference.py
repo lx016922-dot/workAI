@@ -128,6 +128,29 @@ def run(args):
             raise ValueError('Refinement must keep scene and output times identical')
         mode='COMSOL_reference_refinement'
         candidate_identity={'job_id':other_receipt['job_id']}
+    elif args.prediction_archive:
+        # Use a completed prediction made independently of this native result.
+        # This avoids rerunning or altering an already frozen 5 ms trajectory.
+        directory=args.prediction_archive
+        archive=json.loads((directory/'archive.json').read_text())
+        for name,sha in archive['files_sha256'].items():
+            if Path(name).name!=name or digest(directory/name)!=sha:
+                raise ValueError('Prediction archive changed')
+        identity=json.loads((directory/'identity.json').read_text())
+        if identity['case']['scene']!=scene or identity['numerical_corrector'] or identity['reference_arrays_loaded_before_prediction']:
+            raise ValueError('Prediction identity does not match native COMSOL case')
+        frames=round(scene['acquisition']['duration_us']/scene['acquisition']['sample_step_us'])+1
+        with np.load(directory/'traces.npz',allow_pickle=False) as saved:
+            probes=saved['predicted'];times=saved['times_us']
+            if probes.shape!=(3,frames,len(scene['receivers']),3) or not np.isfinite(probes).all():
+                raise ValueError('Incomplete archived prediction')
+            np.testing.assert_allclose(times,np.arange(frames)*scene['acquisition']['sample_step_us'],rtol=0,atol=1e-12)
+        if np.any(probes[:,0]):raise ValueError('Nonzero initial prediction')
+        candidate={i:probes[i] for i in reference}
+        mode='frozen_neural_recording_vs_native_COMSOL'
+        candidate_identity={'weights_sha256':identity['weights_sha256'],'temporal_sha256':identity['temporal_sha256'],
+                            'prediction_archive_sha256':digest(directory/'archive.json'),
+                            'inference_source_sha256':identity['inference_source_sha256']}
     else:
         from numba import set_num_threads
         from graphwave.long_campaign import Driver
@@ -169,7 +192,9 @@ def run(args):
 if __name__=='__main__':
     p=argparse.ArgumentParser()
     p.add_argument('--case',type=Path,required=True)
-    p.add_argument('--other',type=Path)
+    comparison=p.add_mutually_exclusive_group()
+    comparison.add_argument('--other',type=Path)
+    comparison.add_argument('--prediction-archive',type=Path)
     p.add_argument('--weights',type=Path,default=Path('offline/model/continued-weights.npz'))
     p.add_argument('--temporal',type=Path,default=Path('offline/model/time-coefficients.json'))
     p.add_argument('--degree',type=int,default=4)
