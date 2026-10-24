@@ -42,6 +42,8 @@ def main():
         shutil.copyfile(args.run/'source_snapshot/nonlinear_constraints.py',args.output/'source_snapshot/nonlinear_constraints.py')
         for name in ['physics-initial.json','physics-training.json','physics-validation.json','physics-training-patches.npz','physics-validation-patches.npz']:
             shutil.copyfile(args.run/name,args.output/name)
+        for name in ['rigid-parent.json','rigid-initial.json','rigid-final.json']:
+            if (args.run/name).exists():shutil.copyfile(args.run/name,args.output/name)
     if config.get('postfit_feasibility_restoration'):
         restoration=config['postfit_feasibility_restoration']
         for name,key in [('finalize-comsol-training.py','source_sha256'),('feasibility-restoration.py','algorithm_source_sha256')]:
@@ -73,6 +75,8 @@ def main():
              'physics_training_maxima':training.get('physics_training_maxima'),
              'physics_validation_passed':training.get('physics_validation_passed'),
              'physics_validation_maxima':training.get('physics_validation_maxima'),
+             'finite_rigid_motion_checks_passed':training.get('finite_rigid_motion_checks_passed'),
+             'rigid_motion_maxima':training.get('rigid_motion_maxima'),
              'reference_long_phase_converged':config['long_phase_reference_verified'],
              'accepted_for_offline_release':False,'long_record_accuracy_certified':False,
              'scope':'P4 graph filter research candidate for the fixed-end 8 x 3 x 1.5 mm aluminum plate with h=2.5 mm; not a general geometry calibration',

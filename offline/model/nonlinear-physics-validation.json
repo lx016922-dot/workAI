@@ -2,14 +2,14 @@
   "schema": "workai.nonlinear_physics_release_evidence.v1",
   "scope": "offline training research; not the default portable model",
   "default_weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
-  "candidate_weights_sha256": "b756d4f76d4ee2670afbff6ad57a66af366c259c6c35a6fb42aaac197f193d3d",
+  "candidate_weights_sha256": "35bcce927f05bbab3321393b59312df9ab4980b8c45b23d32c37b01d866e4ddf",
   "comsol_training_jobs": [
     "comsol-6b6cec683bd04dcfb426b1a2a123f143",
     "comsol-c420e3febfed41b08d0323e925dd3ad0"
   ],
   "training_samples": 96,
   "independent_validation_samples": 48,
-  "validation_seed": 2026102422,
+  "validation_seed": 2026102434,
   "physical_constraint_gates": 5280,
   "physical_equations": [
     "rho*u_tt=Div(F*S)+b, all three projections and mixed derivatives",
@@ -19,11 +19,11 @@
   ],
   "hard_training_limit_satisfied": true,
   "physics_validation_maxima": {
-    "momentum_interior": 0.016788601927161237,
-    "momentum_boundary": 0.03618138850785103,
-    "traction": 0.00032715871108797976,
-    "strain_energy": 0.0006568322670224396,
-    "internal_power": 0.001183426319685067
+    "momentum_interior": 0.016165402663428672,
+    "momentum_boundary": 0.034917097739618395,
+    "traction": 0.00031739086359142805,
+    "strain_energy": 0.0006468702387043711,
+    "internal_power": 0.0006468811766460551
   },
   "raw_optimizer_success": false,
   "feasibility_restoration": {
@@ -33,21 +33,41 @@
     "trials": [
       {
         "scale": 1.0,
-        "maximum_training_residual": 0.035000017269404916
+        "maximum_training_residual": 0.03500000526035782
       },
       {
         "scale": 0.999,
-        "maximum_training_residual": 0.03496505715113279
+        "maximum_training_residual": 0.034965044876124854
       },
       {
         "scale": 0.998001,
-        "maximum_training_residual": 0.03493013201960437
+        "maximum_training_residual": 0.03493011948693747
       }
     ],
     "validation_used_for_selection": false,
     "inference_correction": false
   },
-  "linear_comsol_modal_matrix": {
+  "unit_tests": {
+    "completed": 7,
+    "passed": 7,
+    "suites": [
+      "tests.test_nonlinear_constraints",
+      "tests.test_comsol_modal_response"
+    ]
+  },
+  "candidate_accepted_for_offline_release": false,
+  "long_accuracy_certified": false,
+  "report_url": "https://github.com/lx016922-dot/workAI/tree/main/research/comsol-validation",
+  "finite_rigid_motion_checks_passed": true,
+  "rigid_motion_maxima": {
+    "force_l2_N": 1.958041387243021e-10,
+    "absolute_energy_J": 1.470466530965834e-28,
+    "strain_norm": 4.101789178629313e-15,
+    "absolute_J_minus_one": 1.1102230246251565e-15
+  },
+  "original_parent_rigid_motion_failed": true,
+  "candidate_label": "v6",
+  "baseline_linear_comsol_modal_matrix": {
     "cases_completed": 20,
     "receivers": 8,
     "samples_per_case": 25001,
@@ -58,15 +78,10 @@
     "native_comsol_time_dependent": false,
     "nonlinear_reference": false
   },
-  "unit_tests": {
-    "completed": 6,
-    "passed": 6,
-    "suites": [
-      "tests.test_nonlinear_constraints",
-      "tests.test_comsol_modal_response"
-    ]
-  },
-  "candidate_accepted_for_offline_release": false,
-  "long_accuracy_certified": false,
-  "report_url": "https://github.com/lx016922-dot/workAI/tree/main/research/comsol-validation"
+  "candidate_linear_comsol_modal_matrix": {
+    "candidate": "v6",
+    "status": "pending",
+    "native_comsol_time_dependent": false,
+    "nonlinear_reference": false
+  }
 }

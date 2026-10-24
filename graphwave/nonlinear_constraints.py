@@ -17,6 +17,35 @@ FAMILIES=('longitudinal','transverse_1','transverse_2','mixed','torsion','mixed_
 CONSTRAINT_GROUPS=('momentum_interior','momentum_boundary','traction','strain_energy','internal_power')
 
 
+def rigid_motion_checks(derivative,weights):
+    """Finite-rotation objectivity of the actual learned graph layer, in SI units."""
+    nodes,w,_,_=gll(4);size=np.array([.0017,.0021,.0013])
+    coordinates=np.stack(np.meshgrid(nodes,nodes,nodes,indexing='ij'),-1).reshape(-1,3)*size/2
+    cells=np.arange(125,dtype=np.int32).reshape(1,5,5,5)
+    inverse=np.broadcast_to(np.diag(2/size),(1,5,5,5,3,3)).copy()
+    volume=np.einsum('i,j,k->ijk',w,w,w)[None]*np.prod(size)/8
+    fields=[]
+    for axis in range(3):
+        i,j=[k for k in range(3) if k!=axis]
+        for angle in [.15,.73,1.5]:
+            rotation=np.eye(3);rotation[i,i]=rotation[j,j]=np.cos(angle)
+            rotation[i,j]=-np.sin(angle);rotation[j,i]=np.sin(angle)
+            fields.append((f'rotation_axis_{axis}_angle_{angle}',coordinates@(rotation-np.eye(3)).T))
+    for axis in range(3):fields.append((f'translation_axis_{axis}',np.broadcast_to(np.eye(3)[axis]*.001,(125,3)).copy()))
+    records=[]
+    for name,field in fields:
+        for law in [1,2]:
+            force,energy,strain,jacobian=graph_message(np.ascontiguousarray(field),cells,derivative,inverse,volume,
+                                                     weights['quadratic_tensor'],weights['cubic_tensor'],law)
+            records.append({'field':name,'law':law,'force_l2_N':float(np.linalg.norm(force)),
+                            'absolute_energy_J':float(abs(energy)),'strain_norm':float(strain),'absolute_J_minus_one':float(abs(jacobian-1))})
+    limits={'force_l2_N':1e-7,'absolute_energy_J':1e-16,'strain_norm':1e-12,'absolute_J_minus_one':1e-12}
+    maxima={key:max(row[key] for row in records) for key in limits}
+    return {'schema':'workai.learned_rigid_motion_check.v1','states':len(fields),'control_checks':len(records),
+            'scope':'StVK and full finite-strain learned operator; finite rotations are not a linear-elastic invariance test',
+            'limits':limits,'maxima':maxima,'passed':all(maxima[key]<=limit for key,limit in limits.items()),'checks':records}
+
+
 def _trace(a):return np.trace(a,axis1=-2,axis2=-1)
 
 

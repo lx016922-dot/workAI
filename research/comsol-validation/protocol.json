@@ -187,6 +187,29 @@
         "strict_training_limit_satisfied": true,
         "physics_validation_passed": true,
         "accepted_for_offline_release": false
+      },
+      {
+        "id": "v6",
+        "physics_patches": [
+          96,
+          48
+        ],
+        "seed": 2026102433,
+        "parameters": 7,
+        "description": "Project the parent P4 derivative onto exact constant/affine constraints before fitting; then verify 12 finite rigid states in both nonlinear controls",
+        "initial_filter_consistency_projection": {
+          "frobenius_correction": 1.3705322576459048e-08,
+          "parent_constant_error": 9.992007221626409e-16,
+          "parent_affine_error": 1.517437597797766e-08,
+          "projected_constant_error": 8.881784197001252e-16,
+          "projected_affine_error": 1.3322676295501878e-15,
+          "scope": "offline weight projection before training; no inference correction"
+        },
+        "raw_optimizer_success": false,
+        "hard_training_limit_satisfied": true,
+        "physics_validation_passed": true,
+        "finite_rigid_motion_checks_passed": true,
+        "accepted_for_offline_release": false
       }
     ]
   },
@@ -244,18 +267,30 @@
     ],
     "training_patches": 96,
     "independent_validation_patches": 48,
-    "training_seed": 2026102419,
-    "validation_seed": 2026102420,
+    "training_seed": 2026102433,
+    "validation_seed": 2026102434,
     "physics_loss_weight": 30,
     "per_case_component_maximum_normalized_residual": 0.05,
     "manufactured_fields": "six longitudinal, transverse, torsion and mixed polynomial families; independent analytic stresses, chain-rule divergence, body forces and six-face tractions; displacement shape(X)*(1-cos(omega*t))",
     "waveform_threshold_unchanged": 0.05,
     "manufactured_physics_validation_is_not_comsol_transient_certification": true,
     "initial_protocol_version": "v3 retained in training/v3/config.json",
-    "latest_training_run": "v5-feasible",
+    "latest_training_run": "v6",
     "training_inequality_limit": 0.035,
     "component_gates_per_training_patch": 55,
     "component_gates_total": 5280,
-    "final_independent_validation_seed": 2026102422
+    "final_independent_validation_seed": 2026102434,
+    "rigid_motion_checks": {
+      "states": 12,
+      "nonlinear_controls": 2,
+      "limits": {
+        "force_l2_N": 1e-07,
+        "absolute_energy_J": 1e-16,
+        "strain_norm": 1e-12,
+        "absolute_J_minus_one": 1e-12
+      },
+      "original_parent_failed": true,
+      "projected_candidate_passed": true
+    }
   }
 }

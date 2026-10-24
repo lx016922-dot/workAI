@@ -7,6 +7,24 @@ MATERIAL={'lambda_pa':58.1e9,'mu_pa':26.1e9,'l_pa':-143e9,'m_pa':-297e9,'n_pa':-
 
 
 class NonlinearMomentumTest(unittest.TestCase):
+    def test_learned_affine_filter_does_not_create_force_under_finite_rigid_rotation(self):
+        from graphwave.modal_calibration import filter_basis,project_filter_consistency
+        from graphwave.buffered_inference import graph_message
+        from spectral3d.mesh import gll
+        with np.load(Path(__file__).resolve().parents[1]/'offline/model/continued-weights.npz',allow_pickle=False) as saved:
+            weights=dict(saved)
+        nodes,_,_,_=gll(4);basis=filter_basis(nodes,1)
+        derivative=project_filter_consistency(weights['derivative_4'],nodes,1)+np.einsum('a,aij->ij',np.linspace(-.12,.14,len(basis)),basis)
+        patch=make_dataset(MATERIAL,6,2026102430)[0]
+        coordinates=np.stack(np.meshgrid(nodes,nodes,nodes,indexing='ij'),-1).reshape(-1,3)*patch['size']/2
+        angle=.73;rotation=np.array([[np.cos(angle),-np.sin(angle),0],[np.sin(angle),np.cos(angle),0],[0,0,1]])
+        displacement=np.ascontiguousarray(coordinates@(rotation-np.eye(3)).T)
+        for law in [1,2]:
+            force,energy,_,_=graph_message(displacement,patch['cells'],derivative,patch['inverse'],patch['volume'],
+                                          weights['quadratic_tensor'],weights['cubic_tensor'],law)
+            self.assertLess(np.linalg.norm(force),1e-7)
+            self.assertLess(abs(energy),1e-16)
+
     def test_all_stress_divergences_against_complex_step(self):
         rng=np.random.default_rng(2026102414)
         g=rng.normal(size=(19,3,3))*4e-5

@@ -119,6 +119,22 @@ def match(reference, actual, mass):
     return right,mac[left,right]
 
 
+def project_filter_consistency(derivative,nodes,consistency_order=1):
+    """Project the learned starting filter, not only its trainable increments.
+
+    An approximately affine-consistent parent can otherwise create spurious
+    strain under finite rigid rotation even when every increment is consistent.
+    """
+    if consistency_order not in [1,2]:raise ValueError('Consistency order must be one or two')
+    coordinates=np.stack([nodes**k for k in range(consistency_order+1)],1)
+    exact=np.stack([np.zeros_like(nodes)]+[k*nodes**(k-1) for k in range(1,consistency_order+1)],1)
+    result=np.array(derivative,copy=True)
+    result+=np.linalg.solve(coordinates.T@coordinates,(exact-result@coordinates).T).T@coordinates.T
+    result=(result-result[::-1,::-1])*.5
+    if np.max(abs(result@coordinates-exact))>2e-14:raise ValueError('Polynomial consistency projection failed')
+    return result
+
+
 def filter_basis(nodes, consistency_order=2):
     """Preserve polynomial consistency and parity, always including rigid motions."""
     if consistency_order not in [1,2]:raise ValueError('Consistency order must be one or two')
@@ -212,13 +228,18 @@ def train(args):
     indices=np.flatnonzero(selected)
     if len(indices)<2:raise ValueError('Insufficient converged COMSOL development modes')
     with np.load(args.weights,allow_pickle=False) as f:weights=dict(f)
-    baseline=weights['derivative_4'];basis=filter_basis(mesh['gll'],args.consistency_order)
+    baseline=project_filter_consistency(weights['derivative_4'],mesh['gll'],args.consistency_order)
+    basis=filter_basis(mesh['gll'],args.consistency_order)
     output=args.output;output.mkdir(parents=True,exist_ok=False)
     (output/'source_snapshot').mkdir()
     shutil.copyfile(Path(__file__),output/'source_snapshot/modal_calibration.py')
     shutil.copyfile(Path(physics.__file__),output/'source_snapshot/nonlinear_constraints.py')
     physical_training=physics.make_dataset(scene['material'],args.physics_samples,args.physics_seed)
     physical_validation=physics.make_dataset(scene['material'],args.physics_validation_samples,args.physics_seed+1)
+    rigid_parent=physics.rigid_motion_checks(weights['derivative_4'],weights)
+    rigid_initial=physics.rigid_motion_checks(baseline,weights)
+    if not rigid_initial['passed']:raise ValueError('Projected starting filter fails rigid-motion objectivity')
+    save(output/'rigid-parent.json',rigid_parent);save(output/'rigid-initial.json',rigid_initial)
     for split,dataset in [('training',physical_training),('validation',physical_validation)]:
         numeric={key:np.stack([item[key] for item in dataset]) for key in dataset[0] if isinstance(dataset[0][key],np.ndarray)}
         np.savez_compressed(output/('physics-'+split+'-patches.npz'),**numeric)
@@ -232,6 +253,13 @@ def train(args):
             'long_phase_reference_verified':bool(np.max(uncertainty[indices])<=.5),
             'training_parameters':len(basis),'parameter_bounds':[-.25,.25],
             'polynomial_consistency_order':args.consistency_order,
+            'initial_filter_consistency_projection':{
+                'frobenius_correction':float(np.linalg.norm(baseline-weights['derivative_4'])),
+                'parent_constant_error':float(np.max(abs(weights['derivative_4']@np.ones(5)))),
+                'parent_affine_error':float(np.max(abs(weights['derivative_4']@mesh['gll']-1))),
+                'projected_constant_error':float(np.max(abs(baseline@np.ones(5)))),
+                'projected_affine_error':float(np.max(abs(baseline@mesh['gll']-1))),
+                'scope':'offline weight projection before training; no inference correction'},
             'preserved':['polynomial derivatives through the declared consistency order','centroskew filter parity',
                          'all material energy tensors','all other polynomial degree filters','nodal mass','time weights'],
             'training_labels':'Actual signed COMSOL eigenfrequencies plus independent analytic nonlinear momentum, traction and energy constraints; no transient test waveform is loaded',
@@ -328,6 +356,8 @@ def train(args):
     final,final_mac,derivative=evaluate(fitted.x)
     _,physical_train_report=physics.evaluate(derivative,weights,physical_training,details=True)
     _,physical_validation_report=physics.evaluate(derivative,weights,physical_validation,details=True)
+    rigid_final=physics.rigid_motion_checks(derivative,weights)
+    save(output/'rigid-final.json',rigid_final)
     save(output/'physics-training.json',physical_train_report)
     save(output/'physics-validation.json',physical_validation_report)
     exported=dict(weights);exported['derivative_4']=derivative
@@ -351,6 +381,7 @@ def train(args):
         'physics_training_maxima':physical_train_report['maximum_normalized_residual'],
         'physics_validation_passed':physical_validation_report['all_physical_checks_within_5_percent'],
         'physics_validation_maxima':physical_validation_report['maximum_normalized_residual'],
+        'finite_rigid_motion_checks_passed':rigid_final['passed'],'rigid_motion_maxima':rigid_final['maxima'],
         'long_phase_reference_verified':config['long_phase_reference_verified'],
         'accepted_for_offline_release':False,'long_record_accuracy_certified':False,'elapsed_s':time.monotonic()-start})
     print(json.dumps({'candidate':str(output/'candidate-weights.npz'),'training_modes':indices.tolist(),

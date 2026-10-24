@@ -8,7 +8,7 @@ import numpy as np
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from graphwave import nonlinear_constraints as physics
-from graphwave.modal_calibration import digest,read_modes,filter_basis,restore_physical_feasibility,modes,match,save
+from graphwave.modal_calibration import digest,read_modes,filter_basis,project_filter_consistency,restore_physical_feasibility,modes,match,save
 from spectral3d.mesh import make_mesh
 
 
@@ -30,6 +30,8 @@ def main():
     scene=reference['scene'];mesh=make_mesh(scene,4,2.5)
     with np.load(args.baseline,allow_pickle=False) as f:weights=dict(f)
     baseline=weights['derivative_4'];basis=filter_basis(mesh['gll'],config['polynomial_consistency_order'])
+    if config.get('initial_filter_consistency_projection'):
+        baseline=project_filter_consistency(baseline,mesh['gll'],config['polynomial_consistency_order'])
     theta=np.array(original['parameters'])
     with np.load(args.run/'candidate-weights.npz',allow_pickle=False) as f:
         np.testing.assert_array_equal(f['derivative_4'],baseline+np.einsum('a,aij->ij',theta,basis))

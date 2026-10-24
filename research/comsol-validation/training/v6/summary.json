@@ -1,0 +1,91 @@
+{
+  "schema": "workai.comsol_training_summary.v1",
+  "weights_sha256": "35bcce927f05bbab3321393b59312df9ab4980b8c45b23d32c37b01d866e4ddf",
+  "actual_comsol_development_jobs": [
+    "comsol-6b6cec683bd04dcfb426b1a2a123f143",
+    "comsol-c420e3febfed41b08d0323e925dd3ad0"
+  ],
+  "training_mode_indices": [
+    5,
+    11,
+    20,
+    22,
+    25,
+    28,
+    29
+  ],
+  "training_initial_frequency_error_norm_hz": 1046.7820847186113,
+  "training_final_frequency_error_norm_hz": 826.6949585129885,
+  "optimizer_success": false,
+  "feasibility_restoration": {
+    "method": "offline parameter backtracking toward the physically verified baseline",
+    "training_limit": 0.035,
+    "target_with_margin": 0.034965,
+    "trials": [
+      {
+        "scale": 1.0,
+        "maximum_training_residual": 0.03500000526035782
+      },
+      {
+        "scale": 0.999,
+        "maximum_training_residual": 0.034965044876124854
+      },
+      {
+        "scale": 0.998001,
+        "maximum_training_residual": 0.03493011948693747
+      }
+    ],
+    "validation_used_for_selection": false,
+    "inference_correction": false
+  },
+  "polynomial_consistency_order": 1,
+  "material_energy_coefficients_changed": false,
+  "transient_test_waveforms_used_for_training": false,
+  "nonlinear_longitudinal_transverse_physics_in_loss": true,
+  "physics_training_passed": true,
+  "hard_training_limit": 0.035,
+  "hard_training_limit_satisfied": true,
+  "physics_training_maxima": {
+    "momentum_interior": 0.01691288361772026,
+    "momentum_boundary": 0.03493011948693747,
+    "traction": 0.00032936295181926786,
+    "strain_energy": 0.0006468692471965203,
+    "internal_power": 0.0014347534026558058
+  },
+  "physics_validation_passed": true,
+  "physics_validation_maxima": {
+    "momentum_interior": 0.016165402663428672,
+    "momentum_boundary": 0.034917097739618395,
+    "traction": 0.00031739086359142805,
+    "strain_energy": 0.0006468702387043711,
+    "internal_power": 0.0006468811766460551
+  },
+  "finite_rigid_motion_checks_passed": true,
+  "rigid_motion_maxima": {
+    "force_l2_N": 1.958041387243021e-10,
+    "absolute_energy_J": 1.470466530965834e-28,
+    "strain_norm": 4.101789178629313e-15,
+    "absolute_J_minus_one": 1.1102230246251565e-15
+  },
+  "reference_long_phase_converged": false,
+  "accepted_for_offline_release": false,
+  "long_record_accuracy_certified": false,
+  "scope": "P4 graph filter research candidate for the fixed-end 8 x 3 x 1.5 mm aluminum plate with h=2.5 mm; not a general geometry calibration",
+  "files_sha256": {
+    "history.json": "8cc246c0189f02e66c2a26bb25997f372a83afba87e316b026f6b0b3d7945403",
+    "rigid-final.json": "cb257ea3389e3881f3b04182ea35acd4ca18564102b71d3bb1290b7436188d33",
+    "physics-training-patches.npz": "18a27213f10cb7fcaf3e6c4c1c07ac4bad1cd17e8c5ce10f658851870f44a1dd",
+    "config.json": "6ccd15a028d27efcb612fb6de6359f94c43f1bfe08306e0107da2e129681f8ec",
+    "candidate-weights.npz": "35bcce927f05bbab3321393b59312df9ab4980b8c45b23d32c37b01d866e4ddf",
+    "physics-training.json": "f9f01bfe82987a0c21d9a53597fdac0767c09d140d2116e3b1b05493db01c94e",
+    "physics-validation-patches.npz": "bfab9d75ec613a710bb36ac92eb66216fa16f640e7c3cf8955381ec5fdb4bb17",
+    "rigid-parent.json": "ae726b161a3dd37a8088592848f3d4d216fc1668c4e1c31f2019aad3ba83c9b6",
+    "frequencies.csv": "908c75d74fb952186b04a0d8cd4f8a6f659f0b798a9c4117e71021c4693d5031",
+    "physics-validation.json": "b628156ed017eb2f5dddbd937c152613b51621bf3ebd03b487e2ff2d5b168191",
+    "rigid-initial.json": "eb68466071546ce609c8ba6025e7f572387f612ba4bb48da6c7fb367d703e304",
+    "physics-initial.json": "7c76def521a6c6eb5f7b195bdee14b8e477a4bfcdea5bc8b57309a11b3d42374",
+    "training.json": "5ae367a9b9284b3b6ddec354d7c8a81000a41e8ed9ac11cb84097991c235d7e1",
+    "source_snapshot/nonlinear_constraints.py": "738795d900b7cb6a981c8f97e10920acb28ffd858fc649e4b38412b1d794d19a",
+    "source_snapshot/modal_calibration.py": "b309ace585acd12df4ebff75fb22adf2be521b0850470c003bb2018cac1ab6c2"
+  }
+}
