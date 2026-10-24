@@ -1,0 +1,35 @@
+name: Five millisecond excitation validation
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  compare:
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        signal: [hann, gaussian, rectangular, chirp]
+        cycles: ['01', '03', '05', '10', '20']
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned numerical validation runtime
+        run: python -m pip install numpy==2.2.6 scipy==1.15.3 numba==0.63.1 llvmlite==0.46.0
+      - name: Run frozen 5 ms case against independent reference
+        run: python tools/run-long-case.py --case '${{ matrix.signal }}-${{ matrix.cycles }}' --output validation
+      - name: Preserve metrics and complete receiver records
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: long-${{ matrix.signal }}-${{ matrix.cycles }}
+          path: validation/
+          compression-level: 0
+          retention-days: 30
