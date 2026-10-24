@@ -106,6 +106,7 @@ def prepare_excitation(mesh,scene):
     from physics import scene as scene_v2
     from physics.boundaries import build_constraints,build_damping
     if not scene_v2.is_v2(scene):return None
+    require(not scene_v2.is_plane_strain(scene),'该场景声明为二维平面应变，请使用 spectral2d 求解器。')
     loads=[];rows=[];selected=np.zeros(len(mesh['surface']),dtype=bool)
     for src in scene_v2.sources(scene):
         force,mask=nodal_load(mesh,src);loads.append((force,src));selected|=mask

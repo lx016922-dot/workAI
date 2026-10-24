@@ -1,0 +1,30 @@
+{
+  "schema": "workai.hyperelastic.solid.v2",
+  "dimension": "2d_plane_strain",
+  "name": "2 mm 铝板 · 平面应变 · S0 基频 0.5 MHz · 吸收远端 · 顶面接收线",
+  "geometry": {
+    "kind": "plate", "length_mm": 300.0, "width_mm": 1.0, "thickness_mm": 2.0,
+    "outer_radius_mm": 3.0, "inner_radius_mm": 2.0, "hole_radius_mm": 0.7, "hole_x_mm": 6.0, "hole_y_mm": 2.0,
+    "notch_x_mm": 6.0, "notch_width_mm": 1.0, "notch_depth_mm": 0.6
+  },
+  "material": { "rho_kg_m3": 2700.0, "lambda_pa": 58100000000.0, "mu_pa": 26100000000.0, "l_pa": -143000000000.0, "m_pa": -297000000000.0, "n_pa": -345000000000.0 },
+  "constitutive": "murnaghan",
+  "source": {
+    "face": "xmin", "center_mm": [0.0, 0.0, 1.0], "radius_mm": 0.0, "direction": [1.0, 0.0, 0.0],
+    "amplitude_mpa": 2.0, "frequency_mhz": 0.5, "cycles": 8.0, "delay_us": 0.0, "phase_deg": 0.0,
+    "signal": { "type": "tone_burst", "window": "tukey", "tukey_alpha": 0.6 }
+  },
+  "boundary": { "fixed_face": "none" },
+  "boundaries": [
+    { "type": "absorbing", "face": "xmax", "length_mm": 60.0, "ramp": "cubic", "attenuation_db": 60.0 }
+  ],
+  "acquisition": { "duration_us": 70.0, "sample_step_us": 0.05 },
+  "numerics": { "h_mm": 1.0, "cfl": 0.3, "max_elements": 40000 },
+  "receivers": [
+    { "name": "mid", "point_mm": [120.0, 0.0, 1.0], "direction": [1.0, 0.0, 0.0] }
+  ],
+  "receiver_lines": [
+    { "name": "top", "from_mm": [60.0, 0.0, 2.0], "to_mm": [220.0, 0.0, 2.0], "count": 161, "direction": [1.0, 0.0, 0.0] },
+    { "name": "thickness", "from_mm": [150.0, 0.0, 0.0], "to_mm": [150.0, 0.0, 2.0], "count": 9, "direction": [1.0, 0.0, 0.0] }
+  ]
+}

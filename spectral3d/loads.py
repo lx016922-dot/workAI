@@ -15,7 +15,7 @@ from .mesh import boundary_data
 
 
 def face_load(mesh, source):
-    """Nodal force (N) for one planar-face source; returns force, area and weighted area."""
+    """Nodal force (N) for one planar-face source; returns force, |profile|-weighted area and signed profile-weighted area."""
     points = mesh['points']; force = np.zeros_like(points); axis, bound = face_bound(points, source['face']); tol = tolerance(points)
     direction = np.asarray(source['direction']) * source['amplitude_mpa'] * 1e6; area = 0.; weighted = 0.; n = mesh['degree'] + 1
     if str(mesh.get('mapping_kind', '')) == 'isoparametric':
@@ -25,7 +25,7 @@ def face_load(mesh, source):
             selection = [slice(None)] * 3; selection[local_axis] = end; jac = mesh['jacobian'][e][tuple(selection)]; other = [i for i in range(3) if i != local_axis]
             quadrature = np.linalg.norm(np.cross(jac[..., other[0]], jac[..., other[1]]), axis=-1) * np.outer(mesh['weights_1d'], mesh['weights_1d'])
             weights = region_weights(points[ids.ravel()], source, axis).reshape(quadrature.shape)
-            area += float(quadrature[weights != 0].sum()); weighted += float((quadrature * weights).sum())
+            area += float((quadrature * np.minimum(np.abs(weights), 1)).sum()); weighted += float((quadrature * weights).sum())
             np.add.at(force, ids.ravel(), ((quadrature * weights)[..., None] * direction).reshape(-1, 3))
     else:
         for e, nodes in enumerate(mesh['elements']):
@@ -34,7 +34,7 @@ def face_load(mesh, source):
             tangential = [q for q in range(3) if q != axis]
             quadrature = np.outer(mesh['weights_1d'], mesh['weights_1d']) * np.prod(mesh['size'][e, tangential]) / 4
             weights = region_weights(points[ids.ravel()], source, axis).reshape(n, n)
-            area += float(quadrature[weights != 0].sum()); weighted += float((quadrature * weights).sum())
+            area += float((quadrature * np.minimum(np.abs(weights), 1)).sum()); weighted += float((quadrature * weights).sum())
             np.add.at(force, ids.ravel(), ((quadrature * weights)[..., None] * direction).reshape(n * n, 3))
     require(area > 0, f'{source.get("name", "primary")} 的加载区域内没有面节点；请检查加载面、中心、半径或梳状参数。')
     return force, area, weighted

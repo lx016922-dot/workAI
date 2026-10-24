@@ -1,0 +1,95 @@
+"""Run one plane-strain job from a version-2 scene file; writes JSON, NPZ and optional CSV.
+
+    python -m spectral2d.run --scene scene.json --output out-dir [--degree 4] [--fields] [--csv]
+
+No remote service, no neural network, no numerical correction.
+"""
+import argparse
+import copy
+import csv
+import hashlib
+import json
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+import numpy as np
+from solid.schema import require
+from physics.scene import validate_scene, is_plane_strain, summary
+from .mesh import make_mesh, interpolation, surface_lines
+from .loads import prepare_excitation, receiver_points
+from .solver import solve
+
+SCHEMA = 'workai.plane_strain.result.v1'
+ENGINE = 'workai_spectral_plane_strain_2d'
+
+
+def prepared_scene(raw, degree):
+    """Validate like the 3-D worker: the resolution screen sees h / degree."""
+    require(isinstance(raw, dict) and isinstance(raw.get('numerics'), dict), '场景需要 numerics。')
+    h = raw['numerics']['h_mm']; require(type(h) in (int, float) and np.isfinite(h) and .02 <= h <= 100, '单元尺寸必须在 0.02–100 mm 范围内。')
+    require(type(degree) is int and 2 <= degree <= 8, '阶次需为 2–8 的整数。')
+    s = copy.deepcopy(raw); s['numerics']['h_mm'] = max(.02, h / degree); scene = validate_scene(s); scene['numerics']['h_mm'] = h
+    require(is_plane_strain(scene), '二维求解器需要 dimension 为 2d_plane_strain 的 v2 场景。')
+    return scene
+
+
+def simulate(raw, degree=4, keep_fields=False, callback=None):
+    """Python API: returns scene, mesh, receivers and the computed record."""
+    scene = prepared_scene(raw, degree); mesh = make_mesh(scene, degree, scene['numerics']['h_mm'])
+    excitation = prepare_excitation(mesh, scene); receivers = receiver_points(scene)
+    for rx in receivers: interpolation(mesh, rx['point_mm'])
+    computed = solve(scene, mesh, excitation, receivers, cfl=scene['numerics']['cfl'], keep_fields=keep_fields, callback=callback)
+    return {'scene': scene, 'mesh': mesh, 'receivers': receivers, 'computed': computed, 'degree': degree}
+
+
+def write_outputs(run, output, write_csv=False):
+    output = Path(output); output.mkdir(parents=True, exist_ok=False)
+    scene = run['scene']; mesh = run['mesh']; computed = run['computed']; receivers = run['receivers']; probes = computed['probes_m']; times = computed['times_us']
+    files = {}
+    def record(path):
+        files[path.name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    points = [i for i, rx in enumerate(receivers) if rx['group'] is None]
+    lines = {}
+    for i, rx in enumerate(receivers):
+        if rx['group'] is not None: lines.setdefault(rx['group'], []).append(i)
+    npz = {'times_us': times, 'nodes_mm': mesh['points'] * 1e3, 'elements': mesh['elements']}
+    for name, indices in lines.items():
+        npz[f'line_{name}_points_mm'] = np.array([receivers[i]['point_mm'] for i in indices]); npz[f'line_{name}_distance_mm'] = np.array([receivers[i]['distance_mm'] for i in indices])
+        npz[f'line_{name}_u_m'] = probes[:, indices]; direction = np.asarray(receivers[indices[0]]['direction'])[[0, 2]]
+        npz[f'line_{name}_projected_m'] = probes[:, indices] @ direction
+    np.savez_compressed(output / 'lines.npz', **npz); record(output / 'lines.npz')
+    if computed['fields_m'] is not None:
+        np.savez_compressed(output / 'fields.npz', fields_m=computed['fields_m'], times_us=times, nodes_mm=mesh['points'] * 1e3, elements=mesh['elements'], surface_lines=np.array(surface_lines(mesh)))
+        record(output / 'fields.npz')
+    if write_csv:
+        for name, indices in lines.items():
+            with (output / f'line-{name}.csv').open('w', newline='') as handle:
+                writer = csv.writer(handle); writer.writerow(['time_us'] + [f"x{receivers[i]['distance_mm']:.4f}mm" for i in indices])
+                for t, row in zip(times, npz[f'line_{name}_projected_m']): writer.writerow([t] + list(row))
+            record(output / f'line-{name}.csv')
+    result = {'schema': SCHEMA, 'engine': ENGINE, 'engine_scope': 'numerical_plane_strain_solution_not_neural_prediction', 'dimension': '2d_plane_strain', 'degree': run['degree'],
+              'scene': scene, 'excitation': summary(scene), 'mesh': {'nodes': len(mesh['points']), 'elements': len(mesh['elements']), 'degree': mesh['degree'], 'h_mm': mesh['h_mm']},
+              'times_us': times.tolist(), 'diagnostics': computed['diagnostics'],
+              'receivers': [{'name': receivers[i]['name'], 'point_mm': receivers[i]['point_mm'], 'direction': receivers[i]['direction'], 'u_x_m': probes[:, i, 0].tolist(), 'u_z_m': probes[:, i, 1].tolist(),
+                             'projected_m': (probes[:, i] @ np.asarray(receivers[i]['direction'])[[0, 2]]).tolist()} for i in points],
+              'receiver_lines': [{'name': name, 'count': len(indices), 'direction': receivers[indices[0]]['direction'], 'file': 'lines.npz'} for name, indices in lines.items()],
+              'files': files, 'completed_at_utc': datetime.now(timezone.utc).isoformat(), 'accepted_for_solver_routing': False}
+    (output / 'result.json').write_text(json.dumps(result, ensure_ascii=False, allow_nan=False, indent=1) + '\n', encoding='utf-8')
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
+    parser.add_argument('--scene', type=Path, required=True); parser.add_argument('--output', type=Path, required=True)
+    parser.add_argument('--degree', type=int, default=4); parser.add_argument('--fields', action='store_true'); parser.add_argument('--csv', action='store_true')
+    args = parser.parse_args(); started = time.monotonic()
+    raw = json.loads(args.scene.read_text(encoding='utf-8'))
+    def progress(value): print(json.dumps(value), flush=True)
+    run = simulate(raw, args.degree, keep_fields=args.fields, callback=progress)
+    result = write_outputs(run, args.output, write_csv=args.csv)
+    d = result['diagnostics']
+    print(json.dumps({'completed': True, 'output': str(args.output), 'nodes': d['nodes'], 'elements': d['elements'], 'internal_steps': d['internal_steps'],
+                      'energy_balance_error': d['external_work_balance_relative'], 'seconds': time.monotonic() - started}, ensure_ascii=False), flush=True)
+
+
+if __name__ == '__main__': main()
