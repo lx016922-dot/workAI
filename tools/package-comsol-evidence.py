@@ -103,14 +103,20 @@ def main():
             'Run from the extracted evidence directory. No server or network connection is required.',
             'These checks compare complete neural records with COMSOL-sourced linear modal references.',
             'They do not certify native nonlinear transient accuracy. Original audit reports remain unchanged.','']
+        candidate_weights_path=None
         for audit,folder,prefix in [(report,args.audit_subdir,'candidate-cases')]+([(baseline,args.baseline_audit_subdir,'baseline-cases')] if baseline else []):
             weights=[path for path in (research/'training').glob('*/candidate-weights.npz') if sha(path)==audit['weights_sha256']]
             if not weights:raise ValueError('Missing frozen weights')
             weights.sort()
+            if prefix=='candidate-cases':candidate_weights_path='research/'+weights[0].relative_to(research).as_posix()
             instructions.append('python tools/summarize-comsol-linear-validation.py --input '+prefix+' --plan '+plan+
                 ' --weights research/'+weights[0].relative_to(research).as_posix()+' --reference research/data/'+ref+
                 ' --check-reference research/data/'+fine+' --output replay-'+folder+
                 ' --workflow-run '+audit['workflow_run_url'].rsplit('/',1)[-1])
+        instructions.extend(['','Optional: compute a new complete 5 ms research prediction locally (may take tens of minutes).',
+            'This does not install the candidate as the default application model or certify its accuracy.',
+            'python tools/run-comsol-linear-case.py --case hann-01 --plan '+plan+' --weights '+candidate_weights_path+
+            ' --reference research/data/'+ref+' --check-reference research/data/'+fine+' --output new-research-predictions'])
         content=('\n'.join(instructions)+'\n').encode('utf-8');name='REPRODUCE.txt'
         z.writestr(name,content);entries.append({'path':name,'bytes':len(content),'sha256':hashlib.sha256(content).hexdigest()})
         z.writestr('MANIFEST.json',json.dumps({'schema':'workai.comsol_physics_evidence.v1',
