@@ -12,6 +12,16 @@ on:
         required: true
         default: false
         type: boolean
+      audit_subdir:
+        description: Committed COMSOL audit directory
+        required: true
+        default: candidate-matrix20
+        type: string
+      archive_label:
+        description: Distinct label for later evidence snapshots, such as training-v7
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: write
   actions: read
@@ -98,6 +108,10 @@ jobs:
   comsol-evidence:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      WORKAI_AUDIT_SUBDIR: ${{ inputs.audit_subdir }}
+      WORKAI_EVIDENCE_LABEL: ${{ inputs.archive_label }}
+      WORKAI_EVIDENCE_ONLY: ${{ inputs.evidence_only }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -109,7 +123,12 @@ jobs:
         run: |
           import json,os,re
           from pathlib import Path
-          report=json.loads(Path('research/comsol-validation/candidate-matrix20/summary.json').read_text())
+          folder=os.environ['WORKAI_AUDIT_SUBDIR'];label=os.environ['WORKAI_EVIDENCE_LABEL']
+          assert re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}',folder)
+          assert not label or re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}',label)
+          if folder!='candidate-matrix20' or label:
+              assert label and os.environ['WORKAI_EVIDENCE_ONLY']=='true', 'Later snapshots must preserve original assets'
+          report=json.loads((Path('research/comsol-validation')/folder/'summary.json').read_text())
           match=re.fullmatch(r'https://github.com/lx016922-dot/workAI/actions/runs/([0-9]+)',report['workflow_run_url'])
           assert match and report['completed_cases']==20 and report['metrics_independently_recomputed']
           with open(os.environ['GITHUB_OUTPUT'],'a') as output:
@@ -124,7 +143,7 @@ jobs:
       - name: Verify and archive COMSOL and nonlinear physics evidence
         env:
           WORKAI_EVIDENCE_COMMIT: ${{ github.sha }}
-        run: python tools/package-comsol-evidence.py --input comsol-artifacts --output comsol-evidence ${{ inputs.evidence_only && '--supplement' || '' }}
+        run: python tools/package-comsol-evidence.py --input comsol-artifacts --output comsol-evidence --audit-subdir "$WORKAI_AUDIT_SUBDIR" --archive-label "$WORKAI_EVIDENCE_LABEL" ${{ inputs.evidence_only && '--supplement' || '' }}
       - name: Upload scientific evidence to the prepared draft
         env:
           GH_TOKEN: ${{ github.token }}

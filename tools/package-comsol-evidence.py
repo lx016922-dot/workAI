@@ -3,6 +3,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import zipfile
 
@@ -15,13 +16,19 @@ def main():
     p=argparse.ArgumentParser();p.add_argument('--input',type=Path,required=True)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--supplement',action='store_true',help='Use a distinct asset name to retain the original release evidence')
+    p.add_argument('--audit-subdir',default='candidate-matrix20',help='Committed audited candidate directory under research/comsol-validation')
+    p.add_argument('--archive-label',default='',help='Optional distinct label for a later training evidence snapshot')
     args=p.parse_args()
+    for value in [args.audit_subdir]+([args.archive_label] if args.archive_label else []):
+        if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}',value):raise ValueError('Invalid evidence dataset or label')
+    if args.audit_subdir!='candidate-matrix20' and not args.archive_label:
+        raise ValueError('A different audited candidate requires a distinct archive label')
     repo=Path(__file__).resolve().parents[1];research=repo/'research/comsol-validation'
-    report=json.loads((research/'candidate-matrix20/summary.json').read_text())
+    report=json.loads((research/args.audit_subdir/'summary.json').read_text())
     if report['completed_cases']!=20 or not report['metrics_independently_recomputed']:
         raise ValueError('The complete independent audit must be committed first')
     args.output.mkdir(parents=True,exist_ok=True)
-    suffix='-supplement' if args.supplement else ''
+    suffix='-'+args.archive_label if args.archive_label else '-supplement' if args.supplement else ''
     archive=args.output/('WorkAI-COMSOL-physics-evidence-0.3.0'+suffix+'.zip');entries=[]
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=4) as z:
         def add(path,name):
@@ -56,13 +63,22 @@ def main():
             add(path,'research/'+path.relative_to(research).as_posix())
         z.writestr('MANIFEST.json',json.dumps({'schema':'workai.comsol_physics_evidence.v1',
             'repository_source_commit':os.environ.get('WORKAI_EVIDENCE_COMMIT','working-tree'),
-            'supplemental_snapshot':args.supplement,
+            'supplemental_snapshot':bool(args.supplement or args.archive_label),
+            'audited_candidate_subdirectory':args.audit_subdir,'archive_label':args.archive_label,
             'source_workflow_run_url':report['workflow_run_url'],'candidate_cases':20,
             'candidate_reference_kind':'COMSOL-sourced linear modal response; native transient cases are separately labeled',
             'scientific_accuracy_certified':False,'files':entries},indent=2)+'\n')
+    with zipfile.ZipFile(archive) as verified:
+        for entry in entries:
+            if verified.getinfo(entry['path']).file_size!=entry['bytes']:
+                raise ValueError('Archived file length differs from manifest')
+            with verified.open(entry['path']) as stream:
+                if hashlib.file_digest(stream,'sha256').hexdigest()!=entry['sha256']:
+                    raise ValueError('Archived bytes differ from manifest: '+entry['path'])
     digest=sha(archive)
     (args.output/('SHA256SUMS-comsol'+suffix+'.txt')).write_text(digest+'  '+archive.name+'\n')
-    print(json.dumps({'archive':archive.name,'bytes':archive.stat().st_size,'sha256':digest,'verified_files':len(entries)}))
+    print(json.dumps({'archive':archive.name,'bytes':archive.stat().st_size,'sha256':digest,'verified_files':len(entries),
+                      'archive_contents_read_back_and_verified':True}))
 
 
 if __name__=='__main__':main()
