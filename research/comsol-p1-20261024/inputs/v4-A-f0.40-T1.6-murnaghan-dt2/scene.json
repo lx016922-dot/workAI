@@ -1,0 +1,180 @@
+{
+  "schema": "workai.comsol.graphwave3d.scene.v1",
+  "case_id": "A-f0.40-T1.6",
+  "scene": {
+    "schema": "workai.comsol.p1.v1",
+    "analysis": "transient",
+    "family": "A",
+    "geometry": {
+      "length_mm": 48,
+      "width_mm": 2,
+      "thickness_mm": 1.6
+    },
+    "material": {
+      "rho_kg_m3": 2700,
+      "lambda_pa": 58100000000.0,
+      "mu_pa": 26100000000.0,
+      "l_pa": -143000000000.0,
+      "m_pa": -297000000000.0,
+      "n_pa": -345000000000.0
+    },
+    "receivers": [
+      {
+        "name": "P_far",
+        "point_mm": [
+          36,
+          1,
+          1.6
+        ]
+      },
+      {
+        "name": "top_0",
+        "point_mm": [
+          22,
+          1,
+          1.6
+        ]
+      },
+      {
+        "name": "top_1",
+        "point_mm": [
+          25,
+          1,
+          1.6
+        ]
+      },
+      {
+        "name": "top_2",
+        "point_mm": [
+          28,
+          1,
+          1.6
+        ]
+      },
+      {
+        "name": "top_3",
+        "point_mm": [
+          31,
+          1,
+          1.6
+        ]
+      },
+      {
+        "name": "top_4",
+        "point_mm": [
+          34,
+          1,
+          1.6
+        ]
+      },
+      {
+        "name": "top_5",
+        "point_mm": [
+          37,
+          1,
+          1.6
+        ]
+      },
+      {
+        "name": "mid_0",
+        "point_mm": [
+          22,
+          1,
+          0.8
+        ]
+      },
+      {
+        "name": "mid_1",
+        "point_mm": [
+          25,
+          1,
+          0.8
+        ]
+      },
+      {
+        "name": "mid_2",
+        "point_mm": [
+          28,
+          1,
+          0.8
+        ]
+      },
+      {
+        "name": "mid_3",
+        "point_mm": [
+          31,
+          1,
+          0.8
+        ]
+      },
+      {
+        "name": "mid_4",
+        "point_mm": [
+          34,
+          1,
+          0.8
+        ]
+      },
+      {
+        "name": "mid_5",
+        "point_mm": [
+          37,
+          1,
+          0.8
+        ]
+      }
+    ],
+    "symmetry": "ymax_uy_zero_ux_uz_free",
+    "absorbing_faces": "xmin+xmax",
+    "alpha_max_per_s": 22075615.536638446,
+    "amplitude_pa": 1000000.0,
+    "cycles": 5,
+    "frequency_mhz": 0.4,
+    "initial_displacement_m": [
+      0,
+      0,
+      0
+    ],
+    "initial_velocity_m_s": [
+      0,
+      0,
+      0
+    ],
+    "load_type": "nominal_dead_traction_per_reference_area",
+    "receiver_frame": "reference",
+    "constitutive_energy": "0.5*(lambda+2*mu)*i1^2-2*mu*i2+(l+2*m)/3*i1^3-2*m*i1*i2+n*i3",
+    "sources": [
+      {
+        "face": "zmax",
+        "spatial": "full_face_gaussian",
+        "center_mm": [
+          16,
+          1
+        ],
+        "sigma_mm": 2,
+        "direction": [
+          0,
+          0,
+          -1
+        ],
+        "delay_us": 0
+      }
+    ]
+  },
+  "execution": {
+    "level": "timecheck",
+    "h_mm": 0.8,
+    "max_step_us": 0.005,
+    "duration_us": 30,
+    "sample_step_us": 0.05,
+    "quadrature_order": 20,
+    "degree": 4,
+    "relative_tolerance": 1e-06,
+    "absolute_tolerance_m": 1e-18,
+    "laws": [
+      2
+    ],
+    "rho_infinity": 1,
+    "guard_output_times": 601
+  }
+}
