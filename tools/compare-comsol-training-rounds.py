@@ -19,14 +19,14 @@ def main():
     new=json.loads((args.candidate/'summary.json').read_text())
     if old['reference_identity']!=new['reference_identity'] or old['plan_sha256']!=new['plan_sha256']:
         raise ValueError('References or validation plans differ; this would confound training with reference changes')
-    if not old['predictions_unchanged'] or not new['metrics_independently_recomputed']:
+    if not (old.get('predictions_unchanged') or old.get('metrics_independently_recomputed')) or not new['metrics_independently_recomputed']:
         raise ValueError('Frozen baseline and independently audited candidate required')
     a={r['case_id']:r for r in old['rows']};b={r['case_id']:r for r in new['rows']}
     if len(a)!=20 or len(b)!=20 or a.keys()!=b.keys():raise ValueError('Incomplete 20-case matrix')
     rows=[];direction_roundoff=1e-10
     for case,x in a.items():
         y=b[case];pa=args.baseline/'metrics'/(case+'.json');pb=args.candidate/'metrics'/(case+'.json')
-        if sha(pa)!=x['new_metrics_sha256'] or sha(pb)!=y['metrics_sha256']:
+        if sha(pa)!=x.get('new_metrics_sha256',x.get('metrics_sha256')) or sha(pb)!=y['metrics_sha256']:
             raise ValueError('Metrics changed after audit')
         ma=json.loads(pa.read_text());mb=json.loads(pb.read_text())
         if ma['reference_identity']!=new['reference_identity'] or mb['reference_identity']!=new['reference_identity']:
@@ -42,6 +42,7 @@ def main():
                      'improved_receivers':sum(v<u-direction_roundoff for u,v in zip(av,bv)),
                      'baseline_case_passed':x['linear_comparison_passed'],'candidate_case_passed':y['linear_comparison_passed']})
     result={'schema':'workai.comsol_paired_training_comparison.v1',
+            'baseline_kind':'unchanged frozen predictions recomputed against the reference' if old.get('predictions_unchanged') else 'independently audited complete baseline rollout',
             'baseline_weights_sha256':old['weights_sha256'],'candidate_weights_sha256':new['weights_sha256'],
             'reference_identity':new['reference_identity'],'baseline_summary_sha256':sha(args.baseline/'summary.json'),
             'candidate_summary_sha256':sha(args.candidate/'summary.json'),'completed_cases':len(rows),

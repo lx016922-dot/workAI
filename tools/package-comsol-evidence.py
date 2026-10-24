@@ -18,8 +18,10 @@ def main():
     p.add_argument('--supplement',action='store_true',help='Use a distinct asset name to retain the original release evidence')
     p.add_argument('--audit-subdir',default='candidate-matrix20',help='Committed audited candidate directory under research/comsol-validation')
     p.add_argument('--archive-label',default='',help='Optional distinct label for a later training evidence snapshot')
+    p.add_argument('--baseline-input',type=Path,help='Optional complete same-plan baseline records')
+    p.add_argument('--baseline-audit-subdir',default='',help='Independent audit of the paired baseline')
     args=p.parse_args()
-    for value in [args.audit_subdir]+([args.archive_label] if args.archive_label else []):
+    for value in [args.audit_subdir]+[v for v in [args.archive_label,args.baseline_audit_subdir] if v]:
         if not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}',value):raise ValueError('Invalid evidence dataset or label')
     if args.audit_subdir!='candidate-matrix20' and not args.archive_label:
         raise ValueError('A different audited candidate requires a distinct archive label')
@@ -27,36 +29,54 @@ def main():
     report=json.loads((research/args.audit_subdir/'summary.json').read_text())
     if report['completed_cases']!=20 or not report['metrics_independently_recomputed']:
         raise ValueError('The complete independent audit must be committed first')
+    if bool(args.baseline_input)!=bool(args.baseline_audit_subdir):
+        raise ValueError('Baseline input and audit must be supplied together')
+    baseline=None
+    if args.baseline_input:
+        if not args.archive_label:raise ValueError('Paired evidence requires a distinct archive label')
+        baseline=json.loads((research/args.baseline_audit_subdir/'summary.json').read_text())
+        if baseline['completed_cases']!=20 or not baseline['metrics_independently_recomputed']:
+            raise ValueError('The complete baseline audit must be committed first')
+        for key in ['plan_sha256','reference_identity','refinement_identity']:
+            if baseline[key]!=report[key]:raise ValueError('Baseline and candidate comparisons differ: '+key)
     args.output.mkdir(parents=True,exist_ok=True)
     suffix='-'+args.archive_label if args.archive_label else '-supplement' if args.supplement else ''
     archive=args.output/('WorkAI-COMSOL-physics-evidence-0.3.0'+suffix+'.zip');entries=[]
     with zipfile.ZipFile(archive,'w',zipfile.ZIP_DEFLATED,compresslevel=4) as z:
         def add(path,name):
             z.write(path,name);entries.append({'path':name,'bytes':path.stat().st_size,'sha256':sha(path)})
-        for row in report['rows']:
-            case=row['case_id']
-            choices=[args.input/('comsol-linear-'+case)/case,args.input/case/case]
-            present=[path for path in choices if (path/'metrics.json').exists()]
-            if len(present)!=1:raise ValueError('Missing or ambiguous completed case: '+case)
-            directory=present[0]
-            for name,key in [('identity.json','identity_sha256'),('metrics.json','metrics_sha256'),('comsol-modal-reference.npz','comsol_modal_reference_sha256')]:
-                if sha(directory/name)!=row[key]:raise ValueError('Downloaded evidence differs from audit')
-            identity=json.loads((directory/'identity.json').read_text())
-            metrics=json.loads((directory/'metrics.json').read_text());prediction=metrics['prediction']
-            if identity['weights_sha256']!=report['weights_sha256'] or prediction['frames']!=25001 or prediction['duration_us']!=5000:
-                raise ValueError('Wrong model or incomplete record')
-            if json.loads((directory/'prediction.json').read_text())!=prediction:raise ValueError('Prediction receipt differs')
-            progress=json.loads((directory/'progress.json').read_text())
-            if progress['phase']!='completed' or progress['completed_frames']!=25001:raise ValueError('Incomplete record')
-            names=['identity.json','metrics.json','prediction.json','progress.json','comsol-modal-reference.npz']
-            first=0
-            for block in prediction['probe_blocks']:
-                name=block['file']
-                if Path(name).name!=name or block['first_frame']!=first or sha(directory/name)!=block['sha256']:
-                    raise ValueError('Changed or discontinuous probe data')
-                first=block['last_frame']+1;names.append(name)
-            if first!=25001:raise ValueError('Missing end of record')
-            for name in names:add(directory/name,'candidate-cases/'+case+'/'+name)
+        def add_records(audit,root,prefix):
+            cases=set()
+            for row in audit['rows']:
+                case=row['case_id']
+                if not re.fullmatch(r'(hann|gaussian|rectangular|chirp)-(01|03|05|10|20)',case) or case in cases:
+                    raise ValueError('Invalid or duplicated case')
+                cases.add(case)
+                choices=[root/('comsol-linear-'+case)/case,root/case/case]
+                present=[path for path in choices if (path/'metrics.json').exists()]
+                if len(present)!=1:raise ValueError('Missing or ambiguous completed case: '+case)
+                directory=present[0]
+                for name,key in [('identity.json','identity_sha256'),('metrics.json','metrics_sha256'),('comsol-modal-reference.npz','comsol_modal_reference_sha256')]:
+                    if sha(directory/name)!=row[key]:raise ValueError('Downloaded evidence differs from audit')
+                identity=json.loads((directory/'identity.json').read_text())
+                metrics=json.loads((directory/'metrics.json').read_text());prediction=metrics['prediction']
+                if identity['weights_sha256']!=audit['weights_sha256'] or prediction['frames']!=25001 or prediction['duration_us']!=5000:
+                    raise ValueError('Wrong model or incomplete record')
+                if json.loads((directory/'prediction.json').read_text())!=prediction:raise ValueError('Prediction receipt differs')
+                progress=json.loads((directory/'progress.json').read_text())
+                if progress['phase']!='completed' or progress['completed_frames']!=25001:raise ValueError('Incomplete record')
+                names=['identity.json','metrics.json','prediction.json','progress.json','comsol-modal-reference.npz']
+                first=0
+                for block in prediction['probe_blocks']:
+                    name=block['file']
+                    if Path(name).name!=name or block['first_frame']!=first or sha(directory/name)!=block['sha256']:
+                        raise ValueError('Changed or discontinuous probe data')
+                    first=block['last_frame']+1;names.append(name)
+                if first!=25001:raise ValueError('Missing end of record')
+                for name in names:add(directory/name,prefix+'/'+case+'/'+name)
+            if len(cases)!=20:raise ValueError('Incomplete case matrix')
+        add_records(report,args.input,'candidate-cases')
+        if baseline:add_records(baseline,args.baseline_input,'baseline-cases')
         for path in sorted(research.rglob('*')):
             if not path.is_file() or '__pycache__' in path.parts or path.name.endswith('.decoded.csv'):continue
             if path.suffix.lower() in ['.pt','.pth','.safetensors']:raise ValueError('No new optimizer checkpoints in this archive')
@@ -66,6 +86,9 @@ def main():
             'supplemental_snapshot':bool(args.supplement or args.archive_label),
             'audited_candidate_subdirectory':args.audit_subdir,'archive_label':args.archive_label,
             'source_workflow_run_url':report['workflow_run_url'],'candidate_cases':20,
+            'baseline_cases':20 if baseline else 0,
+            'audited_baseline_subdirectory':args.baseline_audit_subdir or None,
+            'baseline_workflow_run_url':baseline['workflow_run_url'] if baseline else None,
             'candidate_reference_kind':'COMSOL-sourced linear modal response; native transient cases are separately labeled',
             'scientific_accuracy_certified':False,'files':entries},indent=2)+'\n')
     with zipfile.ZipFile(archive) as verified:

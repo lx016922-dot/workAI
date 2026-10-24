@@ -35,7 +35,9 @@
     "physics_samples": 192,
     "validation_samples": 96,
     "seed": 2026102483,
-    "maximum_iterations": 80
+    "maximum_iterations": 80,
+    "constraint_form": "1 - normalized_RMS / 0.035 >= 0",
+    "conditioning_reason": "Preflight squared constraints have nearly zero gradients near the exact initial operator and take strongly infeasible trial steps. Use the equivalent RMS inequality for formal optimization, retaining the same physical limit and final checks; validation is not used to choose the form."
   },
   "training": {
     "hard_physical_limit": 0.035,
@@ -72,5 +74,36 @@
     "reference_convergence_required_for_certification": true
   },
   "accepted_for_offline_release": false,
-  "scientific_accuracy_certified": false
+  "scientific_accuracy_certified": false,
+  "independent_reference_improvement": {
+    "method": "Grade the reference-only COMSOL hex mesh toward the fixed end and symmetric transverse edges",
+    "cases": [
+      "eigen-graded-05-v8c",
+      "eigen-graded-04-v8c"
+    ],
+    "element_ratio": 20,
+    "modes_each": 80,
+    "verify_actual_axis_coordinates": true,
+    "physical_scene_unchanged": true,
+    "affects_neural_inference_mesh": false,
+    "used_for_current_training": false,
+    "selection_criterion": "Reference agreement only; no candidate waveform used to select a reference",
+    "phase_gate_hz": 0.5,
+    "report_even_if_failed": true,
+    "failed_attempts": [
+      "eigen-graded-05-v8"
+    ],
+    "retry_reason": "COMSOL rejected the unsupported distrib property before solving. Use the documented predefined Distribution API: method=geometric and elemcount. Preserve the failed job; no data from it used.",
+    "api_reference": "https://doc.comsol.com/6.4/doc/com.comsol.help.comsol/comsol_api_mesh.49.074.html",
+    "nominal_uniform_spacing_mm": [
+      0.5,
+      0.4
+    ],
+    "spacing_scope": "Nominal spacing determines element counts before grading; actual minimum and maximum cell widths are measured from exported mesh axes",
+    "earlier_mesh_diagnostic_cases": [
+      "eigen-graded-05-v8b",
+      "eigen-graded-04-v8b"
+    ],
+    "mapped_edge_revision": "Actual coordinates of the first v8b mesh show a warped cross-section: prescribing only one of each pair of parallel edges leaves opposite edges uniform. Apply the same symmetric distribution to both parallel source-face edges, then recheck all exported vertex coordinates. Earlier cases are retained."
+  }
 }

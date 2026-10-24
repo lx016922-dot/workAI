@@ -189,23 +189,25 @@ def restore_physical_feasibility(theta, baseline, basis, weights, dataset, limit
 
 def audit(args):
     reference=read_modes(args.reference)
-    scene=reference['scene'];mesh=make_mesh(scene,4,2.5)
-    if not np.allclose(mesh['points'],reference['coordinates'],rtol=0,atol=1e-14):raise ValueError('Reference/node grid mismatch')
+    scene=reference['scene'];mesh=make_mesh(scene,args.degree,args.h_mm)
+    label_mesh=make_mesh(scene,4,2.5);sample_modes=modal_sampling(mesh,reference['coordinates'])
+    if not np.allclose(label_mesh['points'],reference['coordinates'],rtol=0,atol=1e-14):raise ValueError('Reference/node grid mismatch')
     with np.load(args.weights,allow_pickle=False) as f:weights=dict(f)
-    derivative=weights['derivative_4'];matrix=stiffness(mesh,derivative,weights['quadratic_tensor'])
+    derivative=weights['derivative_'+str(args.degree)];matrix=stiffness(mesh,derivative,weights['quadratic_tensor'])
     displacement=np.random.default_rng(2026102405).normal(size=mesh['points'].shape)*1e-9
     message,_,_,_=graph_message(displacement,mesh['elements'],derivative,inverse_mapping(mesh),mesh['volume_weight'],weights['quadratic_tensor'],weights['cubic_tensor'],0)
     tangent_error=np.linalg.norm(matrix@displacement.ravel()-message.ravel())/np.linalg.norm(message)
     if tangent_error>1e-12:raise ValueError('Modal training tangent differs from actual neural forward pass')
     frequency,fields=modes(mesh,scene,derivative,weights['quadratic_tensor'],len(reference['frequency_hz']))
-    mapping,mac=match(reference['fields'],fields,mesh['mass'])
+    mapping,mac=match(reference['fields'],sample_modes(fields),label_mesh['mass'])
     actual=frequency[mapping];delta=actual-reference['frequency_hz']
-    load,_,_=boundary_data(mesh,scene)
+    load,_,_=boundary_data(label_mesh,scene)
     participation=np.abs(np.einsum('mnc,nc->m',reference['fields'],load))
-    participation/=np.sqrt(np.einsum('mnc,mnc,n->m',reference['fields'],reference['fields'],mesh['mass']))
+    participation/=np.sqrt(np.einsum('mnc,mnc,n->m',reference['fields'],reference['fields'],label_mesh['mass']))
     result={'schema':'workai.comsol_neural_modal_audit.v1','reference_job_id':reference['receipt']['job_id'],
             'reference_scene_sha256':reference['identity']['scene_sha256'],'weights_sha256':digest(args.weights),
             'neural_tangent_forward_relative_error':float(tangent_error),'nodes':len(mesh['points']),
+            'candidate_degree':args.degree,'candidate_h_mm':args.h_mm,
             'filter_trainable_basis_dimension':len(filter_basis(mesh['gll'])),
             'modes':[{'index':i,'comsol_frequency_hz':float(f),'neural_frequency_hz':float(a),
                       'difference_hz':float(d),'phase_drift_degrees_at_5ms':float(360*.005*d),
@@ -309,7 +311,8 @@ def train(args):
                 'validation_samples':args.physics_validation_samples,'seed':args.physics_seed,
                 'loss_weight':args.physics_weight,'maximum_normalized_component_residual':.05,
                 'optimizer':args.optimizer,'hard_training_limit':args.physics_limit if args.optimizer=='slsqp' else None,
-                'constraint_form':'1 - (per-sample component RMS / hard_training_limit)^2 >= 0',
+                'constraint_form':'1 - (per-sample component RMS / hard_training_limit)'+('^2' if args.constraint_form=='squared' else '')+' >= 0',
+                'mode_correspondence_limit':.9,
                 'finite_difference_step':args.gradient_step,'objective_scaling':'fixed initial objective; never candidate-dependent',
                 'slsqp_tolerance':args.optimizer_tolerance,'maximum_optimizer_iterations':args.max_iterations,
                 'postfit_feasibility':'re-evaluate training constraints after parameter backtracking; 0.1% interior margin; preserve raw optimizer status',
@@ -373,7 +376,8 @@ def train(args):
                 # A trial step may lose correspondence before SLSQP backtracks.
                 # Reject it through an explicit inequality instead of aborting
                 # the line search. The final candidate retains the same gate.
-                cache[key]=(value,np.r_[1-(values/args.physics_limit)**2,mac[indices]/.9-1])
+                exponent=2 if args.constraint_form=='squared' else 1
+                cache[key]=(value,np.r_[1-(values/args.physics_limit)**exponent,mac[indices]/.9-1])
                 if len(cache)>96:cache.pop(next(iter(cache)))
                 row={'evaluation':len(history)+1,'elapsed_s':time.monotonic()-start,'parameters':theta.tolist(),
                      'weighted_phase_loss':float(residual@residual),'weighted_physics_loss':float(args.physics_weight**2*(r@r)),
@@ -454,6 +458,7 @@ if __name__=='__main__':
     p.add_argument('--physics-seed',type=int,default=2026102413)
     p.add_argument('--physics-weight',type=float,default=30.)
     p.add_argument('--optimizer',choices=['least_squares','slsqp'],default='slsqp')
+    p.add_argument('--constraint-form',choices=['squared','rms'],default='squared',help='Equivalent physical feasibility sets; rms improves scaling near an initially exact derivative')
     p.add_argument('--physics-limit',type=float,default=.04)
     p.add_argument('--gradient-step',type=float,default=1e-5)
     p.add_argument('--dominant-phase-weight',type=float,default=1.,help='Residual multiplier for the largest admitted load participation mode')

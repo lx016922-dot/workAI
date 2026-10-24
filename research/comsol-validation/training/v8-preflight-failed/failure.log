@@ -1,0 +1,30 @@
+{"evaluation": 20, "elapsed_s": 31.27041760699649, "parameters": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0001, 0.0, 0.0], "weighted_phase_loss": 1242.4023772360918, "weighted_physics_loss": 0.0005514476059638205, "maximum_physics_training_residual": 0.003012479862690097, "training_frequency_errors_hz": [111.53174823836889, 312.165458212723, 281.4336516899057, 4.225879526115023, 159.03549553023186, 22.864788912935182, 284.9436293276958], "minimum_training_mac": 0.9999837344812764}
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/workspace/workAI/graphwave/modal_calibration.py", line 471, in <module>
+    train(args)
+  File "/workspace/workAI/graphwave/modal_calibration.py", line 392, in train
+    fitted=minimize(lambda theta:constrained(theta)[0]/objective_scale,np.zeros(len(basis)),
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/site-packages/scipy/optimize/_minimize.py", line 796, in minimize
+    res = _minimize_slsqp(fun, x0, args, jac, bounds,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/site-packages/scipy/optimize/_slsqp_py.py", line 524, in _minimize_slsqp
+    fx = sf.fun(x)
+         ^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/site-packages/scipy/optimize/_differentiable_functions.py", line 394, in fun
+    self._update_fun()
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/site-packages/scipy/optimize/_differentiable_functions.py", line 362, in _update_fun
+    fx = self._wrapped_fun(self.x)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/codex/runtimes/codex-primary-runtime/dependencies/python/lib/python3.12/site-packages/scipy/_lib/_util.py", line 603, in __call__
+    fx = self.f(np.copy(x), *self.args)
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/workAI/graphwave/modal_calibration.py", line 392, in <lambda>
+    fitted=minimize(lambda theta:constrained(theta)[0]/objective_scale,np.zeros(len(basis)),
+                                 ^^^^^^^^^^^^^^^^^^
+  File "/workspace/workAI/graphwave/modal_calibration.py", line 366, in constrained
+    if np.min(mac[indices])<.9:raise ValueError('Training mode correspondence lost')
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: Training mode correspondence lost
