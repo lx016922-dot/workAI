@@ -8,6 +8,7 @@ import { ModelStore } from './models.mjs';
 import { readTrainingStatus } from './training.mjs';
 import { SolidService } from './solid.mjs';
 import { SpectralService } from './spectral.mjs';
+import { PlaneService } from './plane.mjs';
 
 const root = resolve(process.env.WORKAI_REMOTE_ROOT || '/workspace/workai-remote');
 const state = resolve(process.env.WORKAI_STATE_DIR || join(root, 'web/jobs'));
@@ -38,7 +39,8 @@ try {
   const models = new ModelStore(join(state, '..', 'models'), remote); await models.init();
   const solid = new SolidService(root); await solid.init();
   const spectral = new SpectralService(root,solid); await spectral.init(); solid.spectral=spectral;
-  const server = createApp({ remote, store, models, solid, spectral, trainingReader: () => readTrainingStatus(root), password, origin, connection: {
+  const plane = new PlaneService(root,solid); await plane.init(); solid.plane=plane;
+  const server = createApp({ remote, store, models, solid, spectral, plane, trainingReader: () => readTrainingStatus(root), password, origin, connection: {
     base_url: info.base_url, server_fingerprint: info.server_public_key_sha256,
     client_fingerprint: info.cloud_client_public_key_sha256,
   } });

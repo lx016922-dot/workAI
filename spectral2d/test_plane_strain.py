@@ -101,6 +101,28 @@ class PlaneStrainTests(unittest.TestCase):
             self.assertIn(message, str(caught.exception))
 
 
+    def test_worker_writes_a_verifiable_browser_record(self):
+        import gzip, hashlib, json, tempfile
+        from pathlib import Path
+        from .worker import run as worker_run
+        raw = plane(24., 2., 2., frequency_mhz=.25, cycles=3.)
+        raw['receiver_lines'] = [{'name': 'top', 'from_mm': [6., 0., 2.], 'to_mm': [18., 0., 2.], 'count': 7, 'direction': [1., 0., 0.]}]
+        with tempfile.TemporaryDirectory() as temp:
+            job = Path(temp) / ('plane-' + 'c' * 32); job.mkdir()
+            (job / 'scene.json').write_text(json.dumps(raw)); (job / 'settings.json').write_text(json.dumps({'degree': 3})); (job / 'status.json').write_text(json.dumps({'job_id': job.name, 'phase': 'starting'}))
+            worker_run(job)
+            status = json.loads((job / 'status.json').read_text()); self.assertEqual(status['phase'], 'completed', status)
+            record_bytes = (job / 'result.json').read_bytes(); self.assertEqual(hashlib.sha256(record_bytes).hexdigest(), status['result_sha256'])
+            record = json.loads(record_bytes); self.assertEqual(record['schema'], 'workai.plane_strain.result.v1'); self.assertEqual(record['job_id'], job.name)
+            field = (job / 'field.bin.gz').read_bytes(); lines = (job / 'lines.bin.gz').read_bytes()
+            self.assertEqual(hashlib.sha256(field).hexdigest(), record['field']['sha256']); self.assertEqual(hashlib.sha256(lines).hexdigest(), record['lines']['sha256'])
+            raw_field = gzip.decompress(field); self.assertEqual(len(raw_field), record['field']['uncompressed_bytes']); self.assertEqual(record['field']['shape'], [len(record['field']['frame_indices']), len(record['mesh']['nodes_mm']), 2])
+            self.assertEqual(record['field']['frame_indices'][-1], len(record['times_us']) - 1)
+            self.assertEqual(record['lines']['shape'], [len(record['times_us']), 7, 2]); self.assertEqual(len(gzip.decompress(lines)), record['lines']['uncompressed_bytes'])
+            self.assertEqual(record['receiver_lines'][0]['columns'], list(range(7))); self.assertEqual(len(record['receivers']), 1); self.assertEqual(len(record['receivers'][0]['u_x_m']), len(record['times_us']))
+            self.assertTrue(all(len(l) == 2 for l in record['mesh']['boundary_lines'])); self.assertEqual(status['diagnostics']['excitation_model'], 'multi_source_v2')
+
+
 def _prepare3d(raw, degree):
     s = copy.deepcopy(raw); h = s['numerics']['h_mm']; s['numerics']['h_mm'] = h / degree; out = validate_scene(s); out['numerics']['h_mm'] = h; return out
 

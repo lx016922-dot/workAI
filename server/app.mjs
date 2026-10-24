@@ -32,6 +32,9 @@ const staticFiles = new Map([
   ['/solid-propagation.js', ['solid-propagation.js', 'text/javascript; charset=utf-8']],
   ['/solid-propagation-viewer.js', ['solid-propagation-viewer.js', 'text/javascript; charset=utf-8']],
   ['/solid-propagation-report.js', ['solid-propagation-report.js', 'text/javascript; charset=utf-8']],
+  ['/plane-ui.js', ['plane-ui.js', 'text/javascript; charset=utf-8']],
+  ['/plane-viewer.js', ['plane-viewer.js', 'text/javascript; charset=utf-8']],
+  ['/plane-data.js', ['plane-data.js', 'text/javascript; charset=utf-8']],
   ['/styles.css', ['styles.css', 'text/css; charset=utf-8']],
   ['/favicon.svg', ['favicon.svg', 'image/svg+xml']],
 ]);
@@ -59,7 +62,7 @@ function exactKeys(value, keys) {
   if (Object.keys(value).length !== keys.length || keys.some(k => !Object.hasOwn(value, k))) throw new AppError(400, '请求字段不正确。');
 }
 
-export function createApp({ remote, store, models, solid, spectral, trainingReader = async () => ({ available: false }), password = '', origin = '', connection = {} }) {
+export function createApp({ remote, store, models, solid, spectral, plane, trainingReader = async () => ({ available: false }), password = '', origin = '', connection = {} }) {
   const csrf = randomBytes(32).toString('base64url');
   let submitting = false;
   let healthPromise = null;
@@ -120,6 +123,24 @@ export function createApp({ remote, store, models, solid, spectral, trainingRead
           return;
         }
         throw new AppError(404,'没有找到该高阶任务接口。');
+      }
+      if(plane && url.pathname.startsWith('/api/plane/')) {
+        if(url.pathname==='/api/plane/jobs') {
+          if(request.method==='GET')json(response,200,{jobs:await plane.list()});
+          else if(request.method==='POST')json(response,202,await plane.submit(await readJson(request,512*1024)));
+          else throw new AppError(405,'该操作方法不支持。');
+          return;
+        }
+        if(request.method==='GET'&&url.pathname==='/api/plane/templates'){json(response,200,{templates:await plane.templates()});return;}
+        if(request.method==='GET'&&url.pathname==='/api/plane/dispersion'){json(response,200,await plane.dispersion(url.searchParams.get('thickness_mm')));return;}
+        const match=url.pathname.match(/^\/api\/plane\/jobs\/(plane-[a-f0-9]{32})(?:\/(result|field|lines))?$/);
+        if(request.method==='GET'&&match) {
+          const [,id,action]=match;
+          if(action==='field'||action==='lines'){const bytes=await plane.binary(id,action);response.writeHead(200,{'Content-Type':'application/gzip','Content-Length':bytes.length});response.end(bytes);}
+          else json(response,200,action==='result'?await plane.result(id):await plane.status(id));
+          return;
+        }
+        throw new AppError(404,'没有找到该二维任务接口。');
       }
       if(solid && url.pathname.startsWith('/api/solid/')) {
         if(url.pathname==='/api/solid/studies'){

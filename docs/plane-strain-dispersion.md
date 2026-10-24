@@ -90,6 +90,16 @@ python -m dispersion.lamb --thickness-mm 2 --fd-max 8 --output lamb.json --csv l
 
 要观察累积增长，应把载频降到 fd ≤ 0.4 MHz·mm，或改用 S1(3.56 MHz·mm)–S2 同步点并用梳状/楔块激励选模。
 
-## 7. 尚未包含
+## 7. 网页提交入口与查看器
 
-二维结果的浏览器查看器与网页提交入口、层合板与各向异性、流体加载、周期边界、二维四面体/三角形网格与任意截面几何、以及把二维求解器用作训练数据生成器的批处理框架。
+侧栏新增「二维平面应变」页面（`public/plane-ui.js`、`plane-viewer.js`、`plane-data.js`；服务 `server/plane.mjs`，接口 `/api/plane/*`）。
+
+- **表单**：截面几何（板/缺口）、阶次与单元尺寸、记录设置；z 中面对称/反对称（半厚度模型）、固定面、两端吸收层；主激励的加载边、区域、方向、幅值、载频、信号族与参数、空间分布；接收点列表；一条顶面接收线。表单给出单元数、节点数、内部步数和耗时的经验估计。
+- **JSON 编辑器**：表单改动实时同步为场景 JSON，可直接编辑后“应用”，用于额外激励、多频分量、采样序列等表单未覆盖的字段；支持导入/导出 JSON；提交以当前 JSON 为准，服务器重新完整校验。
+- **任务**：`spectral2d/worker.py` 在任务目录写入 `status.json`（阶段与帧进度）、`result.json`、`field.bin.gz`（按预算抽帧的 float32 位移场）与 `lines.bin.gz`（全采样接收线）。Node 服务按状态文件中的 SHA-256 校验结果与二进制文件，与三维任务相同；同一时间只允许一个三维或二维任务运行。
+- **查看器**：截面位移场动画（厚度方向可放大、形变倍率、分量着色、平移缩放）；接收点与接收线上任意点的方向投影波形、整段频谱、窗内 f/2f 复系数；接收线面板：按 x/c_g 移动或固定时间窗逐点提取 A₁、A₂，A₂/A₁² 的线性拟合，相位斜率相速度（并列出该板厚的理论 S0/A0 相速度），f–k 幅值谱叠加 Rayleigh–Lamb 理论曲线（服务端 `python -m dispersion.lamb` 按板厚缓存），CSV 下载。
+- **测试**：`tests/plane-service.test.mjs`（身份与摘要校验、提交拒绝、路由与 CSRF）、`tests/plane-data.test.mjs`（解码、篡改拒绝、谐波/速度/f–k 对合成波）、`spectral2d/test_plane_strain.py::test_worker_writes_a_verifiable_browser_record`，以及一次真实 Playwright 冒烟（临时站点 + 真实求解 + 查看器交互）。
+
+## 8. 尚未包含
+
+层合板与各向异性、流体加载、周期边界、二维四面体/三角形网格与任意截面几何、以及把二维求解器用作训练数据生成器的批处理框架。
