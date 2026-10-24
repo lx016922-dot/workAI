@@ -77,6 +77,11 @@ for wheel in sorted((args.cache / 'wheels' / args.platform).glob('*.whl')):
                 raise SystemExit('Unsafe wheel path')
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(z.read(item))
+# Relocated CPython can regenerate its upstream bytecode on first startup.
+# Ship verified source and let Python create caches, outside the immutable manifest.
+if args.platform == 'linux':
+    for cache_file in (target / 'runtime').rglob('*.pyc'):
+        cache_file.unlink()
 rows = [{'path': str(p.relative_to(target)).replace(os.sep, '/'), 'bytes': p.stat().st_size, 'sha256': sha(p)}
         for p in sorted(target.rglob('*')) if p.is_file()]
 (target / 'MANIFEST.json').write_text(json.dumps({'schema': 'workai.offline.bundle.v1', 'platform': args.platform,
