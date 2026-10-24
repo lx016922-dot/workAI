@@ -8,6 +8,7 @@ import argparse
 import fcntl
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -148,9 +149,25 @@ def run_job(root, folder):
                     try:
                         body=json.loads(live.read_text())['body']
                         progress.update(remote_phase=body.get('phase'),solver_log_bytes=body.get('total_bytes'),last_remote_update=body.get('last_write_utc'))
+                        times=re.findall(r'^\s*\d+\s+([0-9.eE+-]+)\s+[0-9.eE+-]+\s',body.get('tail_utf8',''),re.MULTILINE)
+                        if times:
+                            progress.update(simulation_time_us=float(times[-1])*1e6,target_time_us=30)
                     except (ValueError,OSError):
                         pass  # The signed client may be replacing this progress file.
-                state('running',active_pilot_job=None,message='COMSOL job active; awaiting verified complete outputs.',**progress)
+                connection='connected'
+                polling=folder/'polling-status.json'
+                if polling.exists():
+                    try:
+                        check=json.loads(polling.read_text())
+                        connection=check['status']
+                        progress['last_status_check_utc']=check['utc']
+                    except (ValueError,OSError,KeyError):
+                        pass
+                if connection=='waiting_for_connection':
+                    state('waiting_for_connection',active_pilot_job=None,
+                          message='Read-only polling is retrying after a timeout; remote progress is not currently confirmed.',**progress)
+                else:
+                    state('running',active_pilot_job=None,message='COMSOL job active; awaiting verified complete outputs.',**progress)
                 last_report=time.monotonic()
             time.sleep(15)
         if proc.returncode:

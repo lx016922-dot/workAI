@@ -26,6 +26,36 @@ def save(path, value):
     tmp.replace(path)
 
 
+class TransientReadError(RuntimeError):
+    """A bounded group of read-only requests failed temporarily."""
+
+
+def invoke_request(command, action, *options):
+    attempts=1 if action=='submit' else 3
+    for attempt in range(attempts):
+        try:
+            result=subprocess.run(command+['-Action',action,*map(str,options)],capture_output=True,text=True,
+                                  timeout=1250 if action=='download' else 45)
+        except subprocess.TimeoutExpired:
+            if action=='submit':
+                raise  # The POST outcome is unknown; never retry it.
+            error=f'Read-only {action} request timed out'
+        else:
+            if not result.returncode:
+                value=json.loads(result.stdout)
+                if not value.get('server_signature_verified'):
+                    raise ValueError('Unverified server response')
+                return value
+            error=result.stderr.strip() or result.stdout[-2500:]
+            transient=any(s in error.lower() for s in ['timeout','timed out','request was canceled',
+                          'temporarily unavailable','http 502','http 503','http 504'])
+            if action=='submit' or not transient:
+                raise RuntimeError(error)
+        if attempt==attempts-1:
+            raise TransientReadError(error)
+        time.sleep(3)
+
+
 def run(args):
     root, folder=args.root, args.case
     identity=json.loads((folder/'identity.json').read_text())
@@ -38,18 +68,7 @@ def run(args):
              '-Root',str(root),'-JobId',job]
 
     def request(action, *options):
-        for attempt in range(1 if action=='submit' else 3):
-            result=subprocess.run(command+['-Action',action,*map(str,options)],capture_output=True,text=True,timeout=1250 if action=='download' else 45)
-            if not result.returncode:
-                break
-            error=result.stderr.strip() or result.stdout[-2500:]
-            if action=='submit' or attempt==2 or not any(s in error.lower() for s in ['timeout','timed out','request was canceled','temporarily unavailable','http 502','http 503','http 504']):
-                raise RuntimeError(error)
-            time.sleep(3)
-        value=json.loads(result.stdout)
-        if not value.get('server_signature_verified'):
-            raise ValueError('Unverified server response')
-        return value
+        return invoke_request(command,action,*options)
 
     if args.submit and not (root/'requests'/job).exists():
         if not args.source or digest(args.source)!=identity['source_sha256']:
@@ -60,10 +79,28 @@ def run(args):
         print(json.dumps({'job_id':job,'submitted':result['http_status']==202}),flush=True)
     deadline=time.monotonic()+args.timeout
     while True:
-        status=request('status','-OutputFile',folder/'status.json')
+        try:
+            status=request('status','-OutputFile',folder/'status.json')
+        except TransientReadError as exc:
+            polling={'utc':datetime.now(timezone.utc).isoformat(),'job_id':job,
+                     'status':'waiting_for_connection','message':str(exc)}
+            save(folder/'polling-status.json',polling)
+            print(json.dumps(polling),flush=True)
+            if not args.wait or time.monotonic()>=deadline:
+                raise
+            time.sleep(30)
+            continue
         phase=status['body']['phase']
-        live=request('log','-OutputFile',folder/'solver-live.json')
-        body=live['body']
+        polling={'utc':datetime.now(timezone.utc).isoformat(),'job_id':job,
+                 'status':'connected','remote_phase':phase,'server_signature_verified':True}
+        save(folder/'polling-status.json',polling)
+        try:
+            live=request('log','-OutputFile',folder/'solver-live.json')
+            body=live['body']
+        except TransientReadError as exc:
+            # Live logs are optional diagnostics; signed status controls collection.
+            body={}
+            print(json.dumps({**polling,'log_warning':str(exc)}),flush=True)
         print(json.dumps({'utc':datetime.now(timezone.utc).isoformat(),'job_id':job,'phase':phase,
                           'log_bytes':body.get('total_bytes',0),'tail':body.get('tail_utf8','')[-700:]}),flush=True)
         if phase in ['completed','failed']:
