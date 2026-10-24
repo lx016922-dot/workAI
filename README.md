@@ -1,5 +1,30 @@
 # workAI · 超声研究工作台
 
+## 离线软件（2026-10-24 恢复版）
+
+本仓库新增独立的 **WorkAI Offline**，可用冻结图网络在本机预测板、管、通孔和缺口的三维波传播，查看五种响应的动画、任意点位/方向波形、时间窗频谱、f/2f 和沿程谐波，导出 CSV、配置及完整结果。
+
+[下载便携包](https://github.com/lx016922-dot/workAI/releases/tag/v0.2.0-recovery.1)。Windows x64 解压后双击 `Start-WorkAI.bat`；Linux x64 运行 `sh start-workai.sh`。包内自带 Python 与计算依赖，无需联网安装、Node、COMSOL、账号或配对身份。启动后在本机浏览器使用，按 Ctrl+C 正常退出并停止进行中的计算。
+
+**模型来源：**原聊天完成后的云快照未恢复最新权重与八例验收文件。本次从聊天记录恢复图网络代码，按相同种子和流程重新生成权重；SHA-256 不同，因此不继承原版的八例验收结论。恢复版自己的检查记录见 [validation.json](offline/model/validation.json)，训练来源见 [model.json](offline/model/model.json)。它是带网格、逐时计算的物理图网络，不是任意 CAD 的瞬时通用模型。
+
+打包只选择本地推理所需源码、固定权重、运行时和示例，原云端私钥与连接身份不在包内。详细使用方法见 [离线说明](offline/README-OFFLINE.txt)。下面的章节保留早期云工作台的功能与历史记录，其 `/workspace` 路径和远程连接要求不适用于离线便携包。
+
+### 从源码构建便携包
+
+构建阶段需要联网下载依赖，生成的软件包运行时不需要网络：
+
+```sh
+python tools/download-offline.py --cache build-cache --platform windows
+python tools/build-offline.py --cache build-cache --output portable --platform windows --archive
+```
+
+Linux 将 `windows` 改为 `linux`。所有输入都由 `offline/dependencies.json` 的 SHA-256 固定；已存在的构建输出不会被覆盖。大体积示例随 Release 分发，不进入 Git 历史。从源码构建仍可创建新预测任务。
+
+包内执行 `runtime/python.exe -m offline.smoke`（Windows）或 `runtime/bin/python3 -m offline.smoke`（Linux），可以完成一次真实预测、能量检查、五种响应分解、文件摘要及 API 检查。历史参考场验证需要另行提供原参考数据，执行 `tools/validate-offline-model.py`。
+
+## 早期云工作台与历史记录
+
 本仓库已保存 2026-10-23 的源码与环境配置备份；上传范围、恢复步骤及未包含的运行数据见 [环境备份说明](environment/README.md)。
 
 根据现有 COMSOL 服务和用户确认的「建模、物理场、研究、结果」四个模块重建的网页工作台。

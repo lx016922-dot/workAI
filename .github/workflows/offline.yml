@@ -1,0 +1,28 @@
+name: Offline portable application
+on:
+  push:
+    paths: ['offline/**/*.py', 'offline/web/**', 'offline/model/weights.npz', 'offline/dependencies.json', 'graphwave/**', 'tools/*offline*', '.github/workflows/offline.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-portable:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch hash-pinned runtime and wheels
+        run: python tools/download-offline.py --cache build-cache --platform windows
+      - name: Assemble portable application
+        run: python tools/build-offline.py --cache build-cache --output portable --platform windows
+      - name: Verify package and run actual neural prediction
+        shell: pwsh
+        run: |
+          Set-Location portable/WorkAI-Offline-windows-x64
+          ./runtime/python.exe verify-package.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./runtime/python.exe -m offline.smoke
+          exit $LASTEXITCODE

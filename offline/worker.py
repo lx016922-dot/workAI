@@ -1,0 +1,81 @@
+"""One local inference job. No remote service or numerical solver fallback."""
+import argparse
+import json
+import sys
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+import numpy as np
+from graphwave.predict import predict
+from spectral3d.mesh import make_mesh, boundary_data, interpolation
+from spectral3d.result import result_record, surface_triangles
+from .domain import MODEL, PARTS, digest, model_info, validate_request
+
+
+def write_json(path, value):
+    temp = path.with_suffix(path.suffix + '.tmp')
+    temp.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + '\n', encoding='utf-8')
+    temp.replace(path)
+
+
+def export_results(directory, scene, mesh, fields, diagnostics, info):
+    times = np.arange(fields[0].shape[0]) * scene['acquisition']['sample_step_us']
+    exports = {}
+    for part in PARTS:
+        field = {'full': lambda: fields[2], 'linear': lambda: fields[0], 'stvk': lambda: fields[1],
+                 'geometric': lambda: fields[1] - fields[0], 'material': lambda: fields[2] - fields[1]}[part]()
+        d = dict(diagnostics[{'linear': 0, 'stvk': 1}.get(part, 2)])
+        d.update(output_dtype='float64', internal_step_us=d['layer_step_us'])
+        record, packed = result_record(directory.name, scene, mesh, {'fields_m': field, 'times_us': times, 'diagnostics': d})
+        record.update(schema='workai.offline.graphwave.result.v1', engine='workai_graphwave_offline',
+                      engine_scope='recovered_frozen_graph_network', response_part=part,
+                      neural_model={'weights_sha256': info['weights_sha256'], 'numerical_correction': False,
+                                    'neural_forward_only': True, 'original_acceptance_inherited': False},
+                      controls=diagnostics)
+        (directory / (part + '.bin.gz')).write_bytes(packed)
+        write_json(directory / (part + '.json'), record)
+        exports[part] = {'result_sha256': digest(directory / (part + '.json')), 'field_sha256': digest(directory / (part + '.bin.gz'))}
+    write_json(directory / 'exports.json', exports)
+
+
+def run(directory):
+    directory = Path(directory)
+    start = time.monotonic()
+    status = json.loads((directory / 'status.json').read_text(encoding='utf-8'))
+    def publish(**values):
+        status.update(values, elapsed_s=time.monotonic() - start, updated_at_utc=datetime.now(timezone.utc).isoformat())
+        write_json(directory / 'status.json', status)
+    try:
+        request = validate_request(json.loads((directory / 'request.json').read_text(encoding='utf-8')))
+        info = model_info()
+        with np.load(MODEL / 'weights.npz', allow_pickle=False) as saved:
+            weights = dict(saved)
+        scene = request['scene']
+        publish(phase='meshing', message='正在生成几何连接图')
+        mesh = make_mesh(scene, request['degree'], scene['numerics']['h_mm'])
+        if len(mesh['points']) > 30000 or mesh['elements'].size > 100000 or len(mesh['points']) * 281 * 24 > 192 * 1024**2 or len(surface_triangles(mesh['elements'])) > 50000:
+            raise ValueError('网格超过离线显示预算，请增大网格尺寸。')
+        boundary_data(mesh, scene)
+        for rx in scene['receivers']:
+            interpolation(mesh, rx['point_mm'])
+        publish(phase='running', nodes=len(mesh['points']), controls_completed=0, message='首次运行需要编译网络，随后计算三组控制')
+        def progress(d):
+            if not d['energy_balance_within_1_percent']:
+                raise ValueError('网络输出能量收支未通过 1% 检查。')
+            publish(controls_completed=['linear', 'stvk', 'murnaghan'].index(d['law']) + 1, message=d['law'] + ' 控制完成')
+        fields, diagnostics = predict(scene, mesh, weights, callback=progress)
+        forbidden = ['spectral3d.solver', 'spectral3d.curved_solver', 'spectral3d.implicit', 'solid.fem']
+        if any(name in sys.modules for name in forbidden):
+            raise RuntimeError('预测进程意外加载了数值求解模块。')
+        publish(phase='exporting', message='正在保存动画及五种响应')
+        export_results(directory, scene, mesh, fields, diagnostics, info)
+        publish(phase='completed', message='本机预测完成', weights_sha256=info['weights_sha256'], numerical_correction=False)
+    except Exception as error:
+        publish(phase='failed', message=str(error))
+        raise
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--job-dir', required=True, type=Path)
+    run(parser.parse_args().job_dir)
