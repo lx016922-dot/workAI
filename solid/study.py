@@ -1,14 +1,15 @@
 """Five constitutive/amplitude controls on one exact mesh, with immutable jobs."""
 import argparse,copy,hashlib,json,time,uuid
 from pathlib import Path
-from .schema import validate_scene,exact,require
+from .schema import exact,require
+from physics.scene import validate_scene,sources
 from .worker import run,write_json,now
 
 CONTROLS=[('linear_A','linear',1),('geometric_A','stvk',1),('material_A','murnaghan',1),('geometric_2A','stvk',2),('material_2A','murnaghan',2)]
 
 def validate_study(value):
     exact(value,['scene'],'非线性对照');scene=validate_scene(value['scene'])
-    require(scene['source']['amplitude_mpa']<=5,'五组对照需要双幅值计算，基准幅值不能超过 5 MPa。')
+    require(all(src['amplitude_mpa']<=5 for src in sources(scene)),'五组对照需要双幅值计算，基准幅值不能超过 5 MPa。')
     require(scene['acquisition']['duration_us']*scene['source']['frequency_mhz']>=2,'谐波分析记录至少需要两个基频周期。')
     scene['constitutive']='murnaghan'
     return {'scene':scene}
@@ -22,7 +23,8 @@ def execute(directory,mesh_reference=None):
     try:
         for role,law,factor in CONTROLS:
             require(time.monotonic()-started<2700,'五组对照超过 45 分钟预算，停止启动后续计算。')
-            current=copy.deepcopy(scene);current['constitutive']=law;current['source']['amplitude_mpa']*=factor;current['name']=scene['name'][:70]+' · '+role
+            current=copy.deepcopy(scene);current['constitutive']=law;current['name']=scene['name'][:70]+' · '+role
+            for src in [current['source']]+current.get('sources',[]):src['amplitude_mpa']*=factor
             job=jobs/('solid-'+uuid.uuid4().hex);job.mkdir();write_json(job/'scene.json',current)
             status['jobs'].append({'role':role,'job_id':job.name});publish(active_role=role,active_job_id=job.name)
             remaining=max(1,min(1800,int(2700-(time.monotonic()-started))))

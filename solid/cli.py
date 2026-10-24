@@ -1,7 +1,8 @@
 """Only fixed JSON operations for the local web service."""
 import argparse,json,sys
 from pathlib import Path
-from .schema import default_scene,validate_scene
+from .schema import default_scene
+from physics.scene import validate_scene
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('action',choices=['templates','validate','validate-study','inspect']);parser.add_argument('--root',default='/workspace/workai-remote');args=parser.parse_args()

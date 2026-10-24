@@ -8,8 +8,9 @@ from pathlib import Path
 import signal
 import time
 import numpy as np
-from .schema import validate_scene,require
-from .mesh import make_mesh,prepare_mesh,nodal_load,face_selection,locate
+from .schema import require
+from physics.scene import validate_scene
+from .mesh import make_mesh,prepare_mesh,nodal_load,face_selection,locate,prepare_excitation
 from .fem import solve
 
 def now():return datetime.now(timezone.utc).isoformat()
@@ -22,13 +23,18 @@ def validate_mesh_reference(scene,record,scope):
     for key in ['geometry','material','boundary','acquisition','receivers']:
         require(scene[key]==record['scene'][key],'参考网格的几何、材料、边界、采样和接收点必须一致。')
     require(scene['numerics']['h_mm']==record['scene']['numerics']['h_mm'],'参考网格的目标尺寸必须一致。')
+    expected=record['scene']
+    require(scene.get('boundaries',[])==expected.get('boundaries',[]) and len(scene.get('sources',[]))==len(expected.get('sources',[])),'参考网格的边界条件和激励数量必须一致。')
     if scope=='time':
-        for key in ['source','constitutive']:require(scene[key]==record['scene'][key],'时间步对照必须保持物理场景不变。')
+        for key in ['source','constitutive']:require(scene[key]==expected[key],'时间步对照必须保持物理场景不变。')
+        require(scene.get('sources',[])==expected.get('sources',[]),'时间步对照必须保持全部激励不变。')
     else:
-        expected=record['scene'];require(scene['numerics']==expected['numerics'],'本构对照必须使用相同数值设置。')
+        require(scene['numerics']==expected['numerics'],'本构对照必须使用相同数值设置。')
         require(expected['constitutive']=='linear','五组本构对照的参考必须是线性基准。')
         a=dict(scene['source']);b=dict(expected['source']);amplitude=a.pop('amplitude_mpa');baseline=b.pop('amplitude_mpa')
         require(a==b and amplitude in [baseline,2*baseline],'本构对照仅允许切换本构及 A/2A 幅值。')
+        for x,y in zip(scene.get('sources',[]),expected.get('sources',[])):
+            a=dict(x);b=dict(y);require(a.pop('amplitude_mpa')==b.pop('amplitude_mpa')*amplitude/baseline and a==b,'本构对照的额外激励必须按相同比例缩放。')
 
 def run(directory,mesh_reference=None,mesh_scope='time',output_precision='float32',time_budget_s=1800):
     directory=Path(directory);started=time.monotonic();status={'job_id':directory.name,'phase':'meshing','started_at_utc':now()}
@@ -62,11 +68,16 @@ def run(directory,mesh_reference=None,mesh_scope='time',output_precision='float3
             require(np.array_equal(points*1000,record['nodes_mm']) and np.array_equal(tetra,record['tetra']),'参考网格与结果记录不匹配。')
             mesh=prepare_mesh(points,tetra)
         for rx in scene['receivers']:locate(mesh,rx['point_mm'])
-        load,selected=nodal_load(mesh,scene['source'])
-        fixed=np.array([],dtype=int)
-        if scene['boundary']['fixed_face']!='none':fixed=np.unique(mesh['surface'][face_selection(mesh,scene['boundary']['fixed_face'])])
-        if np.any(load[fixed]!=0):raise ValueError('激励与固定节点重叠；请调整端面/孔径。')
-        fields,diagnostics=solve(scene,mesh,load,fixed,publish,output_precision)
+        excitation=prepare_excitation(mesh,scene)
+        if excitation is None:
+            load,selected=nodal_load(mesh,scene['source'])
+            fixed=np.array([],dtype=int)
+            if scene['boundary']['fixed_face']!='none':fixed=np.unique(mesh['surface'][face_selection(mesh,scene['boundary']['fixed_face'])])
+            if np.any(load[fixed]!=0):raise ValueError('激励与固定节点重叠；请调整端面/孔径。')
+            fields,diagnostics=solve(scene,mesh,load,fixed,publish,output_precision)
+        else:
+            selected=excitation['selected']
+            fields,diagnostics=solve(scene,mesh,None,None,publish,output_precision,excitation=excitation)
         publish({'phase':'exporting'})
         field_bytes=fields.astype('<f8' if output_precision=='float64' else '<f4',copy=False).tobytes();packed=gzip.compress(field_bytes,compresslevel=5,mtime=0)
         (directory/'field.bin.gz').write_bytes(packed)

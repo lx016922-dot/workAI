@@ -88,10 +88,35 @@ def nodal_load(mesh,source):
         axis='xyz'.index(source['face'][0]);delta=mesh['points'][mesh['surface']].mean(axis=1)-center
         delta[:,axis]=0;selected &= np.linalg.norm(delta,axis=1)<=source['radius_mm']*.001
     require(selected.any(),'激励孔径内没有表面三角形；请扩大孔径或细化网格。')
-    force=np.zeros_like(mesh['points']);weights=mesh['area'][selected]/3
+    force=np.zeros_like(mesh['points']);indices=np.flatnonzero(selected);weights=mesh['area'][selected]/3
+    if source.get('profile'):
+        # Version-2 spatial profile, evaluated at the centroids of the selected triangles.
+        from physics.loads import region_weights
+        centroids=mesh['points'][mesh['surface'][indices]].mean(axis=1)
+        profile=region_weights(centroids,dict(source,radius_mm=0.),None if source['face']=='surface_patch' else 'xyz'.index(source['face'][0]))
+        keep=profile!=0;require(keep.any(),'载荷分布在加载区域内处处为零；请检查梳状参数。')
+        indices=indices[keep];weights=weights[keep]*profile[keep];selected=np.zeros_like(selected);selected[indices]=True
     for j in range(3):
-        np.add.at(force,mesh['surface'][selected,j],weights[:,None]*np.asarray(source['direction'])*source['amplitude_mpa']*1e6)
+        np.add.at(force,mesh['surface'][indices,j],weights[:,None]*np.asarray(source['direction'])*source['amplitude_mpa']*1e6)
     return force,selected
+
+def prepare_excitation(mesh,scene):
+    """Version-2 loads, constraints and damping on a tetrahedral mesh; None for version 1."""
+    import math
+    from physics import scene as scene_v2
+    from physics.boundaries import build_constraints,build_damping
+    if not scene_v2.is_v2(scene):return None
+    loads=[];rows=[];selected=np.zeros(len(mesh['surface']),dtype=bool)
+    for src in scene_v2.sources(scene):
+        force,mask=nodal_load(mesh,src);loads.append((force,src));selected|=mask
+        rows.append({'name':src.get('name','primary'),'face':src['face'],'loaded_area_mm2':float(mesh['area'][mask].sum()*1e6),'triangles':int(mask.sum())})
+    constrained,constraint_rows=build_constraints(mesh['points'],scene['boundary']['fixed_face'],scene_v2.boundaries(scene))
+    total=sum(force for force,_ in loads)
+    require(not np.any(total[constrained]!=0),'激励作用在固定或对称约束的位移分量上；请改变加载方向或边界类型。')
+    material=scene['material'];speed=math.sqrt((material['lambda_pa']+2*material['mu_pa'])/material['rho_kg_m3'])
+    alpha,damping_rows=build_damping(mesh['points'],scene_v2.boundaries(scene),speed)
+    return {'loads':loads,'constrained':constrained,'alpha':alpha,'selected':selected,'area_m2':float(mesh['area'][selected].sum()),
+            'summary':{'excitation_model':'multi_source_v2','sources':rows,'constraints':constraint_rows,'damping':damping_rows}}
 
 def locate(mesh,point_mm):
     p=np.asarray(point_mm)*.001;v=mesh['points'][mesh['tetra']]
