@@ -18,4 +18,3 @@ def physics_checks(case,parts,scales):
             if boundary.any():zero_peak=max(zero_peak,float(torch.sqrt((zero[boundary].square().mean(2)*mass[boundary,None]).sum(0)/mass[boundary].sum()).max()))
             rows.append({'time_us':float(case['times'][frame]),'interior_branch_rms':rms(~boundary),'boundary_branch_rms':rms(boundary),'max_strain':float(torch.linalg.matrix_norm(strain,dim=(-2,-1)).max()),'min_J':float(jac.min())})
     return {'checks':rows,'all_free_nodes_checked':len(targets),'time_frames_checked':len(rows),'stencil':'fourth-order five-point central acceleration at output interval','normalization_from_previous_training_only':True,'zero_field_boundary_rms_peak':zero_peak,'zero_field_rejected':zero_peak>.05,'passed':all(max(r['interior_branch_rms']+r['boundary_branch_rms'])<=.05 for r in rows) and zero_peak>.05}
-

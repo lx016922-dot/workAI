@@ -76,7 +76,7 @@ class Application:
             self.current = job
             try:
                 with (directory / 'worker.log').open('wb') as log:
-                    self.process = subprocess.Popen([sys.executable, '-m', 'offline.worker', '--job-dir', str(directory)],
+                    self.process = subprocess.Popen([sys.executable, '-X', 'utf8', '-m', 'offline.worker', '--job-dir', str(directory)],
                         cwd=REPOSITORY, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
             except OSError:
                 self.fail(job, '无法启动计算进程。请检查软件包是否完整。')
@@ -220,6 +220,10 @@ def handler(application):
 
 
 def main():
+    # Embeddable Windows Python ignores PYTHONUTF8 under its isolated _pth mode.
+    # Keep redirected logs and Chinese paths readable even outside the launcher.
+    sys.stdout.reconfigure(encoding='utf-8', errors='backslashreplace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='backslashreplace')
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', type=Path, default=Path(os.environ.get('WORKAI_DATA_DIR', REPOSITORY / 'data')))
     parser.add_argument('--port', type=int, default=0)

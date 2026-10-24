@@ -18,7 +18,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='workai-package-smoke-') as temp:
         directory = Path(temp)
         log = (directory / 'server.log').open('w+', encoding='utf-8')
-        server = subprocess.Popen([sys.executable, '-m', 'offline.app', '--no-browser', '--data', str(directory / 'data')], cwd=root, stdout=log, stderr=subprocess.STDOUT)
+        server = subprocess.Popen([sys.executable, '-X', 'utf8', '-m', 'offline.app', '--no-browser', '--data', str(directory / 'data')], cwd=root, stdout=log, stderr=subprocess.STDOUT)
         try:
             deadline = time.monotonic() + 30
             address = None
