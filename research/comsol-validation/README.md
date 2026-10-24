@@ -44,6 +44,10 @@
 
 v6 已按预定四种信号、五种周期数完成 [20 组完整 5 ms 记录](https://github.com/lx016922-dot/workAI/actions/runs/40076321323)，并独立校验全部 1960 个接收点分块、零初始位移、能量和 COMSOL 比较指标。线性模态波形/频谱整组通过 **0/20**，最大点位向量波形差异的逐组范围为 **26.61%–152.08%**；能量检查 20/20 通过。模态截断、积分容差、空间细化分别 9/20、20/20、1/20 通过。见 [v6 CSV](candidate-matrix20/cases.csv) 和 [逐组完整指标](candidate-matrix20/summary.json)。较早 [v5-feasible 的 20 组结果](candidate-matrix20-v5/summary.json)也保留，未覆盖失败记录。
 
+![四种信号、五种周期的完整 5 ms 向量波形差异](candidate-matrix20/error-matrix.png)
+
+图中每格为该组八个接收点中最大的向量相对 L2 差异；并非所有分量指标的平均值。20 周期 Gaussian 的 26.61% 与矩形窗的 152.08% 均未通过 5% 门槛，不使用个别组合替代整个矩阵的验收。
+
 v6 另有 [Hann 6 周期开发记录](development-validation-v6/hann-06/metrics.json)，实际 621.74 秒完成 5 ms 三控制；相对线性模态参考最大向量差异 142.69%。同一份冻结神经网络轨迹随后用于原生 COMSOL 比较，未重新训练、对齐相位或缩放幅值。
 
 ### 原生瞬态比较
