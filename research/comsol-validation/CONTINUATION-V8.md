@@ -110,3 +110,7 @@ python -m graphwave.modal_calibration --action train \
 ```
 
 训练环境为 Python 3.12.14、NumPy 2.3.5、SciPy 1.17.0；长记录与离线重放固定 NumPy 2.2.6、SciPy 1.15.3、Numba 0.63.1。五阶物理方程、刚体运动和几何插值的 8 项测试见[检查记录](diagnostics/continuation-v8-unit-validation.json)。候选保持 `accepted_for_offline_release=false`、`scientific_accuracy_certified=false`。
+
+[下载第 8 轮离线证据包](https://github.com/lx016922-dot/workAI/releases/download/v0.3.0/WorkAI-COMSOL-physics-evidence-0.3.0-training-v8.zip)，**943,738,905 字节**。包含原始 COMSOL 数据、训练权重与约束场、训练前后各 20 组完整记录、全部指标及离线复核源码；解压后按 `REPRODUCE.txt`，使用已有 Windows / Linux 便携包的 Python 重算，无需联网或启动 COMSOL。
+
+清单中的 **4986 个文件**已在[发布流程](https://github.com/lx016922-dot/workAI/actions/runs/40102286399)逐项读回校验。归档 SHA-256 为 `01ce08c155d41648cb31720d3fb4e2b025bc85048851ba9a4ec8e16462581652`，来源提交为 `8f2ece24d5f0d54dec67757cd0f8e173fc82f963`。构建摘要、GitHub 资产摘要与实际下载的七个 ZIP 校验清单一致，见[发布核验](../release-validation/v0.3.0-training-v8-assets.json)。本次未再次整包下载；原有六个 ZIP、软件标签和默认模型均保持不变。
