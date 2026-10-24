@@ -31,6 +31,8 @@ Linux 将 `windows` 改为 `linux`。使用全新输出目录和没有预生成 
 
 当前重点为**材料非线性导波：基频与二次谐波的产生、累积**。已在恢复的线性研究引擎上新增多晶铝 Murnaghan 有限应变模型、五组本构/幅值对照、三组离散精度和材料二次谐波分析。详见[非线性 COMSOL 实现与验收记录](docs/nonlinear-comsol.md)。原始线性源码和历史结果继续保留。已完成两项非线性任务、30 次真实求解；最终空间联合对照差异 ≤0.0344%、时间步差异 ≤3.592%、双幅值比约 4，具体适用范围和跨任务证据见验收记录。
 
+新增[图网络输入层读取结论与 v2 输入设计](docs/graph-network-input-design.md)：逐项核对冻结图网络的可学习参数，求导滤波器、状态更新、能量系数与时间组合权重均已收敛到精确离散算子，网络预测与同网格、同时间步的谱元求解相对差约 1e-7；据此给出多源、任意信号、按分量约束与吸收层的输入层设计，以及粗网格算子训练的方向。
+
 新增[三维求解器扫描接入与自动网格收敛复核](docs/sweep-and-datasets.md#4-自动网格收敛复核sweep-converge)：`spectral3d.run`、`solid.run` 与二维入口共用输出结构，三维支持接收线；扫描规格用 `engine` 选择 `2d_plane_strain`、`3d_spectral` 或 `3d_tetra`。`python -m sweep converge` 对选中用例自动重算网格加密、阶次提升、时间步减半三层，按波形相对 L2 与 f/2f 幅值判定，并对非线性用例与其线性对照比较非线性增量的 A₂；结果写入 manifest 与汇总表。示例见 `docs/examples/sweep-3d-convergence.json`。
 
 新增[参数扫描与训练数据批处理框架](docs/sweep-and-datasets.md)：`python -m sweep plan|run|summarize|dataset`，支持全因子网格、显式用例、拉丁超立方/均匀采样、字段线性联动、几何分组划分；隔离进程并行、可恢复运行，manifest 记录规格与源码哈希；汇总接收线 f/2f、A₂/A₁² 拟合、相速度对理论值与 A/2A 幅值标度配对；堆叠为带划分的训练集 NPZ。示例见 `docs/examples/sweep-s0-frequency.json` 与 `dataset-random-plates.json`。
