@@ -19,6 +19,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--report', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--candidate-label', default='v6')
     args = p.parse_args()
     report = json.loads(args.report.read_text())
     kinds = [('hann', 'Hann sine'), ('gaussian', 'Gaussian sine'),
@@ -61,9 +62,10 @@ def main():
     bar.set_label('Vector relative L2 (%)', labelpad=9)
     bar.outline.set_visible(False)
     fig.suptitle('20 complete 5 ms records: maximum vector waveform difference', fontsize=16, y=.965)
-    fig.text(.5, .897, 'Neural v6 versus 80-mode COMSOL-sourced linear response; maximum over eight receiver points',
+    fig.text(.5, .897, f'Neural {args.candidate_label} versus 80-mode COMSOL-sourced linear response; maximum over eight receiver points',
              ha='center', fontsize=10.5)
-    fig.text(.19, .105, 'All 20 vector values exceed the 5% criterion. Each record contains 25,001 real samples.', fontsize=10.5)
+    failures = int(np.count_nonzero(values > 5))
+    fig.text(.19, .105, f'{failures}/20 vector values exceed the 5% criterion. Each record contains 25,001 real samples.', fontsize=10.5)
     fig.text(.19, .062,
              f'Reference checks: mode truncation {report["modal_truncation_passes"]}/20; time integration {report["time_refinement_passes"]}/20; '
              f'mesh refinement {report["mesh_refinement_passes"]}/20. Reference convergence is not certified.', fontsize=10)
@@ -72,6 +74,7 @@ def main():
     fig.savefig(args.output, dpi=160, facecolor='white')
     plt.close(fig)
     record = {'schema': 'workai.comsol_matrix_plot.v1', 'source_report_sha256': sha(args.report),
+              'candidate_label': args.candidate_label,
               'candidate_weights_sha256': report['weights_sha256'], 'source_workflow_run_url': report['workflow_run_url'],
               'plotted_measure': 'maximum vector waveform relative L2 over eight receiver points, multiplied by 100',
               'rows': [kind for kind, _ in kinds], 'columns_cycles': cycles, 'values_percent': values.tolist(),
