@@ -14,7 +14,7 @@
 | 原生 COMSOL 短时程核对 | 8 μs 六面体线性试算完成；模态重建与原生解的波形、f/2f 检查通过 | 只验证这个短窗口与网格；不外推为 5 ms 证书 |
 | 原生 COMSOL 三控制核对 | 20 μs、Hann 2 周期、8 点，线性、StVK、完整 Murnaghan 均实际求解 | v6 的三控制与几何/材料/总增量比较通过，最大归一化差异 2.3465%；本例参考尚未完成空间与时间收敛验收 |
 | 非线性物理约束训练 | 96 个训练制造场，5280 个分量约束；48 个新独立检查场；另有 24 组刚体控制检查 | v6 独立制造场最大残差 3.492%，刚体检查通过 |
-| 原生 COMSOL 5 ms 瞬态 | Hann 6 周期、8 点、25001 点，0.1 μs 内部步长线性控制已完成 | v6 最大归一化波形差异 149.13%，失败；0.05 μs 内部步长检查另行执行 |
+| 原生 COMSOL 5 ms 瞬态 | Hann 6 周期、8 点、25001 点，0.1 / 0.05 μs 内部步长线性控制均已完成 | v6 最大波形差异 149.13% / 123.33%；两次 COMSOL 结果自身相差 142.64%，时间收敛检查失败 |
 
 线性模态诊断的完整逐组数据见 [80 模态、8 点 CSV](linear-baseline20-80/cases.csv) 与 [JSON](linear-baseline20-80/summary.json)。较早的 [48 模态、2 个中心点诊断](linear-baseline20/cases.csv)保留供追溯，不能代替扩展点位后的结果。单频检查 f/2f 复数系数，扫频检查时频激励带与二倍频带；所有点位均检查 XYZ 和向量。
 
@@ -48,13 +48,26 @@ v6 已按预定四种信号、五种周期数完成 [20 组完整 5 ms 记录](h
 
 图中每格为该组八个接收点中最大的向量相对 L2 差异；并非所有分量指标的平均值。20 周期 Gaussian 的 26.61% 与矩形窗的 152.08% 均未通过 5% 门槛，不使用个别组合替代整个矩阵的验收。
 
+原始扫频频带汇总使用复系数 RMS，分母同时包含频率格、时间窗及 XYZ 分量数；它与每个时频格的向量模 RMS 相差 √3。另对 v6 五组扫频的线性响应完成了 [80 项向量模频带补充检查](diagnostics/chirp-vector-bands-v6.json)，分母只取频率格数 × 时间窗数，仍使用 5% / 1e-13 m 判据。本次两种归一化的弱信号分类和通过判定均相同，整组结论仍未通过；原始报告与轨迹未改写。
+
 v6 另有 [Hann 6 周期开发记录](development-validation-v6/hann-06/metrics.json)，实际 621.74 秒完成 5 ms 三控制；相对线性模态参考最大向量差异 142.69%。同一份冻结神经网络轨迹随后用于原生 COMSOL 比较，未重新训练、对齐相位或缩放幅值。
 
 ### 原生瞬态比较
 
-[原生 5 ms 比较](diagnostics/native-5ms-v6.json)中，最大向量波形差异为 148.86%，含 XYZ 分量的最大值为 149.13%，未通过。完整窗口的 f/2f 系数检查虽通过，但这些系数均落在 1e-13 m 弱信号门槛以内，不能据此声称主振动频谱准确。原始三维响应和全部指标均保留；图中的 P6 是预先定义的中心线点。
+[0.1 μs 内部步长的原生 5 ms 比较](diagnostics/native-5ms-v6.json)中，最大向量波形差异为 148.86%，含 XYZ 分量的最大值为 149.13%，未通过。完整窗口的 f/2f 系数检查虽通过，但这些系数均落在 1e-13 m 弱信号门槛以内，不能据此声称主振动频谱准确。原始三维响应和全部指标均保留；图中的 P6 是预先定义的中心线点。
 
 ![原生 COMSOL 与 v6 的真实 5 ms 波形和累计差异](diagnostics/native-5ms-v6-waveforms.png)
+
+同一工况的 **0.05 μs 内部步长**也已实际积分到 5 ms，求解用时 7144 秒；仍为相同 8 个四阶六面体、8 个接收点、25001 个输出时间点。参数中的 `timecheck` 会将 `max_step_us=0.1` 减半，实际步长见原生回执和日志。比较继续使用同一份冻结 v6 轨迹，未对齐或缩放。
+
+| 完整 5 ms 比较 | 最大 XYZ 分量差异 | 最大向量差异 | 波形判定 |
+| --- | ---: | ---: | --- |
+| v6 相对 0.05 μs COMSOL | 123.33% | 123.10% | 失败 |
+| 0.1 μs COMSOL 相对 0.05 μs COMSOL | 142.64% | 142.53% | 失败 |
+
+见 [候选比较](diagnostics/native-5ms-timefine-v6.json)、[时间细化比较](diagnostics/native-time-refinement.json)与[汇总](diagnostics/native-time-refinement-summary.json)。两项比较的 64 个 f/2f 复系数也都属于弱信号检查；不能据此抵消波形失败。**这两次原生参考尚未通过时间收敛验收**，细步长也不自动成为真值；空间收敛与完整 5 ms 非线性三控制同样未获认证。较小的候选差异来自参考变化，不是新一轮训练改善。
+
+[查看 0.05 μs COMSOL 与冻结 v6 的完整波形对照图](diagnostics/native-5ms-timefine-v6-waveforms.png)。所有差异按全部原始采样计算，原始失败记录保留。
 
 [20 μs 三控制检查](diagnostics/native-nonlinear-20us-v6.json)采用 Hann 2 周期、0.22 MHz、1 MPa，COMSOL 内部步长 0.01 μs。所有点位 XYZ 与向量的波形、f/2f 复系数检查通过；可计算相对误差的波形分量最大值如下，弱信号另用 1e-13 m 绝对门槛：
 
@@ -71,6 +84,8 @@ v6 另有 [Hann 6 周期开发记录](development-validation-v6/hann-06/metrics.
 
 更细 COMSOL 网格的主模态频率仍从 160830.526 Hz 变化到 160822.173 Hz，差 8.354 Hz，在 5 ms 中对应约 15.04° 相位差。它满足用于研究训练的 0.01% 频率筛选，却不满足长记录所要求的 0.5 Hz 参考筛选。物理约束增加后仍需解决空间离散与长期相位误差，不能靠继续降低训练损失宣布准确。
 
+v6 主模态相对当前 h=0.4 mm 标签仍差 199.108 Hz，5 ms 累积约 358.39°，见 [各模态记录](training/v6/frequencies.csv)。在等幅、同初相、单频且相位差较小的理想情况下，整窗相对 L2 近似为 \(2\pi|\Delta f|T/\sqrt3\)；T=5 ms 时，5% 对应约 2.76 Hz。该近似只说明长期相位要求，实际多模态、非线性结果仍按完整记录验收，不用这个公式替代仿真对比。
+
 ## 原生 COMSOL 任务与失败记录
 
 - h=0.5 mm、80 模态：`comsol-6b6cec683bd04dcfb426b1a2a123f143`。
@@ -81,7 +96,7 @@ v6 另有 [Hann 6 周期开发记录](development-validation-v6/hann-06/metrics.
 - DOPRI5 开发试算：`comsol-317647a1e3a240e18365bf187feaacf9`，刚性与非有限值错误，不用于训练。
 - 原生 5 ms 线性任务：`comsol-5ad4631fb9cb42d6a4404db8287e530b`，Hann 6 周期、8 点、0.1 μs 内部步长，已完成并校验；与 v6 比较失败。
 - 原生 20 μs 三控制：`comsol-a8829266780c4a69890f438967bdd3ba`，已完成并校验。
-- 0.05 μs 时间细化任务：`comsol-d76645ce4270458abce5add03c3dacad`，与首组保持相同物理场景和输出时刻；该附加检查独立报告，不能把提交或运行状态计作完成。
+- 0.05 μs 时间细化任务：`comsol-d76645ce4270458abce5add03c3dacad`，与首组保持相同物理场景和输出时刻，已完成并校验；时间细化与 v6 波形比较均失败。
 
 [data/](data/)保留完成或失败的原始 CSV、MPH、日志、模型输入、源码和回执。CSV 如采用 `workai_gzip_csv_v1` 容器，按回执校验解压后的字节数与 SHA-256，保留原始 17 位有效数字；不是低精度重采样。传输时已校验服务签名，公开包保存哈希与签名校验记录；原始签名响应头没有存档，故不宣称公开包支持第三方独立重放密码学签名验证。
 
@@ -103,3 +118,25 @@ python -m graphwave.modal_calibration --action train \
 ```
 
 当前训练入口会先投影完整滤波器，并在输出前执行物理可行性回退。各轮精确源码保存在该轮 `source_snapshot/`，可复现历史版本。7 项独立物理与模态时间响应测试通过；测试通过不等于长波形准确。
+
+从仓库中的原生数据和冻结轨迹复算时间细化与候选比较，不需要重新启动 COMSOL：
+
+```sh
+python tools/compare-comsol-reference.py \
+  --case research/comsol-validation/data/native-5ms-linear-timecheck-01 \
+  --other research/comsol-validation/data/native-5ms-linear-01 \
+  --output replay/native-time-refinement.json
+python tools/compare-comsol-reference.py \
+  --case research/comsol-validation/data/native-5ms-linear-timecheck-01 \
+  --prediction-archive research/comsol-validation/development-validation-v6/hann-06 \
+  --output replay/native-5ms-timefine-v6.json
+```
+
+发布页的 `WorkAI-COMSOL-physics-evidence-0.3.0-supplement.zip` 是另行保存的完整科学证据快照，含此次时间细化和扫频补充检查；不覆盖原四个发布 ZIP。将其解压到 `evidence/` 后，可用固定 NumPy 2.2.6、SciPy 1.15.3 复算扫频补充检查：
+
+```sh
+python tools/check-comsol-chirp-vector-bands.py \
+  --input evidence/candidate-cases \
+  --audit research/comsol-validation/candidate-matrix20/summary.json \
+  --output replay/chirp-vector-bands-v6.json
+```

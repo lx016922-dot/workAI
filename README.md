@@ -10,7 +10,7 @@
 
 支持 Hann 窗正弦、Gaussian 窗正弦（6σ 截断）、矩形窗正弦、Hann 窗线性扫频，以及 1–20 周期。本轮固定 **4 种信号 × 1、3、5、10、20 周期**，每组实际计算 5 ms；验证对象为一个固定端 8 × 3 × 1.5 mm 铝板、2.5 mm 单元、四阶预测与五阶独立数值参考。它不代表任意几何、默认 1.4 mm 网格或实验精度。详见 [20 组数值验证与误差诊断](research/long-validation/README.md) 和 [逐组 CSV](research/long-validation/cases.csv)。
 
-另已完成真实 COMSOL 三维求解，并将纵向、两个横向的完整 Murnaghan 运动方程、边界牵引、能量与内功率加入修正训练。v6 在 48 个独立制造场上的最大物理残差为 3.492%，24 组刚体控制检查通过。原生 COMSOL 的 20 μs 三控制核对最大差异 2.3465%；原生 5 ms 线性核对最大波形差异仍为 149.13%。新候选的 20 组 COMSOL 线性模态比较也全部完成并复核，整组通过数 0/20，参考收敛尚不充分。这些结果不能称为 5 ms 精度达标，新候选暂不替换默认模型。见 [COMSOL 与训练报告](research/comsol-validation/README.md) 和 [非线性方程](research/comsol-validation/NONLINEAR-PHYSICS.md)。
+另已完成真实 COMSOL 三维求解，并将纵向、两个横向的完整 Murnaghan 运动方程、边界牵引、能量与内功率加入修正训练。v6 在 48 个独立制造场上的最大物理残差为 3.492%，24 组刚体控制检查通过。原生 COMSOL 的 20 μs 三控制核对最大差异 2.3465%；原生 5 ms 线性核对在 0.1 / 0.05 μs 内部步长下，最大波形差异分别为 149.13% / 123.33%。COMSOL 粗、细时间步结果自身最大差异为 142.64%，时间收敛检查失败。新候选的 20 组 COMSOL 线性模态比较也全部完成并复核，整组通过数 0/20，参考收敛尚不充分。这些结果不能称为 5 ms 精度达标，新候选暂不替换默认模型。见 [COMSOL 与训练报告](research/comsol-validation/README.md) 和 [非线性方程](research/comsol-validation/NONLINEAR-PHYSICS.md)。
 
 继续训练保留原有 120 个参数，新增 36 个五阶空间导数系数，并训练四阶时间组合系数。独立的八个新结构只验证 **14 μs**，其结果与 5 ms 矩阵分开报告：[继续训练与八例检查](research/continued-training/README.md)。模型仍依赖网格并逐时传播，不进行预测后的数值校正。长记录作为研究功能发布，`long_accuracy_certified=false`。
 
