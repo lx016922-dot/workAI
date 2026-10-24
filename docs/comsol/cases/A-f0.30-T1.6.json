@@ -1,0 +1,477 @@
+{
+ "schema": "workai.comsol.case.v1",
+ "case_id": "A-f0.30-T1.6",
+ "family": "A",
+ "priority": "P3",
+ "label_split": "validation",
+ "geometry": {
+  "kind": "plate",
+  "x_mm": [
+   0.0,
+   48.0
+  ],
+  "y_mm": [
+   0.0,
+   2.0
+  ],
+  "z_mm": [
+   0.0,
+   1.6
+  ],
+  "symmetry_planes": [
+   "ymax"
+  ],
+  "note": "half model: the y = width face is a symmetry plane (u_y = 0); every other face is traction-free except the loads"
+ },
+ "material": {
+  "rho_kg_m3": 2700.0,
+  "lambda_pa": 58100000000.0,
+  "mu_pa": 26100000000.0,
+  "l_pa": -143000000000.0,
+  "m_pa": -297000000000.0,
+  "n_pa": -345000000000.0
+ },
+ "controls": [
+  "linear",
+  "stvk",
+  "murnaghan"
+ ],
+ "sources": [
+  {
+   "name": "primary",
+   "face": "zmax",
+   "center_mm": [
+    16.0,
+    1.0,
+    1.6
+   ],
+   "direction": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "amplitude_mpa": 1.0,
+   "frequency_mhz": 0.3,
+   "cycles": 5.0,
+   "delay_us": 0.0,
+   "phase_deg": 0.0,
+   "window": "hann",
+   "profile": {
+    "type": "gaussian",
+    "sigma_mm": 2.0
+   },
+   "traction": "T0 = amplitude * w(X) * s(t) * direction, nominal traction per reference area (dead load, fixed direction)"
+  }
+ ],
+ "absorbing": [
+  {
+   "face": "xmin",
+   "inner_edge_x_mm": 8.0,
+   "outer_face_x_mm": 0.0,
+   "length_mm": 8.0,
+   "ramp_power": 3,
+   "alpha_max_per_s": 22075615.536638446,
+   "formula": "alpha(x) = alpha_max * clip((length - |x - outer_face_x|) / length, 0, 1) ** ramp_power",
+   "body_load": "f = -rho0 * alpha(x) * du/dt   (per reference volume, all three components)"
+  },
+  {
+   "face": "xmax",
+   "inner_edge_x_mm": 40.0,
+   "outer_face_x_mm": 48.0,
+   "length_mm": 8.0,
+   "ramp_power": 3,
+   "alpha_max_per_s": 22075615.536638446,
+   "formula": "alpha(x) = alpha_max * clip((length - |x - outer_face_x|) / length, 0, 1) ** ramp_power",
+   "body_load": "f = -rho0 * alpha(x) * du/dt   (per reference volume, all three components)"
+  }
+ ],
+ "output": {
+  "t_start_us": 0.0,
+  "t_end_us": 30.0,
+  "step_us": 0.05,
+  "samples": 601,
+  "receivers": [
+   {
+    "name": "P_far",
+    "point_mm": [
+     36.0,
+     1.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "columns": [
+     "P_far_ux_m",
+     "P_far_uy_m",
+     "P_far_uz_m"
+    ]
+   },
+   {
+    "name": "top[0]",
+    "point_mm": [
+     22.0,
+     1.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "columns": [
+     "top_0_ux_m",
+     "top_0_uy_m",
+     "top_0_uz_m"
+    ]
+   },
+   {
+    "name": "top[1]",
+    "point_mm": [
+     25.0,
+     1.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "columns": [
+     "top_1_ux_m",
+     "top_1_uy_m",
+     "top_1_uz_m"
+    ]
+   },
+   {
+    "name": "top[2]",
+    "point_mm": [
+     28.0,
+     1.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "columns": [
+     "top_2_ux_m",
+     "top_2_uy_m",
+     "top_2_uz_m"
+    ]
+   },
+   {
+    "name": "top[3]",
+    "point_mm": [
+     31.0,
+     1.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "columns": [
+     "top_3_ux_m",
+     "top_3_uy_m",
+     "top_3_uz_m"
+    ]
+   },
+   {
+    "name": "top[4]",
+    "point_mm": [
+     34.0,
+     1.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "columns": [
+     "top_4_ux_m",
+     "top_4_uy_m",
+     "top_4_uz_m"
+    ]
+   },
+   {
+    "name": "top[5]",
+    "point_mm": [
+     37.0,
+     1.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ],
+    "columns": [
+     "top_5_ux_m",
+     "top_5_uy_m",
+     "top_5_uz_m"
+    ]
+   },
+   {
+    "name": "mid[0]",
+    "point_mm": [
+     22.0,
+     1.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "columns": [
+     "mid_0_ux_m",
+     "mid_0_uy_m",
+     "mid_0_uz_m"
+    ]
+   },
+   {
+    "name": "mid[1]",
+    "point_mm": [
+     25.0,
+     1.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "columns": [
+     "mid_1_ux_m",
+     "mid_1_uy_m",
+     "mid_1_uz_m"
+    ]
+   },
+   {
+    "name": "mid[2]",
+    "point_mm": [
+     28.0,
+     1.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "columns": [
+     "mid_2_ux_m",
+     "mid_2_uy_m",
+     "mid_2_uz_m"
+    ]
+   },
+   {
+    "name": "mid[3]",
+    "point_mm": [
+     31.0,
+     1.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "columns": [
+     "mid_3_ux_m",
+     "mid_3_uy_m",
+     "mid_3_uz_m"
+    ]
+   },
+   {
+    "name": "mid[4]",
+    "point_mm": [
+     34.0,
+     1.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "columns": [
+     "mid_4_ux_m",
+     "mid_4_uy_m",
+     "mid_4_uz_m"
+    ]
+   },
+   {
+    "name": "mid[5]",
+    "point_mm": [
+     37.0,
+     1.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ],
+    "columns": [
+     "mid_5_ux_m",
+     "mid_5_uy_m",
+     "mid_5_uz_m"
+    ]
+   }
+  ]
+ },
+ "reference": {
+  "P_far_projected_peak_nm": -13.673706200539877,
+  "P_far_peak_time_us": 16.0,
+  "max_abs_projected_nm": 17.092648682866578
+ },
+ "scene_v2": {
+  "schema": "workai.hyperelastic.solid.v2",
+  "name": "铝板",
+  "geometry": {
+   "kind": "plate",
+   "length_mm": 48.0,
+   "width_mm": 2.0,
+   "thickness_mm": 1.6,
+   "outer_radius_mm": 3.0,
+   "inner_radius_mm": 2.0,
+   "hole_radius_mm": 0.7,
+   "hole_x_mm": 6.0,
+   "hole_y_mm": 2.0,
+   "notch_x_mm": 6.0,
+   "notch_width_mm": 1.0,
+   "notch_depth_mm": 0.6
+  },
+  "material": {
+   "rho_kg_m3": 2700.0,
+   "lambda_pa": 58100000000.0,
+   "mu_pa": 26100000000.0,
+   "l_pa": -143000000000.0,
+   "m_pa": -297000000000.0,
+   "n_pa": -345000000000.0
+  },
+  "source": {
+   "face": "zmax",
+   "center_mm": [
+    16.0,
+    1.0,
+    1.6
+   ],
+   "radius_mm": 0.0,
+   "direction": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "amplitude_mpa": 1.0,
+   "frequency_mhz": 0.3,
+   "cycles": 5.0,
+   "delay_us": 0.0,
+   "phase_deg": 0.0,
+   "signal": {
+    "type": "tone_burst",
+    "window": "hann"
+   },
+   "profile": {
+    "type": "gaussian",
+    "sigma_mm": 2.0
+   }
+  },
+  "boundary": {
+   "fixed_face": "none"
+  },
+  "acquisition": {
+   "duration_us": 30.0,
+   "sample_step_us": 0.05
+  },
+  "numerics": {
+   "h_mm": 1.5,
+   "cfl": 0.3,
+   "max_elements": 40000
+  },
+  "receivers": [
+   {
+    "name": "P_far",
+    "point_mm": [
+     36.0,
+     1.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   }
+  ],
+  "sources": [],
+  "boundaries": [
+   {
+    "type": "absorbing",
+    "face": "xmin",
+    "length_mm": 8.0,
+    "ramp": "cubic",
+    "attenuation_db": 60.0
+   },
+   {
+    "type": "absorbing",
+    "face": "xmax",
+    "length_mm": 8.0,
+    "ramp": "cubic",
+    "attenuation_db": 60.0
+   },
+   {
+    "type": "symmetry",
+    "face": "ymax"
+   }
+  ],
+  "dimension": "3d",
+  "receiver_lines": [
+   {
+    "name": "top",
+    "from_mm": [
+     22.0,
+     1.0,
+     1.6
+    ],
+    "to_mm": [
+     37.0,
+     1.0,
+     1.6
+    ],
+    "count": 6,
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "mid",
+    "from_mm": [
+     22.0,
+     1.0,
+     0.8
+    ],
+    "to_mm": [
+     37.0,
+     1.0,
+     0.8
+    ],
+    "count": 6,
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   }
+  ]
+ }
+}
