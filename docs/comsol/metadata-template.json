@@ -1,0 +1,104 @@
+{
+ "comsol_version": "6.4 build 293",
+ "element": {
+  "shape": "hexahedral, swept",
+  "order": "quadratic Lagrange (or quartic)",
+  "discretization": "displacement, total Lagrangian (P = F S)"
+ },
+ "max_element_size_mm": {
+  "x": 0.4,
+  "y": 0.4,
+  "z": 0.4
+ },
+ "elements": 0,
+ "dofs": 0,
+ "integration_order": 12,
+ "time_stepping": {
+  "method": "generalized-alpha",
+  "rho_infinity": 1.0,
+  "max_step_us": 0.01,
+  "output_step_us": 0.05,
+  "steps": "strict"
+ },
+ "tolerances": {
+  "time_relative": 1e-06,
+  "newton": "relative change of displacement <= 1e-8 or equivalent",
+  "notes": ""
+ },
+ "load": {
+  "type": "nominal traction per reference area (dead load, fixed direction)"
+ },
+ "absorbing": {
+  "method": "body load f = -rho0*alpha(x)*du/dt in the absorbing domains",
+  "alpha_max_per_s": 22075615.536638446,
+  "ramp_power": 3
+ },
+ "material_check": {
+  "uniaxial_E11_1e-3_S_MPa": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0
+   ]
+  ],
+  "shear_E12_1e-3_S_MPa": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0
+   ]
+  ],
+  "general_S_MPa": [
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0
+   ]
+  ]
+ },
+ "runs": {
+  "linear": {
+   "solve_time_s": 0,
+   "time_steps": 0,
+   "max_green_strain": 0,
+   "min_J": 1
+  },
+  "stvk": {},
+  "murnaghan": {},
+  "linear_mesh2": {},
+  "murnaghan_mesh2": {},
+  "linear_dt2": {},
+  "murnaghan_dt2": {}
+ },
+ "notes": ""
+}
