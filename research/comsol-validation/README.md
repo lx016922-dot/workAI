@@ -12,8 +12,9 @@
 | COMSOL 线性模态长记录诊断 | 四种信号 × 1/3/5/10/20 周期，8 个点、每组 25001 点；与此前冻结的实际神经网络记录比较 | 20/20 完成，0/20 通过全部比较；结果不是 20 次原生 COMSOL 瞬态求解 |
 | 线性参考自身检查 | 48/80 模态截断 9/20 通过，时间积分细化 20/20 通过，h=0.5/0.4 mm 空间检查 1/20 通过 | 参考尚不满足全部长时程收敛要求，不能称为已收敛真值 |
 | 原生 COMSOL 短时程核对 | 8 μs 六面体线性试算完成；模态重建与原生解的波形、f/2f 检查通过 | 只验证这个短窗口与网格；不外推为 5 ms 证书 |
+| 原生 COMSOL 三控制核对 | 20 μs、Hann 2 周期、8 点，线性、StVK、完整 Murnaghan 均实际求解 | v6 的三控制与几何/材料/总增量比较通过，最大归一化差异 2.3465%；本例参考尚未完成空间与时间收敛验收 |
 | 非线性物理约束训练 | 96 个训练制造场，5280 个分量约束；48 个新独立检查场；另有 24 组刚体控制检查 | v6 独立制造场最大残差 3.492%，刚体检查通过 |
-| 原生 COMSOL 5 ms 瞬态 | 单独保留任务与实际状态，见下文 | 运行中、完成、比较通过、参考收敛四种状态分开记录 |
+| 原生 COMSOL 5 ms 瞬态 | Hann 6 周期、8 点、25001 点，0.1 μs 内部步长线性控制已完成 | v6 最大归一化波形差异 149.13%，失败；0.05 μs 内部步长检查另行执行 |
 
 线性模态诊断的完整逐组数据见 [80 模态、8 点 CSV](linear-baseline20-80/cases.csv) 与 [JSON](linear-baseline20-80/summary.json)。较早的 [48 模态、2 个中心点诊断](linear-baseline20/cases.csv)保留供追溯，不能代替扩展点位后的结果。单频检查 f/2f 复数系数，扫频检查时频激励带与二倍频带；所有点位均检查 XYZ 和向量。
 
@@ -41,7 +42,28 @@
 
 `v5-feasible` 的 [Hann 6 周期开发验证](development-validation/hann-06/metrics.json)已真实完成 5000 μs、25001 点、8 个接收点和三个控制，耗时 542.80 秒；原始轨迹保存在同目录 `traces.npz`。三组能量收支相对差约 6.1e-10，但相对 COMSOL 80 模态线性参考的最大向量波形差异为 **142.71%**，未通过；该参考自身的空间检查也未通过。新增约束不能替代长期相位与参考收敛检查。
 
-新候选另按预定四种信号、五种周期数执行 [20 组完整 5 ms 记录](https://github.com/lx016922-dot/workAI/actions/runs/40073476561)。工作流执行完成不代表精度通过；最终逐组结果需校验所有原始分块并重新计算比较指标。
+v6 已按预定四种信号、五种周期数完成 [20 组完整 5 ms 记录](https://github.com/lx016922-dot/workAI/actions/runs/40076321323)，并独立校验全部 1960 个接收点分块、零初始位移、能量和 COMSOL 比较指标。线性模态波形/频谱整组通过 **0/20**，最大点位向量波形差异的逐组范围为 **26.61%–152.08%**；能量检查 20/20 通过。模态截断、积分容差、空间细化分别 9/20、20/20、1/20 通过。见 [v6 CSV](candidate-matrix20/cases.csv) 和 [逐组完整指标](candidate-matrix20/summary.json)。较早 [v5-feasible 的 20 组结果](candidate-matrix20-v5/summary.json)也保留，未覆盖失败记录。
+
+v6 另有 [Hann 6 周期开发记录](development-validation-v6/hann-06/metrics.json)，实际 621.74 秒完成 5 ms 三控制；相对线性模态参考最大向量差异 142.69%。同一份冻结神经网络轨迹随后用于原生 COMSOL 比较，未重新训练、对齐相位或缩放幅值。
+
+### 原生瞬态比较
+
+[原生 5 ms 比较](diagnostics/native-5ms-v6.json)中，最大向量波形差异为 148.86%，含 XYZ 分量的最大值为 149.13%，未通过。完整窗口的 f/2f 系数检查虽通过，但这些系数均落在 1e-13 m 弱信号门槛以内，不能据此声称主振动频谱准确。原始三维响应和全部指标均保留；图中的 P6 是预先定义的中心线点。
+
+![原生 COMSOL 与 v6 的真实 5 ms 波形和累计差异](diagnostics/native-5ms-v6-waveforms.png)
+
+[20 μs 三控制检查](diagnostics/native-nonlinear-20us-v6.json)采用 Hann 2 周期、0.22 MHz、1 MPa，COMSOL 内部步长 0.01 μs。所有点位 XYZ 与向量的波形、f/2f 复系数检查通过；可计算相对误差的波形分量最大值如下，弱信号另用 1e-13 m 绝对门槛：
+
+| 响应 | 最大波形差异 |
+| --- | ---: |
+| 线性 | 0.9352% |
+| StVK | 0.9352% |
+| 完整 Murnaghan | 0.9352% |
+| 几何增量 | 0.7776% |
+| 材料增量 | 2.2852% |
+| 总非线性增量 | 2.3465% |
+
+这是单个短时程工况的原生三控制核对，不能代替全部 20 组、5 ms 的原生非线性验证；参考本身尚未取得本例空间/时间收敛证明。
 
 更细 COMSOL 网格的主模态频率仍从 160830.526 Hz 变化到 160822.173 Hz，差 8.354 Hz，在 5 ms 中对应约 15.04° 相位差。它满足用于研究训练的 0.01% 频率筛选，却不满足长记录所要求的 0.5 Hz 参考筛选。物理约束增加后仍需解决空间离散与长期相位误差，不能靠继续降低训练损失宣布准确。
 
@@ -53,7 +75,9 @@
 - 常量矩阵复用试算：`comsol-72db9b3961594c22bd2b81ce52a49433`，与原试算相对差 4.87e-15；没有据此宣称加速。
 - BDF5 开发试算：`comsol-a8718a74aba54b039cb78b5525a6afb9`，在 145.485 μs 求解失败，不构成完整 200 μs 参考。
 - DOPRI5 开发试算：`comsol-317647a1e3a240e18365bf187feaacf9`，刚性与非有限值错误，不用于训练。
-- 原生 5 ms 线性任务：`comsol-5ad4631fb9cb42d6a4404db8287e530b`，Hann 6 周期、8 点、0.1 μs 内部步长；另准备 0.05 μs 时间细化任务 `comsol-d76645ce4270458abce5add03c3dacad`。完整收集及比较前不计作完成或通过。
+- 原生 5 ms 线性任务：`comsol-5ad4631fb9cb42d6a4404db8287e530b`，Hann 6 周期、8 点、0.1 μs 内部步长，已完成并校验；与 v6 比较失败。
+- 原生 20 μs 三控制：`comsol-a8829266780c4a69890f438967bdd3ba`，已完成并校验。
+- 0.05 μs 时间细化任务：`comsol-d76645ce4270458abce5add03c3dacad`，与首组保持相同物理场景和输出时刻；该附加检查独立报告，不能把提交或运行状态计作完成。
 
 [data/](data/)保留完成或失败的原始 CSV、MPH、日志、模型输入、源码和回执。CSV 如采用 `workai_gzip_csv_v1` 容器，按回执校验解压后的字节数与 SHA-256，保留原始 17 位有效数字；不是低精度重采样。传输时已校验服务签名，公开包保存哈希与签名校验记录；原始签名响应头没有存档，故不宣称公开包支持第三方独立重放密码学签名验证。
 
@@ -70,7 +94,7 @@ python -m graphwave.modal_calibration --action train \
   --reference research/comsol-validation/data/eigen-half-05 \
   --check-reference research/comsol-validation/data/eigen-finer-05 \
   --consistency-order 1 --physics-samples 96 --physics-validation-samples 48 \
-  --physics-seed 2026102419 --physics-weight 30 --optimizer slsqp \
+  --physics-seed 2026102433 --physics-weight 30 --optimizer slsqp \
   --physics-limit .035 --gradient-step .00001 --output new-training-run
 ```
 

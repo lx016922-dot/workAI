@@ -7,6 +7,11 @@ on:
         required: true
         default: v0.3.0
         type: string
+      evidence_only:
+        description: Refresh supplemental research evidence without rebuilding the frozen software
+        required: true
+        default: false
+        type: boolean
 permissions:
   contents: write
   actions: read
@@ -14,6 +19,7 @@ env:
   WORKAI_RELEASE_TAG: ${{ inputs.tag }}
 jobs:
   package:
+    if: ${{ !inputs.evidence_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -88,8 +94,43 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$WORKAI_RELEASE_TAG" evidence/*.zip evidence/SHA256SUMS-validation.txt --repo "$GITHUB_REPOSITORY" --clobber
+  comsol-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Read the audited workflow identity
+        id: audited
+        shell: python
+        run: |
+          import json,os,re
+          from pathlib import Path
+          report=json.loads(Path('research/comsol-validation/candidate-matrix20/summary.json').read_text())
+          match=re.fullmatch(r'https://github.com/lx016922-dot/workAI/actions/runs/([0-9]+)',report['workflow_run_url'])
+          assert match and report['completed_cases']==20 and report['metrics_independently_recomputed']
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('run_id='+match.group(1)+'\n')
+      - name: Retrieve the completed constrained-candidate validation
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.audited.outputs.run_id }}
+          pattern: comsol-linear-*
+          path: comsol-artifacts
+      - name: Verify and archive COMSOL and nonlinear physics evidence
+        env:
+          WORKAI_EVIDENCE_COMMIT: ${{ github.sha }}
+        run: python tools/package-comsol-evidence.py --input comsol-artifacts --output comsol-evidence
+      - name: Upload scientific evidence to the prepared draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$WORKAI_RELEASE_TAG" comsol-evidence/*.zip comsol-evidence/SHA256SUMS-comsol.txt --repo "$GITHUB_REPOSITORY" --clobber
   checksums:
-    needs: [package, evidence]
+    needs: [package, evidence, comsol-evidence]
+    if: ${{ always() && (needs.package.result == 'success' || needs.package.result == 'skipped') && needs.evidence.result == 'success' && needs.comsol-evidence.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Publish the combined checksum file
