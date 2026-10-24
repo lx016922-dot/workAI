@@ -19,10 +19,10 @@ CONSTRAINT_GROUPS=('momentum_interior','momentum_boundary','traction','strain_en
 
 def rigid_motion_checks(derivative,weights):
     """Finite-rotation objectivity of the actual learned graph layer, in SI units."""
-    nodes,w,_,_=gll(4);size=np.array([.0017,.0021,.0013])
+    degree=len(derivative)-1;nodes,w,_,_=gll(degree);n=degree+1;size=np.array([.0017,.0021,.0013])
     coordinates=np.stack(np.meshgrid(nodes,nodes,nodes,indexing='ij'),-1).reshape(-1,3)*size/2
-    cells=np.arange(125,dtype=np.int32).reshape(1,5,5,5)
-    inverse=np.broadcast_to(np.diag(2/size),(1,5,5,5,3,3)).copy()
+    cells=np.arange(n**3,dtype=np.int32).reshape(1,n,n,n)
+    inverse=np.broadcast_to(np.diag(2/size),(1,n,n,n,3,3)).copy()
     volume=np.einsum('i,j,k->ijk',w,w,w)[None]*np.prod(size)/8
     fields=[]
     for axis in range(3):
@@ -31,7 +31,7 @@ def rigid_motion_checks(derivative,weights):
             rotation=np.eye(3);rotation[i,i]=rotation[j,j]=np.cos(angle)
             rotation[i,j]=-np.sin(angle);rotation[j,i]=np.sin(angle)
             fields.append((f'rotation_axis_{axis}_angle_{angle}',coordinates@(rotation-np.eye(3)).T))
-    for axis in range(3):fields.append((f'translation_axis_{axis}',np.broadcast_to(np.eye(3)[axis]*.001,(125,3)).copy()))
+    for axis in range(3):fields.append((f'translation_axis_{axis}',np.broadcast_to(np.eye(3)[axis]*.001,(n**3,3)).copy()))
     records=[]
     for name,field in fields:
         for law in [1,2]:
@@ -97,8 +97,8 @@ def polynomial_field(coefficients,exponents,coordinates,size):
     return u,gradient,hessian
 
 
-def make_dataset(material,count=48,seed=2026102413):
-    rng=np.random.default_rng(seed);nodes,w,_,_=gll(4);n=len(nodes)
+def make_dataset(material,count=48,seed=2026102413,degree=4):
+    rng=np.random.default_rng(seed);nodes,w,_,_=gll(degree);n=len(nodes)
     xyz=np.stack(np.meshgrid(nodes,nodes,nodes,indexing='ij'),-1).reshape(-1,3)
     exponents=np.array([p for p in product(range(4),repeat=3) if 1<=sum(p)<=3])
     cells=np.arange(n**3,dtype=np.int32).reshape(1,n,n,n);items=[]
@@ -194,7 +194,7 @@ def evaluate(derivative,weights,dataset,*,details=False):
         for name,mask in [('momentum_interior',item['interior']),('momentum_boundary',~item['interior'])]:
             values=normalized[:,mask];groups[name]=np.sqrt(np.mean(values**2,axis=1))
             residuals.append(values.ravel()/np.sqrt(values.size*len(dataset)))
-        local=item['u'].reshape(5,5,5,3)
+        n=len(derivative);local=item['u'].reshape(n,n,n,3)
         grad=np.stack([np.einsum('ia,ajkc->ijkc',derivative,local),np.einsum('ja,iakc->ijkc',derivative,local),
                        np.einsum('ka,ijac->ijkc',derivative,local)],-1).reshape(-1,3,3)@item['inverse'][0,0,0,0]
         stress=_parts(_stresses(np.ascontiguousarray(grad),weights['quadratic_tensor'],weights['cubic_tensor']))

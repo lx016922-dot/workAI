@@ -14,6 +14,11 @@ on:
         description: Independently meshed COMSOL eigenpair folder under the same data root
         required: true
         type: string
+      plan:
+        description: Committed validation plan JSON below research
+        required: true
+        default: research/long-validation/plan.json
+        type: string
 permissions:
   contents: read
 jobs:
@@ -33,6 +38,7 @@ jobs:
       WORKAI_CANDIDATE: ${{ inputs.candidate }}
       WORKAI_REFERENCE: ${{ inputs.reference }}
       WORKAI_REFINEMENT: ${{ inputs.refinement }}
+      WORKAI_PLAN: ${{ inputs.plan }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -49,10 +55,14 @@ jobs:
               value=os.environ[name]
               assert re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}',value), 'Invalid dataset name'
               assert (Path('research/comsol-validation')/parent/value).is_dir(), 'Dataset must already be committed'
+          plan=os.environ['WORKAI_PLAN']
+          assert re.fullmatch(r'research/(?:[a-z0-9][a-z0-9-]*/)*[a-z0-9][a-z0-9-]*[.]json',plan), 'Invalid plan path'
+          assert Path(plan).is_file(), 'Plan must already be committed'
           PY
       - name: Predict full 5 ms before loading COMSOL modal labels
         run: >-
           python tools/run-comsol-linear-case.py
+          --plan "$WORKAI_PLAN"
           --case '${{ matrix.signal }}-${{ matrix.cycles }}'
           --weights "research/comsol-validation/training/$WORKAI_CANDIDATE/candidate-weights.npz"
           --reference "research/comsol-validation/data/$WORKAI_REFERENCE"

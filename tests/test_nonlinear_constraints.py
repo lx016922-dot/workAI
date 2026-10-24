@@ -7,6 +7,28 @@ MATERIAL={'lambda_pa':58.1e9,'mu_pa':26.1e9,'l_pa':-143e9,'m_pa':-297e9,'n_pa':-
 
 
 class NonlinearMomentumTest(unittest.TestCase):
+    def test_fifth_order_constraints_and_mode_sampling(self):
+        from graphwave.nonlinear_constraints import rigid_motion_checks
+        from graphwave.modal_calibration import modal_sampling,project_filter_consistency
+        from spectral3d.mesh import gll,make_mesh
+        root=Path(__file__).resolve().parents[1]
+        import json
+        scene=json.loads((root/'research/comsol-validation/data/eigen-030-v7/scene.json').read_text())['scene']
+        with np.load(root/'offline/model/continued-weights.npz',allow_pickle=False) as saved:weights=dict(saved)
+        nodes,_,exact,_=gll(5)
+        derivative=project_filter_consistency(weights['derivative_5'],nodes,1)
+        self.assertTrue(rigid_motion_checks(derivative,weights)['passed'])
+        patches=make_dataset(MATERIAL,12,2026102480,degree=5)
+        _,report=evaluate(exact,weights,patches,details=True)
+        self.assertTrue(report['all_physical_checks_within_5_percent'])
+        broken=exact.copy();broken[0,0]+=.2;broken[0,1]-=.2
+        _,failure=evaluate(broken,weights,patches,details=True)
+        self.assertFalse(failure['all_physical_checks_within_5_percent'])
+        source=make_mesh(scene,5,2.5);target=make_mesh(scene,4,2.5)
+        def field(x):return np.stack([x[:,0]**3,x[:,0]*x[:,1],x[:,2]**2],axis=-1)[None]
+        sampled=modal_sampling(source,target['points'])(field(source['points']))
+        np.testing.assert_allclose(sampled,field(target['points']),rtol=1e-12,atol=1e-18)
+
     def test_learned_affine_filter_does_not_create_force_under_finite_rigid_rotation(self):
         from graphwave.modal_calibration import filter_basis,project_filter_consistency
         from graphwave.buffered_inference import graph_message

@@ -59,7 +59,9 @@ def main():
                      'initial_phase_drift_degrees_at_5ms':before*1.8,'candidate_phase_drift_degrees_at_5ms':after*1.8})
     with (args.output/'frequencies.csv').open('w') as file:
         writer=csv.DictWriter(file,fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)
+    degree=config.get('candidate_degree',4);h_mm=config.get('candidate_h_mm',2.5)
     summary={'schema':'workai.comsol_training_summary.v1','weights_sha256':training['weights_sha256'],
+             'candidate_degree':degree,'candidate_h_mm':h_mm,
              'actual_comsol_development_jobs':[ref['identity']['job_id'],check['identity']['job_id']],
              'training_mode_indices':training['training_mode_indices'],
              'training_initial_frequency_error_norm_hz':training['initial_training_error_norm_hz'],
@@ -86,7 +88,7 @@ def main():
              'rigid_motion_maxima':training.get('rigid_motion_maxima'),
              'reference_long_phase_converged':config['long_phase_reference_verified'],
              'accepted_for_offline_release':False,'long_record_accuracy_certified':False,
-             'scope':'P4 graph filter research candidate for the fixed-end 8 x 3 x 1.5 mm aluminum plate with h=2.5 mm; not a general geometry calibration',
+             'scope':f'P{degree} graph filter research candidate for the fixed-end 8 x 3 x 1.5 mm aluminum plate with h={h_mm} mm; not a general geometry calibration',
              'files_sha256':{str(path.relative_to(args.output)):digest(path) for path in args.output.rglob('*') if path.is_file() and path.name!='summary.json'}}
     (args.output/'summary.json').write_text(json.dumps(summary,indent=2)+'\n')
     print(json.dumps(summary),flush=True)

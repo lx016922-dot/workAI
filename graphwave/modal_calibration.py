@@ -15,7 +15,7 @@ from scipy.linalg import null_space
 from scipy.optimize import linear_sum_assignment, least_squares, minimize
 from scipy.sparse import coo_matrix, diags
 from scipy.sparse.linalg import eigsh
-from spectral3d.mesh import make_mesh, boundary_data
+from spectral3d.mesh import make_mesh, boundary_data, interpolation
 from .inference import inverse_mapping, graph_message
 from tools.comsol_artifacts import properties, numeric_csv
 
@@ -119,6 +119,20 @@ def match(reference, actual, mass):
     return right,mac[left,right]
 
 
+def modal_sampling(mesh, coordinates):
+    """Fixed geometric interpolation for offline mode matching, not inference."""
+    if mesh['points'].shape==coordinates.shape and np.allclose(mesh['points'],coordinates,rtol=0,atol=1e-14):
+        return lambda fields: fields
+    rows=[];cols=[];entries=[]
+    for index,point in enumerate(coordinates):
+        ids,weights=interpolation(mesh,point*1e3)
+        rows.extend([index]*len(ids));cols.extend(ids);entries.extend(weights)
+    sample=coo_matrix((entries,(rows,cols)),shape=(len(coordinates),len(mesh['points']))).tocsr()
+    def apply(fields):
+        return np.stack([sample@fields[:,:,axis].T for axis in range(3)],axis=-1).transpose(1,0,2)
+    return apply
+
+
 def project_filter_consistency(derivative,nodes,consistency_order=1):
     """Project the learned starting filter, not only its trainable increments.
 
@@ -208,19 +222,21 @@ def audit(args):
 def train(args):
     from . import nonlinear_constraints as physics
     reference=read_modes(args.reference);check=read_modes(args.check_reference)
-    scene=reference['scene'];mesh=make_mesh(scene,4,2.5)
+    scene=reference['scene'];mesh=make_mesh(scene,args.degree,args.h_mm)
+    label_mesh=make_mesh(scene,4,2.5);sample_modes=modal_sampling(mesh,reference['coordinates'])
+    filter_name='derivative_'+str(args.degree)
     # Excitation metadata is irrelevant to a zero-load eigenproblem, but every
     # physical input and every spatial sampling coordinate must agree.
     for key in ['geometry','material','boundary','constitutive']:
         if scene[key]!=check['scene'][key]:raise ValueError('Refinement changes physical problem')
-    if not np.allclose(mesh['points'],reference['coordinates'],rtol=0,atol=1e-14) or not np.allclose(reference['coordinates'],check['coordinates'],rtol=0,atol=1e-14):
+    if not np.allclose(label_mesh['points'],reference['coordinates'],rtol=0,atol=1e-14) or not np.allclose(reference['coordinates'],check['coordinates'],rtol=0,atol=1e-14):
         raise ValueError('Modal sampling grid mismatch')
-    correspondence,ref_mac=match(reference['fields'],check['fields'],mesh['mass'])
+    correspondence,ref_mac=match(reference['fields'],check['fields'],label_mesh['mass'])
     target=check['frequency_hz'][correspondence]
     uncertainty=abs(reference['frequency_hz']-target)
-    load,_,_=boundary_data(mesh,scene)
+    load,_,_=boundary_data(label_mesh,scene)
     participation=abs(np.einsum('mnc,nc->m',reference['fields'],load))
-    participation/=np.sqrt(np.einsum('mnc,mnc,n->m',reference['fields'],reference['fields'],mesh['mass']))
+    participation/=np.sqrt(np.einsum('mnc,mnc,n->m',reference['fields'],reference['fields'],label_mesh['mass']))
     # Admission is per mode, with its actual refinement uncertainty retained.
     # 0.01% frequency convergence permits research training; it is explicitly
     # NOT sufficient by itself to certify a phase-sensitive 5 ms waveform.
@@ -228,14 +244,14 @@ def train(args):
     indices=np.flatnonzero(selected)
     if len(indices)<2:raise ValueError('Insufficient converged COMSOL development modes')
     with np.load(args.weights,allow_pickle=False) as f:weights=dict(f)
-    baseline=project_filter_consistency(weights['derivative_4'],mesh['gll'],args.consistency_order)
+    baseline=project_filter_consistency(weights[filter_name],mesh['gll'],args.consistency_order)
     basis=filter_basis(mesh['gll'],args.consistency_order)
     output=args.output;output.mkdir(parents=True,exist_ok=False)
     (output/'source_snapshot').mkdir()
     shutil.copyfile(Path(__file__),output/'source_snapshot/modal_calibration.py')
     shutil.copyfile(Path(physics.__file__),output/'source_snapshot/nonlinear_constraints.py')
-    physical_training=physics.make_dataset(scene['material'],args.physics_samples,args.physics_seed)
-    physical_validation=physics.make_dataset(scene['material'],args.physics_validation_samples,args.physics_seed+1)
+    physical_training=physics.make_dataset(scene['material'],args.physics_samples,args.physics_seed,degree=args.degree)
+    physical_validation=physics.make_dataset(scene['material'],args.physics_validation_samples,args.physics_seed+1,degree=args.degree)
     initial_restoration=None
     if args.optimizer=='slsqp':
         # A previously valid candidate may violate a newly expanded training
@@ -251,7 +267,7 @@ def train(args):
             initial_restoration['parent_maximum_training_residual']=max(starting_report['maximum_normalized_residual'].values())
             initial_restoration['scope']='Warm-start feasibility on the declared training set; independent validation is not consulted'
             baseline=exact+np.einsum('a,aij->ij',coefficients,basis)
-    rigid_parent=physics.rigid_motion_checks(weights['derivative_4'],weights)
+    rigid_parent=physics.rigid_motion_checks(weights[filter_name],weights)
     rigid_initial=physics.rigid_motion_checks(baseline,weights)
     if not rigid_initial['passed']:raise ValueError('Projected starting filter fails rigid-motion objectivity')
     save(output/'rigid-parent.json',rigid_parent);save(output/'rigid-initial.json',rigid_initial)
@@ -266,6 +282,8 @@ def train(args):
             'refinement_job_id':check['receipt']['job_id'],'reference_identity':reference['identity'],
             'refinement_identity':check['identity'],'baseline_weights_sha256':digest(args.weights),
             'training_mode_indices':indices.tolist(),'mode_refinement_uncertainty_hz':uncertainty.tolist(),
+            'candidate_degree':args.degree,'candidate_h_mm':args.h_mm,'label_sampling_degree':4,'label_sampling_h_mm':2.5,
+            'mode_matching_interpolation':'Fixed geometric interpolation of candidate eigenvectors to the archived COMSOL sample coordinates; no transient correction',
             'mode_refinement_mac':ref_mac.tolist(),'frequency_admission_relative':1e-4,
             'long_phase_reference_verified':bool(np.max(uncertainty[indices])<=.5),
             'training_parameters':len(basis),'parameter_bounds':[-args.parameter_bound,args.parameter_bound],
@@ -276,10 +294,10 @@ def train(args):
             'initial_physics_feasibility_restoration':initial_restoration,
             'polynomial_consistency_order':args.consistency_order,
             'initial_filter_consistency_projection':{
-                'frobenius_correction':float(np.linalg.norm(baseline-weights['derivative_4'])),
-                'parent_constant_error':float(np.max(abs(weights['derivative_4']@np.ones(5)))),
-                'parent_affine_error':float(np.max(abs(weights['derivative_4']@mesh['gll']-1))),
-                'projected_constant_error':float(np.max(abs(baseline@np.ones(5)))),
+                'frobenius_correction':float(np.linalg.norm(baseline-weights[filter_name])),
+                'parent_constant_error':float(np.max(abs(weights[filter_name]@np.ones(args.degree+1)))),
+                'parent_affine_error':float(np.max(abs(weights[filter_name]@mesh['gll']-1))),
+                'projected_constant_error':float(np.max(abs(baseline@np.ones(args.degree+1)))),
                 'projected_affine_error':float(np.max(abs(baseline@mesh['gll']-1))),
                 'scope':'offline weight projection before training; no inference correction'},
             'preserved':['polynomial derivatives through the declared consistency order','centroskew filter parity',
@@ -311,12 +329,13 @@ def train(args):
     def evaluate(theta):
         derivative=baseline+np.einsum('a,aij->ij',theta,basis)
         frequency,fields=modes(mesh,scene,derivative,weights['quadratic_tensor'],count)
-        mapping,mac=match(reference['fields'],fields,mesh['mass'])
+        mapping,mac=match(reference['fields'],sample_modes(fields),label_mesh['mass'])
         return frequency[mapping],mac,derivative
 
     initial,initial_mac,_=evaluate(np.zeros(len(basis)))
-    parent_frequency,parent_fields=modes(mesh,scene,weights['derivative_4'],weights['quadratic_tensor'],count)
-    parent_mapping,_=match(reference['fields'],parent_fields,mesh['mass'])
+    if np.min(initial_mac[indices])<.9:raise ValueError('Initial training mode correspondence lost')
+    parent_frequency,parent_fields=modes(mesh,scene,weights[filter_name],weights['quadratic_tensor'],count)
+    parent_mapping,_=match(reference['fields'],sample_modes(parent_fields),label_mesh['mass'])
     parent_frequency=parent_frequency[parent_mapping]
     _,initial_physical=physics.evaluate(baseline,weights,physical_training,details=True)
     save(output/'physics-initial.json',initial_physical)
@@ -345,14 +364,16 @@ def train(args):
             key=np.asarray(theta,dtype=np.float64).tobytes()
             if key not in cache:
                 frequency,mac,derivative=evaluate(theta)
-                if np.min(mac[indices])<.9:raise ValueError('Training mode correspondence lost')
                 residual=(frequency[indices]-target[indices])*2*np.pi*.005*physical_weight[indices]
                 r,report=physics.evaluate(derivative,weights,physical_training,details=True)
                 values=np.concatenate([np.asarray(row[group]).ravel() for row in report['samples'] for group in physics.CONSTRAINT_GROUPS])
                 value=float(residual@residual+args.physics_weight**2*(r@r)+.0001*(theta@theta))
                 # Dimensionless squared inequalities avoid the cusp of the
                 # RMS near zero and put every physical gate on the same scale.
-                cache[key]=(value,1-(values/args.physics_limit)**2)
+                # A trial step may lose correspondence before SLSQP backtracks.
+                # Reject it through an explicit inequality instead of aborting
+                # the line search. The final candidate retains the same gate.
+                cache[key]=(value,np.r_[1-(values/args.physics_limit)**2,mac[indices]/.9-1])
                 if len(cache)>96:cache.pop(next(iter(cache)))
                 row={'evaluation':len(history)+1,'elapsed_s':time.monotonic()-start,'parameters':theta.tolist(),
                      'weighted_phase_loss':float(residual@residual),'weighted_physics_loss':float(args.physics_weight**2*(r@r)),
@@ -380,15 +401,16 @@ def train(args):
     if args.optimizer=='slsqp':
         fitted.x,restoration=restore_physical_feasibility(fitted.x,baseline,basis,weights,physical_training,args.physics_limit)
     final,final_mac,derivative=evaluate(fitted.x)
+    if np.min(final_mac[indices])<.9:raise ValueError('Final training mode correspondence lost; no candidate exported')
     _,physical_train_report=physics.evaluate(derivative,weights,physical_training,details=True)
     _,physical_validation_report=physics.evaluate(derivative,weights,physical_validation,details=True)
     rigid_final=physics.rigid_motion_checks(derivative,weights)
     save(output/'rigid-final.json',rigid_final)
     save(output/'physics-training.json',physical_train_report)
     save(output/'physics-validation.json',physical_validation_report)
-    exported=dict(weights);exported['derivative_4']=derivative
+    exported=dict(weights);exported[filter_name]=derivative
     for key in weights:
-        if key!='derivative_4' and not np.array_equal(exported[key],weights[key]):raise AssertionError('Unexpected parameter change')
+        if key!=filter_name and not np.array_equal(exported[key],weights[key]):raise AssertionError('Unexpected parameter change')
     np.savez(output/'candidate-weights.npz',**exported)
     save(output/'history.json',history)
     save(output/'training.json',{'optimizer':'scipy_'+args.optimizer,'optimizer_success':bool(fitted.success),
@@ -423,6 +445,8 @@ if __name__=='__main__':
     p.add_argument('--weights',type=Path,default=Path('offline/model/continued-weights.npz'))
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--action',choices=['audit','train'],default='audit')
+    p.add_argument('--degree',type=int,choices=[4,5],default=4)
+    p.add_argument('--h-mm',type=float,default=2.5)
     p.add_argument('--check-reference',type=Path)
     p.add_argument('--consistency-order',type=int,choices=[1,2],default=2)
     p.add_argument('--physics-samples',type=int,default=48)
@@ -438,6 +462,7 @@ if __name__=='__main__':
     p.add_argument('--max-iterations',type=int,default=150)
     args=p.parse_args()
     if args.action=='train':
+        if not .8<=args.h_mm<=2.5:p.error('Training mesh size must be in [0.8, 2.5] mm')
         if not args.check_reference:p.error('--check-reference is required for training')
         if args.physics_samples<6 or args.physics_validation_samples<6 or not np.isfinite(args.physics_weight) or args.physics_weight<=0:
             p.error('Nonlinear physics constraints require at least six patches per split and positive finite loss weight')
