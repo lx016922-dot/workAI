@@ -32,7 +32,7 @@ for row in lock['files']:
             raise SystemExit('Missing or mismatched build input: ' + row['path'])
 
 # Runtime allowlist: neither credentials nor the historical cloud state enter a package.
-files = {'graphwave': ['__init__.py', 'inference.py', 'predict.py'],
+files = {'graphwave': ['__init__.py', 'inference.py', 'predict.py', 'buffered_inference.py', 'long_inference.py', 'long_rollout.py', 'signals.py'],
          'spectral3d': ['__init__.py', 'mesh.py', 'curved_mesh.py', 'result.py'],
          'solid': ['__init__.py', 'schema.py']}
 for module, names in files.items():
@@ -44,7 +44,7 @@ for name in ['README-OFFLINE.txt', 'Start-WorkAI.bat', 'start-workai.sh', 'verif
     shutil.copyfile(REPO / 'offline' / name, target / name)
 (target / 'start-workai.sh').chmod(0o755)
 (target / 'training').mkdir()
-for name in ['model.py', 'train.py', 'test_network.py']:
+for name in ['model.py', 'train.py', 'test_network.py', 'continue_training.py', 'train_long_time.py']:
     shutil.copyfile(REPO / 'graphwave' / name, target / 'training' / name)
 shutil.copyfile(REPO / 'offline/model/training.json', target / 'training/training.json')
 
@@ -92,7 +92,7 @@ if args.example:
     env = dict(os.environ, NUMBA_CACHE_DIR=str((args.cache / ('compile-' + args.platform)).resolve()),
                OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1')
     subprocess.run([str(python.resolve()), '-X', 'utf8', '-m', 'offline.worker', '--job-dir', str(example.resolve())],
-                   cwd=target, env=env, check=True, timeout=900)
+                   cwd=target, env=env, check=True, timeout=5400)
     if json.loads((example / 'status.json').read_text(encoding='utf-8'))['phase'] != 'completed':
         raise SystemExit('Packaged example did not complete.')
 # Relocated CPython can regenerate its upstream bytecode on first startup.
@@ -104,7 +104,9 @@ rows = [{'path': str(p.relative_to(target)).replace(os.sep, '/'), 'bytes': p.sta
 (target / 'MANIFEST.json').write_text(json.dumps({'schema': 'workai.offline.bundle.v1', 'platform': args.platform,
     'source_commit': os.environ.get('WORKAI_BUILD_COMMIT', 'working-tree'), 'files': rows}, indent=2) + '\n')
 if args.archive:
-    version = json.loads((target / 'offline/model/model.json').read_text(encoding='utf-8'))['version']
+    version_file=target/'offline/model/extension.json'
+    if not version_file.exists(): version_file=target/'offline/model/model.json'
+    version = json.loads(version_file.read_text(encoding='utf-8'))['version']
     path = args.output / (target.name + '-' + version + '.zip')
     with zipfile.ZipFile(path, 'w', zipfile.ZIP_DEFLATED, compresslevel=4) as z:
         for p in sorted(target.rglob('*')):

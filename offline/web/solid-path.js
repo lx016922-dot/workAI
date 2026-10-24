@@ -36,28 +36,31 @@ export function parsePointPath(text) {
   });
 }
 
-export function analyzePointPath(result, field, extractSeries, options) {
+export async function analyzePointPath(result, field, extractSeries, options) {
   const points = samplePointPath(options), direction = unitVector(options.direction);
   const { start_us, end_us, delay_us_per_mm = 0 } = options;
   if (![start_us, end_us, delay_us_per_mm].every(Number.isFinite)) throw new Error('时间窗和沿程延迟必须是有限数值。');
   // Validate the base window even when later shifted windows would be valid.
   if (!(start_us < end_us) || start_us < result.times_us[0] || end_us > result.times_us.at(-1)) throw new Error('首点时间窗必须位于记录内，且起点早于终点。');
-  const rows = points.map(point => {
+  if(result.recording&&points.length>8)throw new Error('长记录每次最多分析 8 个点，请缩短点列后分批提取。');
+  const extracted=extractSeries.batch?await extractSeries.batch(points.map(p=>p.point_mm),direction):await Promise.all(points.map(p=>extractSeries(result,field,p.point_mm,direction)));
+  const times=extracted[0].times_us??result.times_us;
+  const rows = points.map((point,index) => {
     try {
       const shift = point.distance_mm * delay_us_per_mm;
       const requested_window_us = [start_us + shift, end_us + shift];
-      const probe = extractSeries(result, field, point.point_mm, direction);
-      const analysis = analyzeTimeWindow(probe.projected_m, result.times_us, result.scene.source.frequency_mhz, ...requested_window_us);
+      const probe = extracted[index];
+      const analysis = analyzeTimeWindow(probe.projected_m, times, result.scene.source.frequency_mhz, ...requested_window_us,result.scene.signal);
       return { ...point, requested_window_us, actual_window_us: [analysis.start_us, analysis.end_us],
         sample_count: analysis.sample_count, carrier_cycles: analysis.carrier_cycles,
-        harmonics: analysis.harmonics, xyz_m: probe.xyz_m, projected_m: probe.projected_m };
+        harmonics: analysis.harmonics, bands: analysis.bands, xyz_m: probe.xyz_m, projected_m: probe.projected_m };
     } catch (error) {
       throw new Error(`第 ${point.index} 点 [${point.point_mm.join(', ')}] mm：${error.message}`);
     }
   });
   return { schema: 'workai.point_path.v1', job_id: result.job_id, response_part: result.response_part ?? 'full',
     field_sha256: result.field.sha256, mesh_sha256: result.mesh_sha256 ?? result.evidence?.mesh_sha256 ?? null,
-    frequency_mhz: result.scene.source.frequency_mhz, direction, times_us: result.times_us,
+    frequency_mhz: result.scene.source.frequency_mhz, direction, times_us: times, signal: result.scene.signal,
     base_window_us: [start_us, end_us], delay_us_per_mm, sampling_mode: options.mode,
     distance_definition: 'cumulative_euclidean_distance_from_first_sample_mm',
     phase_reference: 'record_time_zero', phase_unwrapped: false,
@@ -74,7 +77,7 @@ export function pointPathCsv(analysis) {
     '# distance_definition,' + analysis.distance_definition, '# phase_reference,' + analysis.phase_reference,
     '# phase_unwrapped,false', '# continuous_path_inside_solid_verified,false',
     '# pure_mode_accumulation_verified,false', '# material_beta_estimated,false',
-    '# spectrum,Hann weighted mean removed exact-frequency single-sided complex coefficients',
+    '# spectrum,'+(analysis.signal?.kind==='chirp'?'Hann weighted mean removed frequency-band power':'Hann weighted mean removed exact-frequency single-sided complex coefficients'),
     '# section,harmonics',
     'point_index,x_mm,y_mm,z_mm,distance_mm,requested_start_us,requested_end_us,actual_start_us,actual_end_us,sample_count,carrier_cycles,order,frequency_mhz,available,real_m,imaginary_m,amplitude_m,phase_deg'
   ];
@@ -83,6 +86,7 @@ export function pointPathCsv(analysis) {
       ...row.actual_window_us, row.sample_count, row.carrier_cycles, h.order, h.frequency_mhz, h.available,
       h.available ? h.real_m : '', h.available ? h.imaginary_m : '', h.available ? h.amplitude_m : '', h.phase_deg ?? ''].join(','));
   }
+  if(analysis.signal?.kind==='chirp'){lines.push('', '# section,chirp_bands','point_index,band_order,start_mhz,end_mhz,hann_weighted_rms_m');for(const row of analysis.rows)for(const b of row.bands)lines.push([row.index,b.order,b.start_mhz,b.end_mhz,b.windowed_rms_m].join(','));}
   lines.push('', '# section,full_record_waveforms', 'point_index,time_us,u_x_m,u_y_m,u_z_m,projected_displacement_m');
   for (const row of analysis.rows) analysis.times_us.forEach((time, i) => {
     lines.push([row.index, time, ...row.xyz_m[i], row.projected_m[i]].join(','));

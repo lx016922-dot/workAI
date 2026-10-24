@@ -5,6 +5,8 @@ import json
 import subprocess
 import sys
 import tempfile
+import zipfile
+import shutil
 import time
 from pathlib import Path
 from urllib.request import Request, urlopen, build_opener, ProxyHandler
@@ -44,6 +46,9 @@ def main():
             scene = request('/api/templates')['plate']
             scene['geometry'].update(length_mm=8., width_mm=3., thickness_mm=1.5)
             scene['source']['center_mm'] = [0., 1.5, .75]
+            scene['numerics']['h_mm']=2.5
+            scene['boundary']['fixed_face']='xmax'
+            assert scene['acquisition']['duration_us']==5000
             for i, receiver in enumerate(scene['receivers']):
                 receiver['point_mm'] = [2. if i == 0 else 6., 1.5, .75]
             body = {'scene': scene, 'degree': 4}
@@ -62,7 +67,7 @@ def main():
             except HTTPError as error:
                 assert error.code == 422
             job = request('/api/jobs', body, headers)['job_id']
-            deadline = time.monotonic() + 900
+            deadline = time.monotonic() + 5400
             while time.monotonic() < deadline:
                 status = request('/api/jobs/' + job)
                 if status['phase'] in ('completed', 'failed'):
@@ -80,16 +85,25 @@ def main():
                 fields[part] = np.frombuffer(raw, dtype='<f8')
                 assert np.isfinite(fields[part]).all()
                 assert result['neural_model']['numerical_correction'] is False
+                assert result['recording']['frame_count']==25001 and result['times_us'][-1]==5000
+                assert result['neural_model']['weights_sha256']==info['model']['long_model']['files_sha256']['continued-weights.npz']
                 assert result['diagnostics']['external_work_balance_relative'] <= .01
             np.testing.assert_array_equal(fields['full'] - fields['stvk'], fields['material'])
             np.testing.assert_array_equal(fields['stvk'] - fields['linear'], fields['geometric'])
             assert np.max(abs(fields['full'])) > 1e-12
             assert np.max(abs(fields['material'])) > 1e-16
-            archive = request('/api/jobs/' + job + '/export')
-            assert archive[:2] == b'PK'
+            trace=request('/api/jobs/'+job+'/traces',{'part':'full','points':[[2.,1.5,.75]]},headers)
+            assert len(trace['times_us'])==25001 and trace['times_us'][-1]==5000
+            assert np.isfinite(trace['points'][0]['xyz_m']).all()
+            with opener.open(address+'/api/jobs/'+job+'/export',timeout=120) as response,(directory/'result.zip').open('wb') as output:
+                shutil.copyfileobj(response,output,1024*1024)
+            with zipfile.ZipFile(directory/'result.zip') as archive:
+                assert 'record/recording.json' in archive.namelist()
+                assert len([n for n in archive.namelist() if n.startswith('record/fields/')])>1
+                assert archive.testzip() is None
             print(json.dumps({'passed': True, 'python': sys.version, 'platform': sys.platform,
                               'weights_sha256': info['model']['weights_sha256'], 'elapsed_s': status['elapsed_s'],
-                              'controls': 3, 'response_parts': 5, 'authentication_checks': 2, 'invalid_scene_rejected': True}), flush=True)
+                              'duration_us':5000,'full_samples':25001,'controls': 3, 'response_parts': 5, 'authentication_checks': 2, 'invalid_scene_rejected': True}), flush=True)
         finally:
             server.terminate()
             server.wait(timeout=15)

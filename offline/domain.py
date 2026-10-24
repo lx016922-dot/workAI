@@ -2,8 +2,10 @@
 import copy
 import hashlib
 import json
+import math
 from pathlib import Path
 from solid.schema import default_scene, validate_scene
+from graphwave.signals import specification
 
 ROOT = Path(__file__).resolve().parent
 MODEL = ROOT / 'model'
@@ -35,6 +37,16 @@ def model_info():
         not base['acceptance']['all_gates_passed'] or not refined['all_gates_passed'] or
         len(base['cases']) != 8 or len(refined['cases']) != 8):
         raise ValueError('原始模型与八例验收记录不一致。')
+    extension = MODEL / 'extension.json'
+    if extension.exists():
+        extra = json.loads(extension.read_text(encoding='utf-8'))
+        for name, expected in extra['files_sha256'].items():
+            if digest(MODEL / name) != expected:
+                raise ValueError('长记录模型文件校验失败：' + name)
+        for name, expected in extra['runtime_source_sha256'].items():
+            if digest(ROOT.parent / name) != expected:
+                raise ValueError('长记录运行代码校验失败：' + name)
+        info.update(version=extra['version'], user_notice=extra['user_notice'], long_model=extra)
     return info
 
 
@@ -47,7 +59,9 @@ def templates():
                              hole_x_mm=5., hole_y_mm=1.75, hole_radius_mm=.55,
                              notch_x_mm=5., notch_width_mm=.8, notch_depth_mm=.45)
         s['source'].update(center_mm=[0., 1.75, .9] if kind != 'pipe' else [0., 0., 0.],
-                           delay_us=.2, cycles=1.8)
+                           delay_us=.2, cycles=5.)
+        s['acquisition'] = {'duration_us': 5000., 'sample_step_us': .2}
+        s['signal'] = {'kind': 'hann', 'end_frequency_mhz': .28}
         s['numerics']['h_mm'] = 2. if kind == 'hole' else 1.4
         for i, rx in enumerate(s['receivers']):
             rx['point_mm'] = [3. if i == 0 else 8., 2. if kind == 'pipe' else 1.75, 0. if kind == 'pipe' else .9]
@@ -56,18 +70,44 @@ def templates():
 
 
 def validate_request(body):
-    if not isinstance(body, dict) or set(body) != {'scene', 'degree'} or type(body['degree']) is not int or body['degree'] not in (3, 4):
-        raise ValueError('需要场景与 3/4 阶图设置。')
+    if not isinstance(body, dict) or set(body) != {'scene', 'degree'} or type(body['degree']) is not int or body['degree'] not in (3, 4, 5):
+        raise ValueError('需要场景与 3/4/5 阶图设置。')
     raw = copy.deepcopy(body['scene'])
+    signal = raw.pop('signal', {'kind': 'hann'})
+    if not isinstance(signal, dict):
+        raise ValueError('激励波形配置需要为对象。')
+    acquisition = copy.deepcopy(raw['acquisition'])
+    if set(acquisition) != {'duration_us', 'sample_step_us'}:
+        raise ValueError('采样配置需要时长和采样间隔。')
+    duration, sample = acquisition['duration_us'], acquisition['sample_step_us']
+    if any(type(v) not in (int,float) or not math.isfinite(v) for v in (duration,sample)):
+        raise ValueError('时长和采样间隔需要有限数值。')
+    legacy = acquisition == {'duration_us': 14., 'sample_step_us': .05} and signal.get('kind') == 'hann'
+    if legacy and body['degree'] == 5:
+        raise ValueError('历史 14 μs 记录重现只支持原有 3/4 阶设置；五阶请使用长记录配置。')
+    if not legacy:
+        if not 5000 <= duration <= 20000 or not .025 <= sample <= .2:
+            raise ValueError('长记录时长为 5–20 ms（5000–20000 μs），采样间隔为 0.025–0.2 μs。')
+        ratio = duration / sample
+        if abs(ratio-round(ratio)) > 1e-7 or round(ratio) > 200000:
+            raise ValueError('时长需要为采样间隔的整数倍，最多 200001 个采样点。')
+        # Validate unchanged material/geometric rules on a bounded acquisition;
+        # restore the separately checked real record length below.
+        raw['acquisition'] = {'duration_us': 200., 'sample_step_us': .2}
     h = raw['numerics']['h_mm']
-    if type(h) not in (int, float) or not .8 <= h <= 2.:
-        raise ValueError('网格尺寸需要在 0.8–2 mm 之间。')
+    if type(h) not in (int, float) or not .8 <= h <= 2.5:
+        raise ValueError('网格尺寸需要在 0.8–2.5 mm 之间。')
     raw['numerics']['h_mm'] = h / body['degree']
     s = validate_scene(raw)
     s['numerics']['h_mm'] = h
+    s['acquisition'] = acquisition
+    s['signal'] = signal
+    spec = specification(s)
+    if sample * 2 * max(spec['start_frequency_mhz'], spec['end_frequency_mhz']) > 1/8 + 1e-12:
+        raise ValueError('二次谐波最高频率至少需要 8 个输出采样点/周期。')
     g, tx, acq = s['geometry'], s['source'], s['acquisition']
     limits = [('长度', g['length_mm'], 8, 12), ('频率', tx['frequency_mhz'], .18, .28),
-              ('幅值', tx['amplitude_mpa'], .6, 1.5), ('周期', tx['cycles'], 1.5, 2.1),
+              ('幅值', tx['amplitude_mpa'], .6, 1.5), ('周期', tx['cycles'], 1, 20),
               ('延迟', tx['delay_us'], .05, .5), ('相位', tx['phase_deg'], -75, 75)]
     if g['kind'] not in ('plate', 'pipe', 'hole', 'notch'):
         raise ValueError('本模型只支持参数化板、管、孔与缺口。')
@@ -94,8 +134,6 @@ def validate_request(body):
         raise ValueError('缺口位置、宽度或深度超出原验证范围。')
     if s['boundary']['fixed_face'] not in ('none', 'xmin', 'xmax'):
         raise ValueError('固定面只支持另一 X 端面。')
-    if acq != {'duration_us': 14., 'sample_step_us': .05}:
-        raise ValueError('当前模型采用 14 μs 时长、0.05 μs 输出间隔。')
-    if g['kind'] != 'hole' and h > 1.4:
+    if legacy and g['kind'] != 'hole' and h > 1.4:
         raise ValueError('板、管和缺口的网格尺寸不大于 1.4 mm。')
     return {'scene': s, 'degree': body['degree']}

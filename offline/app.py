@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs, unquote
 from .domain import ROOT, PARTS, digest, model_info, templates, validate_request
+from .recording import traces, manifest
 
 REPOSITORY = ROOT.parent
 
@@ -36,13 +37,15 @@ class Application:
         self.info = model_info()
         self.token = secrets.token_hex(24)
         self.lock = threading.Lock()
+        self.trace_lock = threading.Lock()
         self.process = None
         self.current = None
         self.closed = False
         for p in self.jobs.glob('*/status.json'):
             status = json.loads(p.read_text(encoding='utf-8'))
-            if status['phase'] not in ('completed', 'failed'):
-                status.update(phase='failed', message='上次退出时任务未完成，可重新提交。')
+            if status['phase'] not in ('completed', 'failed', 'paused'):
+                saved = (p.parent / 'record/recording.json').exists()
+                status.update(phase='paused' if saved else 'failed', message='上次退出时任务未完成；已保存的长记录可继续计算。' if saved else '上次退出时任务未完成，可重新提交。')
                 save(p, status)
         for p in (ROOT / 'examples').glob('*/status.json'):
             target = self.jobs / p.parent.name
@@ -71,23 +74,49 @@ class Application:
             save(directory / 'request.json', request)
             save(directory / 'status.json', {'job_id': job, 'name': request['scene']['name'], 'phase': 'starting',
                  'started_at_utc': datetime.now(timezone.utc).isoformat(), 'controls_completed': 0, 'elapsed_s': 0})
-            env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', PYTHONUTF8='1',
-                       NUMBA_CACHE_DIR=str(self.data / 'cache'))
-            self.current = job
-            try:
-                with (directory / 'worker.log').open('wb') as log:
-                    self.process = subprocess.Popen([sys.executable, '-X', 'utf8', '-m', 'offline.worker', '--job-dir', str(directory)],
-                        cwd=REPOSITORY, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
-            except OSError:
-                self.fail(job, '无法启动计算进程。请检查软件包是否完整。')
-                raise
-            threading.Thread(target=self.monitor, args=(job, self.process), daemon=True).start()
+            self.launch(job)
             return {'job_id': job}
+
+    def launch(self, job):
+        directory = self.path(job)
+        (directory / 'pause.request').unlink(missing_ok=True)
+        env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', PYTHONUTF8='1',
+                   NUMBA_CACHE_DIR=str(self.data / 'cache'))
+        self.current = job
+        try:
+            with (directory / 'worker.log').open('ab') as log:
+                self.process = subprocess.Popen([sys.executable, '-X', 'utf8', '-m', 'offline.worker', '--job-dir', str(directory)],
+                    cwd=REPOSITORY, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+        except OSError:
+            self.fail(job, '无法启动计算进程。请检查软件包是否完整。')
+            raise
+        threading.Thread(target=self.monitor, args=(job, self.process), daemon=True).start()
+
+    def control(self, job, action):
+        with self.lock:
+            directory = self.path(job)
+            if action == 'pause':
+                if self.current != job or not self.process or self.process.poll() is not None:
+                    raise ValueError('此任务未在运行。')
+                if json.loads((directory/'request.json').read_text(encoding='utf-8'))['scene']['acquisition']['duration_us'] < 5000:
+                    raise ValueError('历史短记录不支持检查点暂停。')
+                (directory/'pause.request').touch()
+                return {'job_id':job,'message':'当前分块保存后暂停。'}
+            if self.closed or (self.process and self.process.poll() is None):
+                raise ValueError('已有任务正在运行。')
+            status = self.status(job)
+            if status['phase'] not in ('paused','failed') or not (directory/'record/recording.json').exists():
+                raise ValueError('此任务没有可继续的检查点。')
+            status.update(phase='starting',message='正在校验记录并继续计算。')
+            save(directory/'status.json',status)
+            self.launch(job)
+            return {'job_id':job}
 
     def fail(self, job, message):
         status = self.status(job)
-        if status['phase'] not in ('completed', 'failed'):
-            status.update(phase='failed', message=message)
+        if status['phase'] not in ('completed', 'failed', 'paused'):
+            phase = 'paused' if (self.path(job)/'record/recording.json').exists() else 'failed'
+            status.update(phase=phase, message=message)
             save(self.path(job) / 'status.json', status)
 
     def monitor(self, job, process):
@@ -97,12 +126,14 @@ class Application:
             process.kill()
             process.wait()
             self.fail(job, '计算超过 90 分钟预算，已停止。')
-        self.fail(job, '计算进程退出，未生成完整结果。请查看任务目录中的 worker.log。')
+        if self.process is process:
+            self.fail(job, '计算进程退出，未生成完整结果。请查看任务目录中的 worker.log。')
 
     def close(self):
         with self.lock:
             self.closed = True
             if self.process and self.process.poll() is None:
+                (self.path(self.current)/'pause.request').touch()
                 self.process.terminate()
                 try:
                     self.process.wait(timeout=5)
@@ -162,14 +193,26 @@ def handler(application):
                     if status['phase'] != 'completed':
                         return self.reply(409, {'error': '任务尚未完成。'})
                     if kind == 'export':
-                        target = directory / 'results.zip'
-                        # The API whitelist never exposes process logs or arbitrary paths.
-                        with application.lock:
-                            if not target.exists():
-                                with zipfile.ZipFile(target, 'w', zipfile.ZIP_STORED) as archive:
-                                    for name in ['request.json', 'status.json', 'exports.json'] + [p + ext for p in PARTS for ext in ('.json', '.bin.gz')]:
-                                        archive.write(directory / name, name)
-                        return self.reply(200, target.read_bytes(), 'application/zip', job + '.zip')
+                        names = ['request.json','status.json','exports.json'] + [p+ext for p in PARTS for ext in ('.json','.bin.gz')]
+                        if (directory/'record/recording.json').exists():
+                            m = manifest(directory/'record')
+                            names += ['record/recording.json','record/mesh.npz']
+                            names += ['record/'+row['file'] for row in m['chunks']]
+                            names += ['record/'+m['checkpoint_file']]
+                        self.send_response(200)
+                        self.send_header('Content-Type','application/zip')
+                        self.send_header('Content-Disposition','attachment; filename="'+job+'.zip"')
+                        self.send_header('Cache-Control','no-store')
+                        self.end_headers()
+                        # ZIP64 streaming avoids a second multi-GB copy and a
+                        # whole-archive allocation in the local web process.
+                        with zipfile.ZipFile(self.wfile,'w',zipfile.ZIP_STORED,allowZip64=True) as archive:
+                            for name in names:
+                                path=(directory/name).resolve()
+                                if not path.is_relative_to(directory.resolve()):
+                                    raise ValueError('记录路径无效。')
+                                archive.write(path,name)
+                        return
                     part = parse_qs(url.query).get('part', ['full'])[0]
                     if part not in PARTS:
                         raise ValueError('响应类型无效。')
@@ -198,7 +241,8 @@ def handler(application):
         def do_POST(self):
             try:
                 self.local_request()
-                if self.path != '/api/jobs':
+                match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume)',self.path)
+                if self.path != '/api/jobs' and not match:
                     raise FileNotFoundError()
                 if not secrets.compare_digest(self.headers.get('X-WorkAI-Token', ''), application.token):
                     raise PermissionError('请刷新应用页面后重试。')
@@ -207,7 +251,18 @@ def handler(application):
                 size = int(self.headers.get('Content-Length', 0))
                 if not 0 < size <= 65536:
                     raise ValueError('场景超过 64 KiB 或为空。')
-                self.reply(202, application.submit(json.loads(self.rfile.read(size))))
+                body = json.loads(self.rfile.read(size))
+                if match:
+                    job,action = match.groups()
+                    if action == 'traces':
+                        if application.status(job)['phase'] != 'completed':
+                            raise ValueError('任务尚未完成。')
+                        if not isinstance(body,dict) or set(body) != {'part','points'} or body['part'] not in PARTS:
+                            raise ValueError('提取参数无效。')
+                        with application.trace_lock:
+                            return self.reply(200,traces(application.path(job)/'record',body['part'],body['points']))
+                    return self.reply(202,application.control(job,action))
+                self.reply(202, application.submit(body))
             except (ValueError, TypeError, KeyError) as error:
                 self.reply(422, {'error': str(error)})
             except PermissionError as error:
