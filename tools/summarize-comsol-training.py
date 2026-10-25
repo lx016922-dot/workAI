@@ -69,6 +69,8 @@ def main():
              'optimizer_success':training['optimizer_success'],
              'feasibility_restoration':training.get('feasibility_restoration'),
              'polynomial_consistency_order':config.get('polynomial_consistency_order',2),
+             'summation_by_parts_enforced':config.get('summation_by_parts_enforced',False),
+             'summation_by_parts_final':training.get('summation_by_parts_final'),
              'parameter_bounds':config.get('parameter_bounds'),
              'dominant_phase_mode_index':config.get('dominant_phase_mode_index'),
              'dominant_phase_residual_multiplier':config.get('dominant_phase_residual_multiplier',1.),

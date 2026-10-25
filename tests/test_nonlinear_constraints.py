@@ -7,6 +7,24 @@ MATERIAL={'lambda_pa':58.1e9,'mu_pa':26.1e9,'l_pa':-143e9,'m_pa':-297e9,'n_pa':-
 
 
 class NonlinearMomentumTest(unittest.TestCase):
+    def test_sbp_training_preserves_boundary_flux_for_arbitrary_fields(self):
+        from graphwave.modal_calibration import filter_basis,sbp_checks
+        from spectral3d.mesh import gll
+        x,w,exact,_=gll(5)
+        basis=filter_basis(x,2,w)
+        self.assertEqual(len(basis),2)
+        derivative=exact+np.einsum('a,aij->ij',[.13,-.09],basis)
+        self.assertTrue(sbp_checks(derivative,w)['passed'])
+        np.testing.assert_allclose(derivative@np.stack([x*0+1,x,x*x],1),
+                                  np.stack([x*0,x*0+1,2*x],1),rtol=0,atol=3e-14)
+        rng=np.random.default_rng(2026102590)
+        for _ in range(20):
+            u,v=rng.normal(size=(2,6))
+            self.assertAlmostEqual(float(u@(w*(derivative@v))+(derivative@u)@(w*v)),
+                                   float(u[-1]*v[-1]-u[0]*v[0]),places=12)
+        broken=derivative.copy();broken[0,0]+=.01
+        self.assertFalse(sbp_checks(broken,w)['passed'])
+
     def test_fifth_order_constraints_and_mode_sampling(self):
         from graphwave.nonlinear_constraints import rigid_motion_checks
         from graphwave.modal_calibration import modal_sampling,project_filter_consistency

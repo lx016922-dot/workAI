@@ -149,10 +149,21 @@ def project_filter_consistency(derivative,nodes,consistency_order=1):
     return result
 
 
-def filter_basis(nodes, consistency_order=2):
+def filter_basis(nodes, consistency_order=2, quadrature_weights=None):
     """Preserve polynomial consistency and parity, always including rigid motions."""
     if consistency_order not in [1,2]:raise ValueError('Consistency order must be one or two')
     constraints=np.stack([nodes**k for k in range(consistency_order+1)],1)
+    if quadrature_weights is not None:
+        # Preserve discrete integration by parts for arbitrary nodal fields,
+        # not only the manufactured polynomial examples used in the loss.
+        n=len(nodes);w=np.asarray(quadrature_weights)
+        if w.shape!=(n,) or not np.all(np.isfinite(w)) or np.any(w<=0):
+            raise ValueError('Positive matching quadrature weights required')
+        raw=np.eye(n*n).reshape(n*n,n,n)
+        conditions=np.concatenate([(raw@constraints).reshape(n*n,-1),
+            (raw+raw[:,::-1,::-1]).reshape(n*n,-1),
+            (w[None,:,None]*raw+raw.transpose(0,2,1)*w[None,None,:]).reshape(n*n,-1)],axis=1).T
+        return null_space(conditions,rcond=1e-12).T.reshape(-1,n,n)
     null=null_space(constraints.T);raw=[]
     for row in range(len(nodes)):
         for direction in null.T:
@@ -162,6 +173,16 @@ def filter_basis(nodes, consistency_order=2):
     basis=u[:,s>1e-10].T.reshape(-1,len(nodes),len(nodes))
     if np.max(abs(basis@constraints))>1e-12:raise ValueError('Filter consistency constraint')
     return basis
+
+
+def sbp_checks(derivative, quadrature_weights):
+    w=np.asarray(quadrature_weights);boundary=np.zeros_like(derivative)
+    boundary[0,0]=-1;boundary[-1,-1]=1
+    residual=w[:,None]*derivative+derivative.T*w[None,:]-boundary
+    maximum=float(np.max(abs(residual)));limit=2e-12
+    return {'identity':'W D + D^T W = diag(-1,0,...,0,1)',
+            'maximum_absolute_residual':maximum,'absolute_limit':limit,'passed':maximum<=limit,
+            'scope':'Discrete integration by parts for all nodal fields, not a waveform accuracy certificate'}
 
 
 def restore_physical_feasibility(theta, baseline, basis, weights, dataset, limit):
@@ -247,7 +268,14 @@ def train(args):
     if len(indices)<2:raise ValueError('Insufficient converged COMSOL development modes')
     with np.load(args.weights,allow_pickle=False) as f:weights=dict(f)
     baseline=project_filter_consistency(weights[filter_name],mesh['gll'],args.consistency_order)
-    basis=filter_basis(mesh['gll'],args.consistency_order)
+    basis=filter_basis(mesh['gll'],args.consistency_order,
+                       mesh['weights_1d'] if args.summation_by_parts else None)
+    if not len(basis):raise ValueError('No free parameters satisfy the selected exact constraints')
+    if args.summation_by_parts:
+        exact=project_filter_consistency(mesh['derivative'],mesh['gll'],args.consistency_order)
+        baseline=exact+np.einsum('a,aij->ij',np.einsum('aij,ij->a',basis,baseline-exact),basis)
+        if not sbp_checks(baseline,mesh['weights_1d'])['passed']:
+            raise ValueError('Initial filter violates discrete integration by parts')
     output=args.output;output.mkdir(parents=True,exist_ok=False)
     (output/'source_snapshot').mkdir()
     shutil.copyfile(Path(__file__),output/'source_snapshot/modal_calibration.py')
@@ -295,6 +323,9 @@ def train(args):
             'dominant_mode_selection':'largest load participation among admitted COMSOL development modes; no test trajectory selection',
             'initial_physics_feasibility_restoration':initial_restoration,
             'polynomial_consistency_order':args.consistency_order,
+            'summation_by_parts_enforced':args.summation_by_parts,
+            'summation_by_parts_initial':sbp_checks(baseline,mesh['weights_1d']),
+            'summation_by_parts_parent':sbp_checks(weights[filter_name],mesh['weights_1d']),
             'initial_filter_consistency_projection':{
                 'frobenius_correction':float(np.linalg.norm(baseline-weights[filter_name])),
                 'parent_constant_error':float(np.max(abs(weights[filter_name]@np.ones(args.degree+1)))),
@@ -406,6 +437,9 @@ def train(args):
         fitted.x,restoration=restore_physical_feasibility(fitted.x,baseline,basis,weights,physical_training,args.physics_limit)
     final,final_mac,derivative=evaluate(fitted.x)
     if np.min(final_mac[indices])<.9:raise ValueError('Final training mode correspondence lost; no candidate exported')
+    final_sbp=sbp_checks(derivative,mesh['weights_1d'])
+    if args.summation_by_parts and not final_sbp['passed']:
+        raise ValueError('Final filter violates discrete integration by parts; no candidate exported')
     _,physical_train_report=physics.evaluate(derivative,weights,physical_training,details=True)
     _,physical_validation_report=physics.evaluate(derivative,weights,physical_validation,details=True)
     rigid_final=physics.rigid_motion_checks(derivative,weights)
@@ -436,6 +470,7 @@ def train(args):
         'physics_validation_passed':physical_validation_report['all_physical_checks_within_5_percent'],
         'physics_validation_maxima':physical_validation_report['maximum_normalized_residual'],
         'finite_rigid_motion_checks_passed':rigid_final['passed'],'rigid_motion_maxima':rigid_final['maxima'],
+        'summation_by_parts_enforced':args.summation_by_parts,'summation_by_parts_final':final_sbp,
         'long_phase_reference_verified':config['long_phase_reference_verified'],
         'accepted_for_offline_release':False,'long_record_accuracy_certified':False,'elapsed_s':time.monotonic()-start})
     print(json.dumps({'candidate':str(output/'candidate-weights.npz'),'training_modes':indices.tolist(),
@@ -453,6 +488,7 @@ if __name__=='__main__':
     p.add_argument('--h-mm',type=float,default=2.5)
     p.add_argument('--check-reference',type=Path)
     p.add_argument('--consistency-order',type=int,choices=[1,2],default=2)
+    p.add_argument('--summation-by-parts',action='store_true',help='Constrain W D + D^T W to the exact boundary flux matrix for arbitrary nodal fields')
     p.add_argument('--physics-samples',type=int,default=48)
     p.add_argument('--physics-validation-samples',type=int,default=24)
     p.add_argument('--physics-seed',type=int,default=2026102413)
