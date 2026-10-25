@@ -7,6 +7,7 @@ repo=next(p for p in Path(__file__).resolve().parents if (p/'graphwave').is_dir(
 sys.path.insert(0,str(repo))
 from spectral3d.mesh import gll
 root=repo/'research/comsol-validation'
+if not root.is_dir():root=repo/'research'  # Layout inside the offline evidence archive.
 parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);args=parser.parse_args()
 def sha(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def read(path):return json.loads(path.read_text())
