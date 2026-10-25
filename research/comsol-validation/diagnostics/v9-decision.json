@@ -1,0 +1,45 @@
+{
+  "schema": "workai.training_candidate_decision.v1",
+  "candidate": "training/v9",
+  "candidate_weights_sha256": "9c1ec58c3cf93d27334ffbdcf3cc0ffad54ff1b816ff787acf3d296ab3f401be",
+  "decision": "reject_promotion",
+  "reason": "Fresh physical checks and the two known v8 physics regressions pass, but native short nonlinear increments fail and the long reference remains unconverged; full paired long-record outcomes are retained separately.",
+  "formal_training_completed": true,
+  "optimizer_success": true,
+  "independent_physics_passed": true,
+  "independent_physics_maximum": 0.02494992198008089,
+  "failed_independent_physical_components": 0,
+  "summation_by_parts_passed": true,
+  "historical_v8_physics_regression_passed": true,
+  "native_20us_checks_passed": false,
+  "native_20us_maximum_relative_l2": 0.07805288654317008,
+  "complete_5ms_cases": 20,
+  "same_grid_baseline_cases": 20,
+  "long_comparison_passes": 0,
+  "improved_case_maximum_comparisons": 20,
+  "improved_receiver_comparisons": 160,
+  "receiver_comparisons": 160,
+  "vector_difference_range": [
+    0.23363735158664026,
+    1.2890020330378413
+  ],
+  "case_maximum_change_percentage_points": [
+    -0.22013530612918775,
+    -0.03846151851826518
+  ],
+  "converged_long_reference": false,
+  "native_nonlinear_5ms_matrix_verified": false,
+  "accepted_for_offline_release": false,
+  "default_weights_changed": false,
+  "scientific_accuracy_certified": false,
+  "evidence_sha256": {
+    "training/v9/summary.json": "8ca099a476065c13fa21aa4a99f58dc4437c068ff2483b28ff56afe78081c7f1",
+    "diagnostics/physics-validation-v9-paired.json": "b65786c2ac0cab6f6fd8cf21d3aad6e08b984f9e10223f7e095ff3143e20e66b",
+    "diagnostics/v9-historical-physics-regression.json": "daa2c893c1b81062c86aededf7a6fca9decf8bbf99a8e3e3a1189a3d2e9d2d3b",
+    "diagnostics/native-nonlinear-20us-v9.json": "440d5942d9460b7e824f0ea5ffde7e832fd4774b9bc2f96080d5e5f30e432909",
+    "candidate-matrix20-v9/summary.json": "9683781daaaeb81ca1057162c0ed3df2e04dfea3335686bb725c8db1375a3432",
+    "candidate-matrix20-v9-untrained/summary.json": "5f1ff596136e9b958bf1eefff77cf0191999320ed71a497fbfe950e046359b6d",
+    "diagnostics/v9-same-grid-training.json": "05319f654821cfbf5baed1af35b82c8b8e4d3cddbfb96c4d36c822b2726743e6",
+    "diagnostics/spatial-resolution-v9.json": "076636352b65dc671bf592c7e0b514d269df80bc7ff6f761aea11d198170f3d1"
+  }
+}
