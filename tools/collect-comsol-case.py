@@ -26,6 +26,36 @@ def save(path, value):
     tmp.replace(path)
 
 
+def request_json(command, action, *options):
+    """Retry only idempotent reads; an uncertain submission is never replayed."""
+    attempts = 1 if action == 'submit' else 12
+    transient = ['timeout', 'timed out', 'request was canceled', 'temporarily unavailable',
+                 'http 502', 'http 503', 'http 504', 'connection reset']
+    for attempt in range(attempts):
+        try:
+            result = subprocess.run(command + ['-Action', action, *map(str, options)],
+                                    capture_output=True, text=True,
+                                    timeout=1250 if action == 'download' else 45)
+        except subprocess.TimeoutExpired as error:
+            if action == 'submit':
+                raise RuntimeError('Submission outcome is unknown; query its original job ID before any further action.') from error
+            if attempt == attempts - 1:
+                raise
+            time.sleep(min(30, 3 * 2**attempt))
+            continue
+        if result.returncode:
+            error = result.stderr.strip() or result.stdout[-2500:]
+            if action == 'submit' or attempt == attempts - 1 or not any(s in error.lower() for s in transient):
+                raise RuntimeError(error)
+            time.sleep(min(30, 3 * 2**attempt))
+            continue
+        value = json.loads(result.stdout)
+        if not value.get('server_signature_verified'):
+            raise ValueError('Unverified server response')
+        return value
+    raise RuntimeError('Read request exhausted its bounded retry window')
+
+
 def run(args):
     root, folder=args.root, args.case
     identity=json.loads((folder/'identity.json').read_text())
@@ -38,18 +68,7 @@ def run(args):
              '-Root',str(root),'-JobId',job]
 
     def request(action, *options):
-        for attempt in range(1 if action=='submit' else 3):
-            result=subprocess.run(command+['-Action',action,*map(str,options)],capture_output=True,text=True,timeout=1250 if action=='download' else 45)
-            if not result.returncode:
-                break
-            error=result.stderr.strip() or result.stdout[-2500:]
-            if action=='submit' or attempt==2 or not any(s in error.lower() for s in ['timeout','timed out','request was canceled','temporarily unavailable','http 502','http 503','http 504']):
-                raise RuntimeError(error)
-            time.sleep(3)
-        value=json.loads(result.stdout)
-        if not value.get('server_signature_verified'):
-            raise ValueError('Unverified server response')
-        return value
+        return request_json(command, action, *options)
 
     if args.submit and not (root/'requests'/job).exists():
         if not args.source or digest(args.source)!=identity['source_sha256']:

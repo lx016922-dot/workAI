@@ -54,6 +54,10 @@ constraints before acceptance.
 | 300 candidate modes versus the same native h = 0.75 mm, 20 us record | Geometric increment 6.001%, material increment 4.979%, total nonlinear increment 4.761% maximum vector error; maximum complete check 21.368% | Still fails complete native comparison |
 | Candidate modal refinement, 200 to 300 modes at 20 us | Maximum complete change 7.758%; common-mode MAC at least 0.9999999999999967 and maximum common frequency change 7.46e-9 Hz | Truncation is not fully converged; improvement is from additional modes, not changed lower frequencies |
 | Independent reference reconstruction and evolution tests | Exact Q4 polynomial derivatives, Murnaghan energy/force derivative, and sixth-order flow versus adaptive Duffing integration all pass | Implementation tests only; actual native-reference admission is pending |
+| Nonlinear quadrature diagnostic, original GLL to Gauss 9, 200 modes at 20 us | Maximum complete waveform change 0.07168%; native comparison remains approximately 28.926% | Increasing quadrature alone does not resolve the observed discrepancy |
+| Independent analytic physical admission, 300 modes and 64 fresh random fields | Original graph passes all 2,496 checks; maximum residual 0.6270%, below the unchanged 2.5% limit | Separate geometric/material/total increments, x/y/z/summed weak momentum, three modal norm scalings and nonlinear energy; not waveform certification |
+| Gauss 4 acceleration candidate on the same independent fields | Rejected; maximum raw weak-force error 47.422%, and cancellation-sensitive nonlinear energy error 368.473% | Original graph passes the same checks; reduced quadrature is not used in inference |
+| Positive-cubature sketch preflight, 247 retained points | Rejected; maximum independent residual 74.656% | Training states, weights, executed source and failed checks remain archived; no inference use |
 
 The first formal optimization changes the seven-mode frequency-error norm only
 from 2.433461 to 2.433270 Hz. The further run reduces this norm to 2.317378 Hz, with maximum training/independent
@@ -77,6 +81,10 @@ the original time-step, export, polynomial-order and element-budget limits.
 Each source revision is compiled through the existing compare-and-swap endpoint;
 the server retains its previous source and manifest. Unknown submission outcomes
 must be resolved by querying the original job identity, never by duplicate POSTs.
+Read-only status/log/download requests now recover from bounded transient proxy
+failures while preserving signed-response verification. Submission errors and
+timeouts are never automatically replayed. Four transport tests cover recovery,
+unchanged job identity, signature rejection and the no-duplicate-submission rule.
 
 The actual-axis audit detected that COMSOL's y-edge orientation reverses the
 requested one-sided grading. `UltraResearchV11QuarterGradedChecked.java` corrects
