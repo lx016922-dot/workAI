@@ -76,6 +76,17 @@ def prepare(args):
                          field_ny=4*math.ceil(geom['width_mm']/args.sample_h)+1,
                          field_nz=4*math.ceil(geom['thickness_mm']/args.sample_h)+1,
                          field_frames=args.eigenmodes)
+        if args.mesh_nodal_sampling:
+            if not args.quarter_domain:
+                raise ValueError('Mesh-nodal export requires the explicit quarter-domain eigenreference source')
+            step=(args.coarse_h if args.level=='coarse' else args.fine_h)*1e-3
+            lengths=[geom['length_mm']*1e-3,geom['width_mm']*1e-3*.5,geom['thickness_mm']*1e-3*.5]
+            counts=[4*math.ceil(length/step)+1 for length in lengths]
+            if (math.prod(counts)+len(receivers))*args.eigenmodes>2_000_000:
+                raise ValueError('Actual mesh-nodal eigenexport exceeds the existing two-million-record limit')
+            execution.update(sample_mesh_nodes=True,field_nx=counts[0],field_ny=counts[1],field_nz=counts[2])
+    elif args.mesh_nodal_sampling:
+        raise ValueError('Mesh-nodal sampling is only defined for eigenreference exports')
     reference = dict(schema='workai.comsol.graphwave3d.scene.v1', case_id=args.case_id,
                      scene=scene, execution=execution)
     p = dict(schema='workai.comsol.research.case.v1', scenario='guided_plate', boundary='free',
@@ -148,4 +159,5 @@ if __name__ == '__main__':
     p.add_argument('--grading-ratio',type=float,help='Optional explicit graded-mesh eigenreference; requires the graded source variant')
     p.add_argument('--cross-section-grading-ratio',type=float,help='Explicit one-sided quarter-domain grading toward the outer surfaces; requires the compatible source variant')
     p.add_argument('--quarter-domain',action='store_true',help='Explicit axial reflection; requires a compatible quarter-domain source variant')
+    p.add_argument('--mesh-nodal-sampling',action='store_true',help='Export all actual quarter-domain Q4 nodal values within the unchanged record budget; requires the nodal source variant')
     prepare(p.parse_args())

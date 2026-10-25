@@ -49,6 +49,8 @@ constraints before acceptance.
 | Formal physical training, 576 fields + 288 independent fields | Both pass; validation maximum 0.04662% | Physical residuals are not waveform errors |
 | Pinned offline runtime numerical tests | 30 tests pass | Force/energy consistency, sensitivity, mesh, symmetry and independent 5 ms closed-form forcing checks |
 | Corrected temporal layer, native 20 us scene, 200 candidate modes | 0.1 versus 0.025 us: maximum nonlinear-increment vector change 0.531%; complete component/band change 3.234% | Short temporal convergence only; not a COMSOL accuracy certificate |
+| Candidate versus new native quarter COMSOL, h = 0.75 mm, 20 us | Maximum vector errors: linear 0.530%, geometric increment 7.067%, material increment 5.645%, total nonlinear increment 5.210%; maximum complete check 28.926% | Fails; independent finer native mesh/time checks remain pending |
+| Explicit cross-section graded quarter COMSOL, h = 0.3 mm | Rejected: actual y spacing decreases toward the symmetry plane | Mesh orientation differs from the requested outer-surface refinement; excluded from training and convergence admission |
 
 The first formal optimization changes the seven-mode frequency-error norm only
 from 2.433461 to 2.433270 Hz. The further run reduces this norm to 2.317378 Hz, with maximum training/independent
@@ -72,6 +74,32 @@ the original time-step, export, polynomial-order and element-budget limits.
 Each source revision is compiled through the existing compare-and-swap endpoint;
 the server retains its previous source and manifest. Unknown submission outcomes
 must be resolved by querying the original job identity, never by duplicate POSTs.
+
+The actual-axis audit detected that COMSOL's y-edge orientation reverses the
+requested one-sided grading. `UltraResearchV11QuarterGradedChecked.java` corrects
+that edge and checks all actual axis counts, spacing directions, grading ratios
+and Cartesian element counts before solving. The original completed result and
+its rejection remain archived. The corrected variant has not yet supplied an
+admitted reference.
+
+`UltraResearchV11QuarterNodal.java` prepares a separate research reference: native
+COMSOL eigenfields at every Q4 tensor-element node. Coordinates and eigenfrequencies
+are stored once in the signed receipt; the compact CSV retains all three field
+components in double precision. Two prepared exports contain 78 modes at h =
+0.35 mm and 56 at h = 0.3 mm, each below the unchanged two-million-record limit.
+The 256 MiB decoded-export limit also remains enforced. They wait behind the native refinement queue.
+These are inputs to a future independently validated nonlinear modal reference,
+not completed nonlinear COMSOL transients.
+
+The current complete nonlinear matrix is run
+[40204192440](https://github.com/lx016922-dot/workAI/actions/runs/40204192440),
+frozen at commit `1cb35bc82c056b9960f3e94d4f7c679afe8f2ee6`.
+`tools/audit-modal-matrix.py` independently reloads its saved arrays, verifies the
+complete time grid and model identity, reconstructs receivers from saved modal
+coordinates, checks energy histories and sampled conservative potentials, and
+regenerates each linear COMSOL comparison. The separate audit/publication workflow
+requires all 20 source jobs to finish before running. Its acceptance flag remains
+false without full-duration nonlinear reference and convergence evidence.
 
 ## Reproduction
 
