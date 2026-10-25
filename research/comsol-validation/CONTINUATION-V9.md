@@ -155,3 +155,11 @@ python -m graphwave.modal_calibration --action train \
 ```
 
 [正式配置、原始优化记录、场、权重与源码快照](training/v9/summary.json)和预训练记录全部保留。训练使用 Python 3.12.14、NumPy 2.3.5、SciPy 1.17.0；长记录验证固定 NumPy 2.2.6、SciPy 1.15.3、Numba 0.63.1。候选保持 `accepted_for_offline_release=false`、`scientific_accuracy_certified=false`。
+
+## 下载与校验
+
+[下载第 9 轮离线证据包](https://github.com/lx016922-dot/workAI/releases/download/v0.3.0/WorkAI-COMSOL-physics-evidence-0.3.0-training-v9.zip)：**1,009,329,997 字节**，约 **1009 MB**。包含相同网格训练前后各 20 组完整接收点记录、全部训练与约束证据、COMSOL 标签、离线复核源码，以及单独重新计算的 Hann 1 周期离线记录。按包内 `REPRODUCE.txt` 使用软件包的 Python 运行时复核或重新预测，无需联网。
+
+SHA-256：`82dce46680caeb7d386b7b959c03bc8b21c22e6c075b4cb5f49b4a48c3bf9d93`。
+
+[证据构建工作流](https://github.com/lx016922-dot/workAI/actions/runs/40165139849)逐项读回并核验清单内 **5097 个文件**的长度和 SHA-256。新 ZIP 的构建摘要、GitHub 资产摘要、实际下载的八项组合校验清单完全一致；没有在此重复下载整个大 ZIP。原七个 ZIP、软件版本标签与默认权重均保持不变，见[发布核验](../release-validation/v0.3.0-training-v9-assets.json)。证据包来源提交为 `9f3c3b1242510dbf05b8813bf4e9ec16350b5eab`；本发布回执在构建之后单独提交，避免把后写回执冒充归档内已有内容。

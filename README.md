@@ -18,7 +18,7 @@
 
 Windows 和 Linux 自带运行时均已完成真实 5 ms 计算。浏览器提取、五种响应、FFT、CSV、全记录导出及检查点续算均已检查，见 [软件验证记录](offline/model/long-software-validation.json)。详细操作、资源需求和使用范围见 [离线说明](offline/README-OFFLINE.txt)。完整示例包含全部节点时域数据，便携包体积较大；额外的验证证据 ZIP 用于复查研究结果。
 
-0.3.0 已公开为研究预发布版。Windows / Linux 包的构建哈希、GitHub 资产摘要和下载校验清单相符，见[软件发布核验](research/release-validation/v0.3.0-initial-assets.json)。软件固定于该版本标签；[时间细化补充包](research/release-validation/v0.3.0-supplement-assets.json)与[第 7 轮证据包](research/release-validation/v0.3.0-training-v7-assets.json)继续保留。最新新增 [第 8 轮离线证据包](https://github.com/lx016922-dot/workAI/releases/download/v0.3.0/WorkAI-COMSOL-physics-evidence-0.3.0-training-v8.zip)，约 **944 MB**，含训练前后各 20 组完整记录及离线复核源码；清单内 4986 个文件逐项读回校验，七个 ZIP 的下载清单均与 GitHub 摘要一致，见[本轮发布核验](research/release-validation/v0.3.0-training-v8-assets.json)。原六个 ZIP、软件标签和默认模型保持不变。
+0.3.0 已公开为研究预发布版。Windows / Linux 包的构建哈希、GitHub 资产摘要和下载校验清单相符，见[软件发布核验](research/release-validation/v0.3.0-initial-assets.json)。软件固定于该版本标签；[时间细化补充包](research/release-validation/v0.3.0-supplement-assets.json)、[第 7 轮](research/release-validation/v0.3.0-training-v7-assets.json)和[第 8 轮证据包](research/release-validation/v0.3.0-training-v8-assets.json)继续保留。最新新增 [第 9 轮离线证据包](https://github.com/lx016922-dot/workAI/releases/download/v0.3.0/WorkAI-COMSOL-physics-evidence-0.3.0-training-v9.zip)，约 **1009 MB**，含训练前后各 20 组完整记录、离线复核源码及本轮实际离线重算记录；清单内 **5097** 个文件逐项读回校验，八个 ZIP 的下载清单均与 GitHub 摘要一致，见[本轮发布核验](research/release-validation/v0.3.0-training-v9-assets.json)。原七个 ZIP、软件标签和默认模型保持不变。
 
 原始用户模型、检查点与八例历史验收保留在 `offline/model`，可另下载 [0.2.0 原始冻结版](https://github.com/lx016922-dot/workAI/releases/tag/v0.2.0)。其原 14 μs 最大全场误差 0.438%、最大材料增量误差 1.118% 不能延伸到当前 5 ms 或其他工况。[原模型核验](offline/model/validation.json)
 
