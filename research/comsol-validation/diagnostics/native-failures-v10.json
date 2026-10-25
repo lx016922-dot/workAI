@@ -1,0 +1,205 @@
+{
+  "schema": "workai.native_nonlinear_failure_diagnosis.v1",
+  "scope": "Post-freeze failure inventory using archived native 20 us COMSOL records; not used for v10 fitting or selection",
+  "threshold": 0.05,
+  "weak_reference_rms_floor_m": 1e-13,
+  "receiver_index_is_zero_based": true,
+  "reference_convergence_verified": false,
+  "candidates": {
+    "v10-untrained": {
+      "source_report_sha256": "86af448895f5f550e578b79f0ae3703cf7aed7b454b49812f3f229a20f91f013",
+      "failures": [
+        {
+          "kind": "waveform",
+          "branch": "geometric",
+          "receiver_index": 7,
+          "component": "x",
+          "error_rms_m": 2.579611220149274e-14,
+          "reference_rms_m": 2.727918464016231e-13,
+          "relative_l2": 0.09456335496008157,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "geometric",
+          "receiver_index": 7,
+          "component": "z",
+          "error_rms_m": 6.446748325814965e-15,
+          "reference_rms_m": 1.157188460867863e-13,
+          "relative_l2": 0.05571044426920799,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "geometric",
+          "receiver_index": 7,
+          "component": "vector",
+          "error_rms_m": 2.6802114547318213e-14,
+          "reference_rms_m": 3.3984786769887083e-13,
+          "relative_l2": 0.07886503666713242,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "material",
+          "receiver_index": 7,
+          "component": "x",
+          "error_rms_m": 7.902291447881302e-14,
+          "reference_rms_m": 1.1364925939481284e-12,
+          "relative_l2": 0.06953227403294435,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "material",
+          "receiver_index": 7,
+          "component": "vector",
+          "error_rms_m": 8.126661440360469e-14,
+          "reference_rms_m": 1.3631456766164e-12,
+          "relative_l2": 0.05961696962963244,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "total_nonlinear",
+          "receiver_index": 7,
+          "component": "x",
+          "error_rms_m": 5.339674684566293e-14,
+          "reference_rms_m": 8.638053841733232e-13,
+          "relative_l2": 0.06181571430787566,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "total_nonlinear",
+          "receiver_index": 7,
+          "component": "vector",
+          "error_rms_m": 5.505489243410382e-14,
+          "reference_rms_m": 1.0253573283163414e-12,
+          "relative_l2": 0.05369337197258357,
+          "passed": false
+        },
+        {
+          "kind": "spectrum",
+          "branch": "geometric",
+          "receiver_index": 7,
+          "component": "2f_x",
+          "error_rms_m": 1.0633317347755647e-14,
+          "reference_rms_m": 1.8941105400162704e-13,
+          "relative_l2": 0.05613884260241911,
+          "passed": false
+        },
+        {
+          "kind": "spectrum",
+          "branch": "geometric",
+          "receiver_index": 7,
+          "component": "2f_vector",
+          "error_rms_m": 1.1900630739897401e-14,
+          "reference_rms_m": 2.344921509210724e-13,
+          "relative_l2": 0.05075065708234741,
+          "passed": false
+        }
+      ],
+      "waveform_failures": 7,
+      "spectral_failures": 2
+    },
+    "v10": {
+      "source_report_sha256": "84607e68d1cda620de3a08245e089fbb42d4b1807dd9a0ef6bb2892bd5a9265a",
+      "failures": [
+        {
+          "kind": "waveform",
+          "branch": "geometric",
+          "receiver_index": 7,
+          "component": "x",
+          "error_rms_m": 2.595402077862401e-14,
+          "reference_rms_m": 2.727918464016231e-13,
+          "relative_l2": 0.09514221601921596,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "geometric",
+          "receiver_index": 7,
+          "component": "z",
+          "error_rms_m": 6.364198048871282e-15,
+          "reference_rms_m": 1.157188460867863e-13,
+          "relative_l2": 0.054997074928471806,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "geometric",
+          "receiver_index": 7,
+          "component": "vector",
+          "error_rms_m": 2.6949014283740755e-14,
+          "reference_rms_m": 3.3984786769887083e-13,
+          "relative_l2": 0.07929728812546054,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "material",
+          "receiver_index": 7,
+          "component": "x",
+          "error_rms_m": 7.952634237738374e-14,
+          "reference_rms_m": 1.1364925939481284e-12,
+          "relative_l2": 0.0699752403146883,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "material",
+          "receiver_index": 7,
+          "component": "vector",
+          "error_rms_m": 8.177286555642088e-14,
+          "reference_rms_m": 1.3631456766164e-12,
+          "relative_l2": 0.059988354112964264,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "total_nonlinear",
+          "receiver_index": 7,
+          "component": "x",
+          "error_rms_m": 5.374263715607113e-14,
+          "reference_rms_m": 8.638053841733232e-13,
+          "relative_l2": 0.06221614051121454,
+          "passed": false
+        },
+        {
+          "kind": "waveform",
+          "branch": "total_nonlinear",
+          "receiver_index": 7,
+          "component": "vector",
+          "error_rms_m": 5.5418426603544174e-14,
+          "reference_rms_m": 1.0253573283163414e-12,
+          "relative_l2": 0.05404791585636045,
+          "passed": false
+        },
+        {
+          "kind": "spectrum",
+          "branch": "geometric",
+          "receiver_index": 7,
+          "component": "2f_x",
+          "error_rms_m": 1.0692246835002374e-14,
+          "reference_rms_m": 1.8941105400162704e-13,
+          "relative_l2": 0.05644996218072113,
+          "passed": false
+        },
+        {
+          "kind": "spectrum",
+          "branch": "geometric",
+          "receiver_index": 7,
+          "component": "2f_vector",
+          "error_rms_m": 1.196825560617687e-14,
+          "reference_rms_m": 2.344921509210724e-13,
+          "relative_l2": 0.051039045695841896,
+          "passed": false
+        }
+      ],
+      "waveform_failures": 7,
+      "spectral_failures": 2
+    }
+  },
+  "scientific_accuracy_certified": false
+}
