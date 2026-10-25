@@ -61,6 +61,11 @@ def oscillator_response(scene, frequency, times_us, *, rtol=1e-11):
 
 
 def response(reference,scene,*,count=None,rtol=1e-11):
+    direction=np.asarray(scene['source']['direction'],dtype=float)
+    if direction.shape!=(3,) or not np.isfinite(direction).all() or np.linalg.norm(direction)==0:
+        raise ValueError('Finite nonzero force direction required')
+    if reference['receipt'].get('domain_symmetry')=='quarter_yz' and np.any(direction[1:]!=0):
+        raise ValueError('Quarter-domain COMSOL reference requires uniform axial loading')
     for key in ['geometry','material','boundary','constitutive']:
         if scene[key]!=reference['scene'][key]:raise ValueError('Modal reference changes physical problem: '+key)
     if scene['source']['face']!=reference['scene']['source']['face'] or scene['source']['radius_mm']!=0:
@@ -72,7 +77,7 @@ def response(reference,scene,*,count=None,rtol=1e-11):
     coordinates,details=oscillator_response(scene,reference['frequency_hz'][:count],times,rtol=rtol)
     integrals=reference['integrals'][:count]
     forces=np.stack([integrals['force_'+axis+'_integral'] for axis in 'xyz'],-1)
-    direction=np.array(scene['source']['direction'],dtype=float);direction/=np.linalg.norm(direction)
+    direction=direction/np.linalg.norm(direction)
     coupling=(forces@direction)*scene['source']['amplitude_mpa']*1e6/integrals['mass_integral']
     traces=np.einsum('tm,m,mrc->trc',coordinates,coupling,fields[:count],optimize=True)
     if not np.isfinite(traces).all():raise ValueError('Nonfinite modal response')

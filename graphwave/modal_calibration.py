@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 import numpy as np
 from scipy.linalg import null_space
-from scipy.optimize import linear_sum_assignment, least_squares, minimize
+from scipy.optimize import linear_sum_assignment, least_squares, minimize, OptimizeResult
 from scipy.sparse import coo_matrix, diags
 from scipy.sparse.linalg import eigsh
 from spectral3d.mesh import make_mesh, boundary_data, interpolation
@@ -27,6 +27,42 @@ def digest(path):
 def save(path, value):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     path.write_text(json.dumps(value,indent=2,allow_nan=False)+'\n')
+
+
+def candidate_mesh(scene,args):
+    if args.quarter_domain:
+        from .quarter_symmetry import make_quarter_mesh
+        if args.axis_elements is None:raise ValueError('Quarter domain requires explicit computational element counts')
+        return make_quarter_mesh(scene,args.degree,args.h_mm,args.grading_ratios,args.axis_elements)
+    from .graded_mesh import make_graded_mesh
+    return make_graded_mesh(scene,args.degree,args.h_mm,args.grading_ratios,args.axis_elements)
+
+
+def training_reference_subset(reference,count):
+    if count is None:return reference
+    if not 8<=count<=len(reference['frequency_hz']):
+        raise ValueError('Requested training spectrum exceeds the verified COMSOL export')
+    if count<len(reference['frequency_hz']) and reference['frequency_hz'][count-1]<900000:
+        raise ValueError('Training spectrum truncates the declared 900 kHz admission band')
+    result=dict(reference)
+    for key in ['frequency_hz','fields','receiver_fields','integrals']:
+        result[key]=reference[key][:count]
+    return result
+
+
+def axial_reference_subset(reference,weights):
+    """Retain the exact loaded reflection class, never an amplitude-based cutoff."""
+    from .modal_reduction import axial_reflection_subspace
+    grid=make_mesh(reference['scene'],4,2.5)
+    if not np.allclose(grid['points'],reference['coordinates'],rtol=0,atol=1e-14):
+        raise ValueError('Reference reflection grid mismatch')
+    selected,details=axial_reflection_subspace(grid,reference['scene'],weights,reference['fields'])
+    result=dict(reference)
+    for key in ['frequency_hz','fields','receiver_fields','integrals']:
+        result[key]=reference[key][selected]
+    result['source_mode_indices']=selected.tolist()
+    result['reference_symmetry_selection']=details
+    return result
 
 
 def read_modes(folder):
@@ -97,12 +133,19 @@ def stiffness(mesh, derivative, quadratic):
 
 
 def modes(mesh, scene, derivative, quadratic, count):
+    if 'reflection_planes_m' in mesh:
+        from .quarter_symmetry import modes as quarter_modes
+        return quarter_modes(mesh,scene,derivative,quadratic,count)
     matrix=stiffness(mesh,derivative,quadratic)
     _,fixed,_=boundary_data(mesh,scene)
     free=np.ones(len(mesh['points'])*3,dtype=bool);free[(fixed[:,None]*3+np.arange(3)).ravel()]=False
     mass=np.repeat(mesh['mass'],3);scale=1/np.sqrt(mass[free])
     normalized=diags(scale)@matrix[free][:,free]@diags(scale)
-    values,vectors=eigsh(normalized,k=count,sigma=0,which='LM',tol=1e-11,v0=np.ones(free.sum()),maxiter=5000)
+    # A constant start can be exactly orthogonal to antisymmetric modes of a
+    # plate, making the returned spectrum depend on roundoff in the filter.
+    # A reproducible nonsymmetric start excites every symmetry class.
+    start=np.random.default_rng(2026102524).normal(size=free.sum())
+    values,vectors=eigsh(normalized,k=count,sigma=0,which='LM',tol=1e-11,v0=start,maxiter=5000)
     order=np.argsort(values);values=values[order];vectors=vectors[:,order]
     if np.any(values<=0):raise ValueError('Nonpositive neural stiffness mode')
     fields=np.zeros((count,len(mass)));fields[:,free]=(vectors*scale[:,None]).T
@@ -131,6 +174,13 @@ def modal_sampling(mesh, coordinates):
     def apply(fields):
         return np.stack([sample@fields[:,:,axis].T for axis in range(3)],axis=-1).transpose(1,0,2)
     return apply
+
+
+def physical_sampling(mesh,coordinates):
+    if 'reflection_planes_m' in mesh:
+        from .quarter_symmetry import sampling
+        return sampling(mesh,coordinates)
+    return modal_sampling(mesh,coordinates)
 
 
 def project_filter_consistency(derivative,nodes,consistency_order=1):
@@ -210,8 +260,8 @@ def restore_physical_feasibility(theta, baseline, basis, weights, dataset, limit
 
 def audit(args):
     reference=read_modes(args.reference)
-    scene=reference['scene'];mesh=make_mesh(scene,args.degree,args.h_mm)
-    label_mesh=make_mesh(scene,4,2.5);sample_modes=modal_sampling(mesh,reference['coordinates'])
+    scene=reference['scene'];mesh=candidate_mesh(scene,args)
+    label_mesh=make_mesh(scene,4,2.5);sample_modes=physical_sampling(mesh,reference['coordinates'])
     if not np.allclose(label_mesh['points'],reference['coordinates'],rtol=0,atol=1e-14):raise ValueError('Reference/node grid mismatch')
     with np.load(args.weights,allow_pickle=False) as f:weights=dict(f)
     derivative=weights['derivative_'+str(args.degree)];matrix=stiffness(mesh,derivative,weights['quadratic_tensor'])
@@ -244,9 +294,13 @@ def audit(args):
 
 def train(args):
     from . import nonlinear_constraints as physics
+    with np.load(args.weights,allow_pickle=False) as f:weights=dict(f)
     reference=read_modes(args.reference);check=read_modes(args.check_reference)
-    scene=reference['scene'];mesh=make_mesh(scene,args.degree,args.h_mm)
-    label_mesh=make_mesh(scene,4,2.5);sample_modes=modal_sampling(mesh,reference['coordinates'])
+    if args.quarter_domain:
+        reference=axial_reference_subset(reference,weights);check=axial_reference_subset(check,weights)
+    reference=training_reference_subset(reference,args.modal_count)
+    scene=reference['scene'];mesh=candidate_mesh(scene,args)
+    label_mesh=make_mesh(scene,4,2.5);sample_modes=physical_sampling(mesh,reference['coordinates'])
     filter_name='derivative_'+str(args.degree)
     # Excitation metadata is irrelevant to a zero-load eigenproblem, but every
     # physical input and every spatial sampling coordinate must agree.
@@ -266,7 +320,6 @@ def train(args):
     selected=(target<=900000)&(participation>=.01*participation.max())&(ref_mac>=.99)&(uncertainty/target<=1e-4)
     indices=np.flatnonzero(selected)
     if len(indices)<2:raise ValueError('Insufficient converged COMSOL development modes')
-    with np.load(args.weights,allow_pickle=False) as f:weights=dict(f)
     baseline=project_filter_consistency(weights[filter_name],mesh['gll'],args.consistency_order)
     basis=filter_basis(mesh['gll'],args.consistency_order,
                        mesh['weights_1d'] if args.summation_by_parts else None)
@@ -280,6 +333,8 @@ def train(args):
     (output/'source_snapshot').mkdir()
     shutil.copyfile(Path(__file__),output/'source_snapshot/modal_calibration.py')
     shutil.copyfile(Path(physics.__file__),output/'source_snapshot/nonlinear_constraints.py')
+    for name in ['graded_mesh.py','modal_sensitivity.py','modal_sparse.py','quarter_symmetry.py']:
+        shutil.copyfile(Path(__file__).with_name(name),output/'source_snapshot'/name)
     physical_training=physics.make_dataset(scene['material'],args.physics_samples,args.physics_seed,
         degree=args.degree,polynomial_degree=args.physics_polynomial_degree)
     physical_validation=physics.make_dataset(scene['material'],args.physics_validation_samples,args.physics_seed+1,
@@ -315,6 +370,14 @@ def train(args):
             'refinement_identity':check['identity'],'baseline_weights_sha256':digest(args.weights),
             'training_mode_indices':indices.tolist(),'mode_refinement_uncertainty_hz':uncertainty.tolist(),
             'candidate_degree':args.degree,'candidate_h_mm':args.h_mm,'label_sampling_degree':4,'label_sampling_h_mm':2.5,
+            'candidate_grading_ratios':list(args.grading_ratios),'candidate_axis_elements':mesh.get('axis_element_counts'),
+            'candidate_domain_symmetry':'quarter_yz' if args.quarter_domain else 'full',
+            'training_spectrum_modes':len(reference['frequency_hz']),
+            'reference_source_mode_indices':reference.get('source_mode_indices',list(range(len(reference['frequency_hz']))))[:len(reference['frequency_hz'])],
+            'reference_symmetry_selection':reference.get('reference_symmetry_selection'),
+            'training_frequency_gradient':'Hellmann-Feynman exact tangent sensitivity' if args.analytic_frequency_gradient else 'central differences of eigensolves',
+            'sequential_linearization':args.sequential_linearization,
+            'mode_correspondence_guard':'abort every ambiguous trial' if args.analytic_frequency_gradient else 'SLSQP inequality and final check',
             'mode_matching_interpolation':'Fixed geometric interpolation of candidate eigenvectors to the archived COMSOL sample coordinates; no transient correction',
             'mode_refinement_mac':ref_mac.tolist(),'frequency_admission_relative':1e-4,
             'long_phase_reference_verified':bool(np.max(uncertainty[indices])<=.5),
@@ -362,12 +425,30 @@ def train(args):
             'accepted_for_offline_release':False,'long_record_accuracy_certified':False,
             'training_source_sha256':digest(Path(__file__))}
     save(output/'config.json',config)
-    history=[];start=time.monotonic();count=len(reference['frequency_hz'])
+    history=[];start=time.monotonic();count=len(reference['frequency_hz']);latest_frequency_jacobian=None
+    spectrum_cache={}
 
     def evaluate(theta):
+        nonlocal latest_frequency_jacobian
+        key=np.asarray(theta,dtype=np.float64).tobytes()
+        if key in spectrum_cache:
+            frequency,mac,derivative,latest_frequency_jacobian=spectrum_cache[key]
+            return frequency,mac,derivative
         derivative=baseline+np.einsum('a,aij->ij',theta,basis)
         frequency,fields=modes(mesh,scene,derivative,weights['quadratic_tensor'],count)
         mapping,mac=match(reference['fields'],sample_modes(fields),label_mesh['mass'])
+        if args.analytic_frequency_gradient:
+            if np.min(mac[indices])<.9:raise ValueError('Analytic training trial lost mode correspondence; no candidate exported')
+            matched=frequency[mapping[indices]]
+            distances=abs(matched[:,None]-frequency[None,:])
+            distances[np.arange(len(indices)),mapping[indices]]=np.inf
+            if np.any(distances.min(axis=1)/matched<1e-7):
+                raise ValueError('Near-degenerate training eigenvalues require subspace sensitivities')
+            from .modal_sensitivity import frequency_jacobian
+            latest_frequency_jacobian=frequency_jacobian(mesh,derivative,weights['quadratic_tensor'],
+                                                        matched,fields[mapping[indices]],basis)
+        spectrum_cache[key]=(frequency[mapping],mac,derivative,latest_frequency_jacobian)
+        if len(spectrum_cache)>32:spectrum_cache.pop(next(iter(spectrum_cache)))
         return frequency[mapping],mac,derivative
 
     initial,initial_mac,_=evaluate(np.zeros(len(basis)))
@@ -398,6 +479,12 @@ def train(args):
         # Enforce every sample/branch/projection gate, so an average physics
         # penalty cannot hide a locally poor boundary or transverse equation.
         cache={}
+        def physical_values(theta):
+            derivative=baseline+np.einsum('a,aij->ij',theta,basis)
+            r,report=physics.evaluate(derivative,weights,physical_training,details=True)
+            values=np.concatenate([np.asarray(row[group]).ravel() for row in report['samples'] for group in physics.CONSTRAINT_GROUPS])
+            exponent=2 if args.constraint_form=='squared' else 1
+            return args.physics_weight**2*(r@r)+.0001*(theta@theta),1-(values/args.physics_limit)**exponent
         def constrained(theta):
             key=np.asarray(theta,dtype=np.float64).tobytes()
             if key not in cache:
@@ -412,7 +499,13 @@ def train(args):
                 # Reject it through an explicit inequality instead of aborting
                 # the line search. The final candidate retains the same gate.
                 exponent=2 if args.constraint_form=='squared' else 1
-                cache[key]=(value,np.r_[1-(values/args.physics_limit)**exponent,mac[indices]/.9-1])
+                inequalities=1-(values/args.physics_limit)**exponent
+                if not args.analytic_frequency_gradient:inequalities=np.r_[inequalities,mac[indices]/.9-1]
+                phase_jacobian=None;residual_jacobian=None
+                if args.analytic_frequency_gradient:
+                    residual_jacobian=(2*np.pi*.005*physical_weight[indices])[:,None]*latest_frequency_jacobian
+                    phase_jacobian=2*residual@residual_jacobian
+                cache[key]=(value,inequalities,phase_jacobian,residual,residual_jacobian)
                 if len(cache)>96:cache.pop(next(iter(cache)))
                 row={'evaluation':len(history)+1,'elapsed_s':time.monotonic()-start,'parameters':theta.tolist(),
                      'weighted_phase_loss':float(residual@residual),'weighted_physics_loss':float(args.physics_weight**2*(r@r)),
@@ -420,22 +513,87 @@ def train(args):
                      'training_frequency_errors_hz':(frequency[indices]-target[indices]).tolist(),
                      'minimum_training_mac':float(mac[indices].min())}
                 history.append(row)
-                if len(history)%20==0:print(json.dumps(row),flush=True)
+                if len(history)%20==0 or args.analytic_frequency_gradient:print(json.dumps(row),flush=True)
+                save(output/'history-progress.json',history)
             return cache[key]
         def jacobian(theta,which):
             # A declared absolute stencil avoids cancellation in the small
             # material-force increment when differentiating the training loss.
             step=args.gradient_step;columns=[]
+            base=constrained(theta) if args.analytic_frequency_gradient else None
             for j in range(len(theta)):
                 direction=np.zeros_like(theta);direction[j]=step
-                columns.append((constrained(theta+direction)[which]-constrained(theta-direction)[which])/(2*step))
-            return np.stack(columns,axis=-1)
+                function=physical_values if args.analytic_frequency_gradient else constrained
+                columns.append((function(theta+direction)[which]-function(theta-direction)[which])/(2*step))
+            result=np.stack(columns,axis=-1)
+            if args.analytic_frequency_gradient and which==0:result+=base[2]
+            return result
         objective_scale=max(1.,constrained(np.zeros(len(basis)))[0])
-        fitted=minimize(lambda theta:constrained(theta)[0]/objective_scale,np.zeros(len(basis)),
-                        jac=lambda theta:jacobian(theta,0)/objective_scale,method='SLSQP',bounds=[(-args.parameter_bound,args.parameter_bound)]*len(basis),
-                        constraints=[{'type':'ineq','fun':lambda theta:constrained(theta)[1],
-                                      'jac':lambda theta:jacobian(theta,1)}],
-                        options={'maxiter':args.max_iterations,'ftol':args.optimizer_tolerance})
+        if args.sequential_linearization:
+            # Fit a local frequency model while re-evaluating the full nonlinear
+            # physics constraints at EVERY inner trial. Each accepted outer
+            # step requires a fresh graph eigensolve and actual objective gain.
+            # This avoids expensive eigensolves at physically infeasible trials.
+            theta=np.zeros(len(basis));radius=min(.25,args.parameter_bound);steps=[];success=False
+            message='Maximum sequential linearization iterations reached'
+            for outer in range(args.max_iterations):
+                anchor=theta.copy();actual=constrained(anchor);r0,j0=actual[3],actual[4]
+                physical_cache={};derivative_cache={}
+                def physical(theta):
+                    key=np.asarray(theta,dtype=np.float64).tobytes()
+                    if key not in physical_cache:
+                        physical_cache[key]=physical_values(theta)
+                        if len(physical_cache)>32:physical_cache.pop(next(iter(physical_cache)))
+                    return physical_cache[key]
+                def physical_jac(theta,which):
+                    key=np.asarray(theta,dtype=np.float64).tobytes()
+                    if key not in derivative_cache:
+                        columns=[[],[]]
+                        for j in range(len(theta)):
+                            direction=np.zeros_like(theta);direction[j]=args.gradient_step
+                            plus,minus=physical(theta+direction),physical(theta-direction)
+                            for k in range(2):columns[k].append((plus[k]-minus[k])/(2*args.gradient_step))
+                        derivative_cache.clear();derivative_cache[key]=[np.stack(c,axis=-1) for c in columns]
+                    return derivative_cache[key][which]
+                def local_value(theta):
+                    r=r0+j0@(theta-anchor)
+                    return float(r@r+physical(theta)[0])
+                inner=minimize(lambda x:local_value(x)/objective_scale,anchor,
+                    jac=lambda x:(2*(r0+j0@(x-anchor))@j0+physical_jac(x,0))/objective_scale,
+                    method='SLSQP',bounds=[(max(-args.parameter_bound,x-radius),min(args.parameter_bound,x+radius)) for x in anchor],
+                    constraints=[{'type':'ineq','fun':lambda x:physical(x)[1],'jac':lambda x:physical_jac(x,1)}],
+                    options={'maxiter':100,'ftol':args.optimizer_tolerance})
+                increment,repair=restore_physical_feasibility(inner.x-anchor,
+                    baseline+np.einsum('a,aij->ij',anchor,basis),basis,weights,physical_training,args.physics_limit)
+                trial=anchor+increment;predicted_gain=actual[0]-local_value(trial)
+                if np.max(abs(increment))<1e-8 or predicted_gain<=args.optimizer_tolerance:
+                    success=bool(inner.success);message='Converged constrained local frequency model' if success else 'Inner solver did not find a verified improving step'
+                    steps.append({'outer_iteration':outer+1,'converged_without_new_spectrum':True,
+                                  'predicted_gain':float(predicted_gain),'maximum_parameter_step':float(np.max(abs(increment)))})
+                    break
+                evaluated=constrained(trial);gain=actual[0]-evaluated[0];ratio=gain/predicted_gain
+                accepted=bool(gain>0 and ratio>.1)
+                steps.append({'outer_iteration':outer+1,'trust_radius':radius,'inner_optimizer_success':bool(inner.success),
+                    'inner_optimizer_message':str(inner.message),'actual_gain':float(gain),'predicted_gain':float(predicted_gain),
+                    'gain_ratio':float(ratio),'accepted':accepted,'candidate_parameters':trial.tolist(),
+                    'physical_feasibility_restoration':repair})
+                save(output/'sequential-linearization.json',steps)
+                if accepted:
+                    theta=trial
+                    if gain<=args.optimizer_tolerance:
+                        success=True;message='Converged verified objective gain';break
+                    if ratio>.75 and np.max(abs(increment))>.8*radius:radius=min(args.parameter_bound,2*radius)
+                else:radius*=.25
+                if radius<1e-7:
+                    message='Trust radius exhausted; best physically feasible verified candidate retained';break
+            save(output/'sequential-linearization.json',steps)
+            fitted=OptimizeResult(x=theta,success=success,message=message,nfev=len(history),fun=constrained(theta)[0])
+        else:
+            fitted=minimize(lambda theta:constrained(theta)[0]/objective_scale,np.zeros(len(basis)),
+                            jac=lambda theta:jacobian(theta,0)/objective_scale,method='SLSQP',bounds=[(-args.parameter_bound,args.parameter_bound)]*len(basis),
+                            constraints=[{'type':'ineq','fun':lambda theta:constrained(theta)[1],
+                                          'jac':lambda theta:jacobian(theta,1)}],
+                            options={'maxiter':args.max_iterations,'ftol':args.optimizer_tolerance})
     optimized_theta=fitted.x.copy();restoration=None
     if args.optimizer=='slsqp':
         fitted.x,restoration=restore_physical_feasibility(fitted.x,baseline,basis,weights,physical_training,args.physics_limit)
@@ -490,6 +648,12 @@ if __name__=='__main__':
     p.add_argument('--action',choices=['audit','train'],default='audit')
     p.add_argument('--degree',type=int,choices=[4,5,6],default=4)
     p.add_argument('--h-mm',type=float,default=2.5)
+    p.add_argument('--grading-ratios',type=float,nargs=3,default=[1.,1.,1.])
+    p.add_argument('--axis-elements',type=int,nargs=3)
+    p.add_argument('--quarter-domain',action='store_true',help='Use exact axial reflection constraints and reflect transverse displacement back to the full plate')
+    p.add_argument('--modal-count',type=int,help='Verified leading COMSOL modes to retain for training; remaining exported modes remain available for validation')
+    p.add_argument('--analytic-frequency-gradient',action='store_true',help='Differentiate graph eigenvalues exactly; retain independent physical finite differences and reject ambiguous mode trials')
+    p.add_argument('--sequential-linearization',action='store_true',help='Use exact physical constraints with a local frequency model; accept each step only after a fresh eigensolve confirms objective improvement')
     p.add_argument('--check-reference',type=Path)
     p.add_argument('--consistency-order',type=int,choices=[1,2],default=2)
     p.add_argument('--summation-by-parts',action='store_true',help='Constrain W D + D^T W to the exact boundary flux matrix for arbitrary nodal fields')
@@ -509,6 +673,8 @@ if __name__=='__main__':
     p.add_argument('--max-iterations',type=int,default=150)
     args=p.parse_args()
     if args.action=='train':
+        if args.analytic_frequency_gradient and args.optimizer!='slsqp':p.error('Analytic frequency gradients require the constrained SLSQP optimizer')
+        if args.sequential_linearization and not args.analytic_frequency_gradient:p.error('Sequential linearization requires analytic frequency gradients')
         if args.physics_polynomial_degree==4 and args.degree<6:p.error('Quartic manufactured constraints require spatial degree 6')
         if not .8<=args.h_mm<=2.5:p.error('Training mesh size must be in [0.8, 2.5] mm')
         if not args.check_reference:p.error('--check-reference is required for training')

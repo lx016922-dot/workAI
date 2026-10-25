@@ -1,0 +1,352 @@
+{
+  "schema": "workai.training_continuation_target_plan.v1",
+  "goal": "All predefined signal/cycle cases below 5% over complete 5000 us, subject to independent reference convergence and nonlinear checks",
+  "start_candidate": "training/v10",
+  "current_scientific_accuracy_certified": false,
+  "validation": {
+    "signals": [
+      "hann",
+      "gaussian",
+      "rectangular",
+      "chirp"
+    ],
+    "cycles": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "duration_us": 5000,
+    "receivers": 8,
+    "phase_alignment": false,
+    "amplitude_rescaling": false,
+    "short_window_substitution": false,
+    "physical_constraints_are_not_waveform_accuracy": true
+  },
+  "reference_preflight": {
+    "source": "UltraResearchV11.java",
+    "source_sha256": "09a677fed53669b2c7f0cccdddbe0bfaec5372caf858079778c2e29457d7b552",
+    "source_parent": "UltraResearchGradedCartesian.java",
+    "source_parent_sha256": "c5b2afd23aeacbf6057468aad28ea57f71c9629b78509e344a12e63358e5a0ea",
+    "changes": [
+      "increase maximum eigenmode count from 80 to 200; retain existing two-million-value export and 100000-step transport limits"
+    ],
+    "planned_pairs": [
+      {
+        "h_mm": 0.4,
+        "grading_ratio": 100,
+        "eigenmodes": 200
+      },
+      {
+        "h_mm": 0.3,
+        "grading_ratio": 100,
+        "eigenmodes": 200
+      }
+    ],
+    "purpose": "reference_convergence",
+    "training_selection_from_transient_validation": false,
+    "additional_pairs": [
+      {
+        "h_mm": 0.35,
+        "grading_ratio": 20,
+        "eigenmodes": 200
+      },
+      {
+        "h_mm": 0.3,
+        "grading_ratio": 20,
+        "eigenmodes": 200
+      }
+    ],
+    "graded100_pair_result": "Actual mesh axes and energy-frequency identities verified; maximum relevant frequency change 27.4911440690 Hz, so the 0.5 Hz phase-reference gate failed.",
+    "quarter_uniform_pair_result": "Mesh axes, transverse reflections and energy-frequency identities verified; maximum relevant frequency change 6.19565535698 Hz, phase gate fails."
+  },
+  "spatial_development": {
+    "uniform_p6_h_mm": [
+      1.2,
+      1.0,
+      0.8
+    ],
+    "observations": "Completed in local development probe; not transient accuracy certification",
+    "next": "Evaluate boundary-graded spectral meshes before selecting a new training configuration"
+  },
+  "training_selection": "Formal quarter-domain candidate fit uses actual graded full-domain development eigenreferences restricted to the exact loaded symmetry class; no transient waveform enters the optimizer.",
+  "server_revision_handling": {
+    "observed_current_sha256": "c7140d6cfe978034501b21000b7da14e655aeca21d051e283eb843a01dbdd4a1",
+    "update_method": "Existing signed compare-and-swap model-revision endpoint, which compiles the new Java source and retains previous.java and previous-manifest.json in its revision directory",
+    "active_job_inputs": "Server copies source and workers per job and refuses a new job while an existing job is unresolved"
+  },
+  "default_weights_changed": false,
+  "preflight_training": {
+    "output": "training/v11-preflight",
+    "candidate_degree": 6,
+    "h_mm": 1.0,
+    "axis_elements": [
+      8,
+      3,
+      3
+    ],
+    "grading_ratios": [
+      20,
+      12,
+      12
+    ],
+    "training_modes": 36,
+    "reference_pair": [
+      "data/eigen-graded-05-v8c",
+      "data/eigen-graded-04-v8c"
+    ],
+    "physics_train": 48,
+    "physics_validation": 24,
+    "physics_seed": 2026102525,
+    "maximum_iterations": 12,
+    "hard_physical_limit": 0.025,
+    "physics_polynomial_degree": 4,
+    "derivative": "analytic eigenfrequency sensitivity plus finite differences of independently evaluated physical constraints",
+    "purpose": "Verify constrained optimization on boundary-graded discretization; old development references remain unconverged for long waveform certification",
+    "status": "Interrupted for optimizer efficiency; original history and interruption retained",
+    "replacement": "training/v11-sqp-preflight"
+  },
+  "time_architecture_development": {
+    "module": "graphwave/modal_reduction.py",
+    "basis": "candidate graph tangent only, no COMSOL lookup",
+    "constitutive_evaluation": "all learned quadratic/cubic energy entries at all original quadrature nodes",
+    "propagation": "exact candidate linear oscillator flow composed with conservative full nonlinear force kicks",
+    "verification": "force and energy match actual graph projection; energy gradients, reversibility and short-record temporal refinement tests pass",
+    "scope": "Research architecture. Requires independent truncation, full-field and full-duration time checks before use as evidence."
+  },
+  "preflight_result": {
+    "optimizer_success": true,
+    "optimizer_message": "Converged constrained local frequency model",
+    "initial_training_error_norm_hz": 5.262786804296407,
+    "final_training_error_norm_hz": 5.159125129337639,
+    "physics_training_maxima": {
+      "momentum_interior": 0.00017704771658842887,
+      "momentum_boundary": 0.000643082864856874,
+      "traction": 3.7417194854910775e-06,
+      "strain_energy": 5.597973590018781e-07,
+      "internal_power": 8.455154878212342e-07
+    },
+    "physics_validation_maxima": {
+      "momentum_interior": 4.316972306772876e-05,
+      "momentum_boundary": 0.0006430828738892727,
+      "traction": 2.835296818450139e-06,
+      "strain_energy": 7.502441159927803e-07,
+      "internal_power": 7.403392950873153e-06
+    },
+    "physics_training_passed": true,
+    "physics_validation_passed": true,
+    "weights_sha256": "bd7580b1d44f0927b807cb5556f90ba5832f90b4a85f05da9b040e1513b838a8"
+  },
+  "development_linear_diagnostic": {
+    "cases": 20,
+    "all_vector_waveform_components_aggregated_passes": 18,
+    "all_component_and_band_checks_passes": 6,
+    "reference_truncation_passes": 11,
+    "reference": "data/eigen-graded20-035-v11",
+    "candidate": "untrained analytic P6, full-domain 8x3x3 graded20/12/12; 200 neural tangent modes",
+    "full_nonlinear_rollout": false,
+    "scientific_accuracy_certified": false
+  },
+  "quarter_symmetry_development": {
+    "reason": "Improve high-frequency and transverse spatial resolution within the existing element/export/time budgets",
+    "physical_scope": "Rectangular plate with uniform axial face traction; y/z reflection symmetries retain signed transverse motion",
+    "verification": "Full versus quarter learned graph eigenpairs, mass, load and all three nonlinear energies pass independent tests",
+    "comsol_source": "UltraResearchV11Quarter.java",
+    "comsol_source_sha256": "cea2ee73c3aeb91c49f949909b6dfac5929e4c320b6caf0ff3a09434ee83470a",
+    "installed_revision": "research-eb2bad6aadad4fab987bb69d2243bc5c",
+    "source_compiled": true,
+    "model_solve_proven": false,
+    "quarter_h_mm": [
+      0.3,
+      0.2,
+      0.15
+    ],
+    "eigenmodes_per_symmetry_class": 200,
+    "minimum_java_mesh_size_mm": 0.15,
+    "server_element_budget": 6000,
+    "server_time_step_budget_unchanged": 100000,
+    "server_export_budget_unchanged": 2000000,
+    "cross_section_grading": "uniform",
+    "axial_grading_ratio": 20
+  },
+  "last_updated_at_utc": "2026-10-25T14:02:21.112958+00:00",
+  "formal_training": {
+    "first_run": "training/v11-quarter-physics",
+    "first_result": {
+      "optimizer": "scipy_slsqp",
+      "optimizer_success": true,
+      "optimizer_message": "Converged constrained local frequency model",
+      "optimizer_evaluations": 2,
+      "total_forward_evaluations": 2,
+      "parameters": [
+        -3.0257109048446015e-07,
+        1.51002706136535e-06,
+        4.3785382839899697e-07,
+        -2.6141796528089713e-06
+      ],
+      "weights_sha256": "6c4db0c0200db0de6dc3a8fa512c39d6c59cc4d1a2223f07122f876c7bfe01f9",
+      "raw_optimizer_parameters": [
+        -3.0257109048446015e-07,
+        1.51002706136535e-06,
+        4.3785382839899697e-07,
+        -2.6141796528089713e-06
+      ],
+      "feasibility_restoration": {
+        "method": "offline parameter backtracking toward the physically verified baseline",
+        "training_limit": 0.025,
+        "target_with_margin": 0.024975,
+        "trials": [
+          {
+            "scale": 1.0,
+            "maximum_training_residual": 0.0004099397126807626
+          }
+        ],
+        "validation_used_for_selection": false,
+        "inference_correction": false
+      },
+      "initial_frequency_errors_hz": [
+        -0.39288608462084085,
+        -1.0928854512167163,
+        -0.96408191381488,
+        1.6116482869256288,
+        -0.623269246192649,
+        -0.04835723573341966,
+        -0.8095090026035905,
+        -0.7151442806934938,
+        2.6406347503652796,
+        7.658790719229728,
+        3.1324455549474806,
+        17.353003550320864
+      ],
+      "final_frequency_errors_hz": [
+        -0.39288588173803873,
+        -1.0928812478668988,
+        -0.963994836085476,
+        1.6116673366632313,
+        -0.6228844404686242,
+        -0.0482613550266251,
+        -0.8093085672007874,
+        -0.7139678398380056,
+        2.64454926783219,
+        7.661906126653776,
+        3.1366426984313875,
+        17.36002087034285
+      ],
+      "unmodified_parent_frequency_errors_hz": [
+        -0.3928860227752011,
+        -1.0928854183875956,
+        -0.9640819415217265,
+        1.611648240010254,
+        -0.6232692447956651,
+        -0.048357307561673224,
+        -0.8095090121496469,
+        -0.7151442989706993,
+        2.6406347297597677,
+        7.658790714573115,
+        3.132445538882166,
+        17.353003532858565
+      ],
+      "initial_physics_feasibility_restoration": null,
+      "training_mode_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "initial_training_error_norm_hz": 2.433460503698124,
+      "final_training_error_norm_hz": 2.4332695961578756,
+      "initial_mode_mac": [
+        0.9999999998906619,
+        0.9999999991192845,
+        0.9999999964766522,
+        0.9999998667080874,
+        0.999999983752604,
+        0.9999999893597087,
+        0.9999999858531496,
+        0.9999998970638733,
+        0.9999991176937738,
+        0.9999977880592322,
+        0.999997742006734,
+        0.9999934468922798
+      ],
+      "final_mode_mac": [
+        0.9999999998906619,
+        0.9999999991192867,
+        0.999999996476602,
+        0.9999998667082326,
+        0.9999999837512573,
+        0.9999999893590654,
+        0.9999999858523765,
+        0.9999998970567674,
+        0.9999991176273341,
+        0.9999977879474706,
+        0.999997741684097,
+        0.9999934464824312
+      ],
+      "material_parameters_changed": false,
+      "test_waveforms_loaded": false,
+      "nonlinear_longitudinal_transverse_physics_in_loss": true,
+      "physics_training_passed": true,
+      "hard_training_limit": 0.025,
+      "hard_training_limit_satisfied": true,
+      "physics_training_maxima": {
+        "momentum_interior": 0.00019789067006338397,
+        "momentum_boundary": 0.0004099397126807626,
+        "traction": 7.28022837412207e-08,
+        "strain_energy": 2.6073068308474146e-08,
+        "internal_power": 3.300472966505112e-07
+      },
+      "physics_validation_passed": true,
+      "physics_validation_maxima": {
+        "momentum_interior": 0.00022502940352543213,
+        "momentum_boundary": 0.0004661529403842082,
+        "traction": 7.358111265355924e-08,
+        "strain_energy": 2.2423085264381058e-08,
+        "internal_power": 5.678811218946586e-07
+      },
+      "finite_rigid_motion_checks_passed": true,
+      "rigid_motion_maxima": {
+        "force_l2_N": 4.3641608674128913e-10,
+        "absolute_energy_J": 4.335716026627925e-28,
+        "strain_norm": 8.926241880319761e-15,
+        "absolute_J_minus_one": 2.55351295663786e-15
+      },
+      "summation_by_parts_enforced": true,
+      "summation_by_parts_final": {
+        "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+        "maximum_absolute_residual": 1.8681594770742868e-14,
+        "absolute_limit": 2e-12,
+        "passed": true,
+        "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+      },
+      "long_phase_reference_verified": false,
+      "accepted_for_offline_release": false,
+      "long_record_accuracy_certified": false,
+      "elapsed_s": 502.1840902019976
+    },
+    "continuation_run": "training/v11-quarter-phase",
+    "continuation_status": "running",
+    "continuation_physics_weight": 1,
+    "unchanged_hard_physical_limit": 0.025,
+    "fresh_seed": 2026102543
+  },
+  "quarter_development_result": {
+    "linear_bandmatched_vector_passes": 19,
+    "linear_bandmatched_complete_passes": 15,
+    "total_cases": 20,
+    "duration_us": 5000,
+    "scope": "Linear diagnostics only",
+    "native_20us_vector_increment_errors": {
+      "geometric": 0.15066239,
+      "material": 0.11096617,
+      "total_nonlinear": 0.09913373
+    },
+    "native_reference_convergence_verified": false,
+    "scientific_accuracy_certified": false
+  },
+  "new_prediction_plan": "plans/v11-quarter-validation.json"
+}

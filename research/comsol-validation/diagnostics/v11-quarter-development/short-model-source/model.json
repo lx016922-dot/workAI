@@ -1,0 +1,217 @@
+{
+  "schema": "workai.graph_modal_candidate.v1",
+  "scene": {
+    "schema": "workai.hyperelastic.solid.v1",
+    "name": "5 ms \u957f\u8bb0\u5f55\u9a8c\u8bc1 \u00b7 \u56fa\u5b9a\u7aef\u94dd\u677f",
+    "geometry": {
+      "kind": "plate",
+      "length_mm": 8.0,
+      "width_mm": 3.0,
+      "thickness_mm": 1.5,
+      "outer_radius_mm": 2.5,
+      "inner_radius_mm": 1.5,
+      "hole_radius_mm": 0.55,
+      "hole_x_mm": 5.0,
+      "hole_y_mm": 1.75,
+      "notch_x_mm": 5.0,
+      "notch_width_mm": 0.8,
+      "notch_depth_mm": 0.45
+    },
+    "material": {
+      "rho_kg_m3": 2700.0,
+      "lambda_pa": 58100000000.0,
+      "mu_pa": 26100000000.0,
+      "l_pa": -143000000000.0,
+      "m_pa": -297000000000.0,
+      "n_pa": -345000000000.0
+    },
+    "constitutive": "murnaghan",
+    "source": {
+      "face": "xmin",
+      "center_mm": [
+        0.0,
+        1.5,
+        0.75
+      ],
+      "radius_mm": 0.0,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "amplitude_mpa": 1.0,
+      "frequency_mhz": 0.22,
+      "cycles": 2,
+      "delay_us": 0.2,
+      "phase_deg": 0.0
+    },
+    "boundary": {
+      "fixed_face": "xmax"
+    },
+    "acquisition": {
+      "duration_us": 8.0,
+      "sample_step_us": 0.2
+    },
+    "numerics": {
+      "h_mm": 2.5,
+      "cfl": 0.3,
+      "max_elements": 40000
+    },
+    "receivers": [
+      {
+        "name": "P1",
+        "point_mm": [
+          1.1,
+          0.7,
+          0.4
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P2",
+        "point_mm": [
+          2.0,
+          1.5,
+          0.75
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P3",
+        "point_mm": [
+          3.1,
+          2.3,
+          1.1
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P4",
+        "point_mm": [
+          4.2,
+          0.9,
+          1.2
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P5",
+        "point_mm": [
+          5.3,
+          2.1,
+          0.5
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P6",
+        "point_mm": [
+          6.0,
+          1.5,
+          0.75
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P7",
+        "point_mm": [
+          6.9,
+          0.6,
+          0.9
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P8",
+        "point_mm": [
+          7.6,
+          2.4,
+          0.3
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "signal": {
+      "kind": "hann",
+      "end_frequency_mhz": 0.22
+    }
+  },
+  "degree": 6,
+  "h_mm": 1.0,
+  "axis_elements": [
+    12,
+    3,
+    3
+  ],
+  "grading_ratios": [
+    50.0,
+    12.0,
+    12.0
+  ],
+  "exported_modes": 200,
+  "quarter_domain": true,
+  "nodes": 26353,
+  "elements": 108,
+  "weights_sha256": "1c7f99e25e6da42fe7f02b4f56a0000fd75d8db831e8d59c21bde642f8e7934e",
+  "basis_sha256": "3147cc796e4fe1fc87cafa18ca784827846c557987981c5232a9376e2f84d1e7",
+  "compilation_source_sha256": {
+    "graphwave/graded_mesh.py": "664e1ba7ddee040143fee0ace7542bdd07dc0f97cd497f3ad020d793ff4c469b",
+    "graphwave/modal_calibration.py": "0d02132bc6a7fc2c54b18966e507ca982eedb2bf23a2e7bdcfa1ad80b9b7fb1e",
+    "graphwave/modal_reduction.py": "bdd032b25b7fdfdfa1508df11529f4f848a2cdba61a86da2b1c88ff799c10242",
+    "graphwave/modal_sensitivity.py": "00c5ffbb72c0ebabbccaa03ebdf7d685bf6e280ce4a1cc8f9b0fa56ea2518123",
+    "graphwave/buffered_inference.py": "c40eef7d283403b425e4c0627f4722497668675b554dfc5ce7143a033a531040",
+    "graphwave/inference.py": "ab7879deab1ae7893ca0fee58e68d4c882a1b6333903240a0d12fec220b4438b",
+    "graphwave/signals.py": "38dce98326fc587e3aa6988882aefdcba0207ba9b6510495e1dc41c02eeed19b",
+    "graphwave/modal_sparse.py": "7e7d70e3c9185d52319076a24f2c68d82c16376f34a3a972da526c4bb6d11165",
+    "graphwave/quarter_symmetry.py": "ed1e40e022883077f72ee519e811b50b8fea8e6111eab93b073c4232ce75455e",
+    "spectral3d/mesh.py": "258bb3e36208aa6c20490280ab1ff256d1dbe29032f5f9ac48af2f86b556f828",
+    "tools/compile-modal-candidate.py": "bdc21b96d67f88a5458dc4d433788abb009be5bd04f42fd93c67267c70628349"
+  },
+  "symmetry": {
+    "method": "quarter-domain y/z reflection with component-wise essential constraints",
+    "original_modes": 200,
+    "retained_modes": 200,
+    "physical_domain_multiplicity": 4,
+    "transverse_displacements_preserved_with_reflection_signs": true,
+    "requires_full_basis_nonlinear_check": true
+  },
+  "mass_orthonormality_error": 2.6645352591003757e-15,
+  "compilation_seconds": 418.03385248999984,
+  "comsol_arrays_used": false,
+  "numerical_prediction_corrector": false,
+  "material_tensor_entries_dropped": false,
+  "modal_truncation_convergence_verified": false,
+  "scientific_accuracy_certified": false
+}

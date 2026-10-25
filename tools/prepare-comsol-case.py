@@ -56,10 +56,18 @@ def prepare(args):
                      solver=args.solver, laws=laws, field_nx=3, field_ny=3,
                      field_nz=3, field_frames=args.guard_frames)
     execution.update(mesh_type=args.mesh_type, analysis=args.analysis,artifact_encoding=args.artifact_encoding)
+    if args.quarter_domain:
+        if args.mesh_type!='hex' or geom['kind']!='plate' or tx['radius_mm']!=0 or any(float(x)!=0 for x in tx['direction'][1:]):
+            raise ValueError('Quarter-domain reference requires a symmetric axial plate problem')
+        execution['domain_symmetry']='quarter_yz'
     if args.grading_ratio is not None:
-        if args.analysis!='eigen' or args.mesh_type!='hex' or not 1<=args.grading_ratio<=100:
-            raise ValueError('Mesh grading is bounded to [1,100] and linear hex eigenproblems.')
+        if (args.analysis!='eigen' and not args.quarter_domain) or args.mesh_type!='hex' or not 1<=args.grading_ratio<=100:
+            raise ValueError('Mesh grading requires a compatible hex eigenproblem or explicit quarter-domain source, ratio in [1,100].')
         execution['grading_ratio']=args.grading_ratio
+    if args.cross_section_grading_ratio is not None:
+        if not args.quarter_domain or not 1<=args.cross_section_grading_ratio<=100:
+            raise ValueError('One-sided cross-section grading requires an explicit quarter domain and ratio in [1,100].')
+        execution['cross_section_grading_ratio']=args.cross_section_grading_ratio
     if args.analysis=='eigen':
         if laws!=[0] or geom['kind']!='plate':
             raise ValueError('Eigen label scope: linear rectangular plate only.')
@@ -138,4 +146,6 @@ if __name__ == '__main__':
     p.add_argument('--sample-h', type=float, default=2.5)
     p.add_argument('--artifact-encoding',choices=['csv','gzip_csv'],default='gzip_csv')
     p.add_argument('--grading-ratio',type=float,help='Optional explicit graded-mesh eigenreference; requires the graded source variant')
+    p.add_argument('--cross-section-grading-ratio',type=float,help='Explicit one-sided quarter-domain grading toward the outer surfaces; requires the compatible source variant')
+    p.add_argument('--quarter-domain',action='store_true',help='Explicit axial reflection; requires a compatible quarter-domain source variant')
     prepare(p.parse_args())

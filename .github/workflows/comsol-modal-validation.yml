@@ -1,0 +1,118 @@
+name: Nonlinear graph modal validation over complete 5 ms records
+on:
+  workflow_dispatch:
+    inputs:
+      model_asset:
+        description: Compiled research model ZIP on release v0.3.0
+        required: true
+        type: string
+      model_sha256:
+        description: SHA-256 of the complete compiled model archive
+        required: true
+        type: string
+      reference:
+        description: Committed signed COMSOL eigenreference folder
+        required: true
+        type: string
+      refinement:
+        description: Committed independent COMSOL mesh refinement folder
+        required: true
+        type: string
+      plan:
+        description: Committed frozen signal/cycle plan
+        required: true
+        type: string
+      step_us:
+        description: Internal step in microseconds
+        required: true
+        default: '0.2'
+        type: choice
+        options: ['0.2', '0.1', '0.05']
+      modes:
+        description: Leading candidate modes retained before symmetry reduction
+        required: true
+        default: '200'
+        type: choice
+        options: ['80', '100', '120', '160', '200']
+permissions:
+  contents: read
+jobs:
+  compare:
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        signal: [hann, gaussian, rectangular, chirp]
+        cycles: ['01', '03', '05', '10', '20']
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      NUMBA_NUM_THREADS: '2'
+      WORKAI_MODEL_ASSET: ${{ inputs.model_asset }}
+      WORKAI_MODEL_SHA256: ${{ inputs.model_sha256 }}
+      WORKAI_REFERENCE: ${{ inputs.reference }}
+      WORKAI_REFINEMENT: ${{ inputs.refinement }}
+      WORKAI_PLAN: ${{ inputs.plan }}
+      WORKAI_STEP: ${{ inputs.step_us }}
+      WORKAI_MODES: ${{ inputs.modes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned numerical runtime
+        run: python -m pip install numpy==2.2.6 scipy==1.15.3 numba==0.63.1 llvmlite==0.46.0
+      - name: Validate inputs before accessing files
+        run: |
+          python - <<'PY'
+          import os,re
+          from pathlib import Path
+          assert re.fullmatch(r'WorkAI-GraphModal-research-[a-z0-9-]+[.]zip',os.environ['WORKAI_MODEL_ASSET'])
+          assert re.fullmatch(r'[a-f0-9]{64}',os.environ['WORKAI_MODEL_SHA256'])
+          for key in ['WORKAI_REFERENCE','WORKAI_REFINEMENT']:
+              value=os.environ[key]
+              assert re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}',value)
+              assert (Path('research/comsol-validation/data')/value/'collection.json').is_file()
+          plan=os.environ['WORKAI_PLAN']
+          assert re.fullmatch(r'research/(?:[a-z0-9][a-z0-9-]*/)*[a-z0-9][a-z0-9-]*[.]json',plan)
+          assert Path(plan).is_file()
+          PY
+      - name: Download compiled candidate and verify archive identity
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v0.3.0 --repo "$GITHUB_REPOSITORY" --pattern "$WORKAI_MODEL_ASSET" --dir download
+          python - <<'PY'
+          import hashlib,os,stat,zipfile
+          from pathlib import Path,PurePosixPath
+          path=Path('download')/os.environ['WORKAI_MODEL_ASSET']
+          assert hashlib.sha256(path.read_bytes()).hexdigest()==os.environ['WORKAI_MODEL_SHA256']
+          with zipfile.ZipFile(path) as archive:
+              items=archive.infolist()
+              assert len(items)<=256 and sum(x.file_size for x in items)<=512*1024*1024
+              for item in items:
+                  name=PurePosixPath(item.filename)
+                  assert not name.is_absolute() and '..' not in name.parts and '\\' not in item.filename
+                  assert not stat.S_ISLNK(item.external_attr>>16)
+              archive.extractall('model')
+          assert Path('model/model.json').is_file()
+          PY
+      - name: Complete nonlinear prediction before loading COMSOL labels
+        run: >-
+          python tools/run-modal-candidate-case.py
+          --model model --plan "$WORKAI_PLAN"
+          --case '${{ matrix.signal }}-${{ matrix.cycles }}'
+          --step-us "$WORKAI_STEP" --modes "$WORKAI_MODES"
+          --reference "research/comsol-validation/data/$WORKAI_REFERENCE"
+          --check-reference "research/comsol-validation/data/$WORKAI_REFINEMENT"
+          --reference-truncation 160 --output validation
+      - name: Preserve completed and failed evidence without asserting accuracy
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: graph-modal-${{ matrix.signal }}-${{ matrix.cycles }}
+          path: validation/
+          compression-level: 0
+          retention-days: 30
