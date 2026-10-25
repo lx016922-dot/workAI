@@ -59,7 +59,8 @@ constraints before acceptance.
 | Gauss 4 acceleration candidate on the same independent fields | Rejected; maximum raw weak-force error 47.422%, and cancellation-sensitive nonlinear energy error 368.473% | Original graph passes the same checks; reduced quadrature is not used in inference |
 | Positive-cubature sketch preflight, 247 retained points | Rejected; maximum independent residual 74.656% | Training states, weights, executed source and failed checks remain archived; no inference use |
 | Gauss 5 and Gauss 6 acceleration candidates, 64 fresh fields each | Rejected; maximum residuals 20.956% and 13.511%, respectively | Their original full-graph controls pass the same independent analytic checks; neither approximation is used in prediction |
-| Complete-feature positive-cubature training, 948 positive points | Training feature residual 0.09676%, independent preflight maximum 10.6247% | Rejected for inference; a separate broader 128-field analytic admission is queued |
+| Complete-feature positive-cubature training, 948 positive points | Training feature residual 0.09676%, independent preflight maximum 10.6247% | Rejected for inference |
+| Broader independent admission, 128 fresh fields and gradient norms up to 8e-4 | Original graph maximum 0.08551% (passes); fitted cubature maximum 11.768% (fails) | All 4,992 geometric/material/total momentum and energy constraints retained; the reduced quadrature is not used in any prediction |
 | 500 candidate modes versus native h = 0.75 mm, 20 us, 0.0125 us candidate step | Maximum vector errors: geometric 4.131%, material 3.462%, total nonlinear 3.491%; strict maximum 29.358% | Vector checks improve, but the small P7 Z material increment still fails; its reference RMS is 0.144516 pm and error RMS is 0.042428 pm |
 | Same-basis 300 to 500 modes, and 500-mode time refinement | Maximum complete modal change 15.082% (fails); 0.025 to 0.0125 us time change 0.02871% (passes) | Short modal truncation remains unconverged; full 5 ms nonlinear accuracy is still unverified |
 
@@ -76,7 +77,7 @@ use maximum gradient norms between 2e-5 and 1e-4. Their archived reports preserv
 near-zero energy denominators and failures. The portable
 `tools/validate-modal-quadrature.py` additionally records absolute errors and
 reference norms, verifies model identity, and supports explicitly declared
-gradient ranges. A queued positive-cubature admission uses 128 new fields with
+gradient ranges. The completed positive-cubature admission uses 128 new fields with
 gradient norms up to 8e-4. This is a separate physical check, not a change to the
 5% waveform criterion.
 
@@ -106,6 +107,17 @@ h = 0.5 mm spatial/time solves. It reuses the unchanged saved 500-mode predictio
 and checks both successive native refinements. This separates changes in the
 reference from changes in the model. Its first comparison against the original
 h = 0.75 mm reference reproduces every existing component/band metric exactly.
+
+The ongoing 5 ms offline replay uses the published 200-mode phase archive and the
+pinned Python runtime from the existing offline distribution. A queued checker
+waits for both this complete record and the matrix's separate audit/publication.
+It verifies the complete released Hann evidence ZIP before extracting the
+matching case, requires identical prediction identities and complete time grids,
+and compares all control/nonlinear component and spectral histories. Replay
+thresholds are 0.01% relative and 1e-18 m below the existing small-signal floor.
+This verifies software reproducibility; it cannot supply a nonlinear COMSOL
+accuracy certificate. The short checker smoke test does not substitute for the
+pending complete 5 ms replay.
 
 An independent forcing diagnostic found that the original external-force kick
 scheme alone caused 6.934% vector error for the rectangular five-cycle case at a
