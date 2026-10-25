@@ -59,6 +59,9 @@ constraints before acceptance.
 | Gauss 4 acceleration candidate on the same independent fields | Rejected; maximum raw weak-force error 47.422%, and cancellation-sensitive nonlinear energy error 368.473% | Original graph passes the same checks; reduced quadrature is not used in inference |
 | Positive-cubature sketch preflight, 247 retained points | Rejected; maximum independent residual 74.656% | Training states, weights, executed source and failed checks remain archived; no inference use |
 | Gauss 5 and Gauss 6 acceleration candidates, 64 fresh fields each | Rejected; maximum residuals 20.956% and 13.511%, respectively | Their original full-graph controls pass the same independent analytic checks; neither approximation is used in prediction |
+| Complete-feature positive-cubature training, 948 positive points | Training feature residual 0.09676%, independent preflight maximum 10.6247% | Rejected for inference; a separate broader 128-field analytic admission is queued |
+| 500 candidate modes versus native h = 0.75 mm, 20 us, 0.0125 us candidate step | Maximum vector errors: geometric 4.131%, material 3.462%, total nonlinear 3.491%; strict maximum 29.358% | Vector checks improve, but the small P7 Z material increment still fails; its reference RMS is 0.144516 pm and error RMS is 0.042428 pm |
+| Same-basis 300 to 500 modes, and 500-mode time refinement | Maximum complete modal change 15.082% (fails); 0.025 to 0.0125 us time change 0.02871% (passes) | Short modal truncation remains unconverged; full 5 ms nonlinear accuracy is still unverified |
 
 The first formal optimization changes the seven-mode frequency-error norm only
 from 2.433461 to 2.433270 Hz. The further run reduces this norm to 2.317378 Hz, with maximum training/independent
@@ -85,8 +88,24 @@ The immutable release asset is `WorkAI-GraphModal-research-v11-phase500-ci.zip`
 CI verifies the complete archive, and the published GitHub asset digest agrees.
 The follow-up [run 40214419484](https://github.com/lx016922-dot/workAI/actions/runs/40214419484)
 uses this single basis for 300/500-mode comparisons and a halved internal time
-step, against the same archived native 20 us COMSOL record. It cannot establish
-complete 5 ms accuracy. The default offline model remains unchanged.
+step, against the same archived native 20 us COMSOL record. All three predictions
+completed, and the pinned local runtime independently reproduces the complete CI
+comparison report from the downloaded raw arrays. These calculations cannot
+establish complete 5 ms accuracy. The default offline model remains unchanged.
+
+![Short COMSOL comparison, including the failing transverse component](diagnostics/v11-native500-refinement/short-comparison.png)
+
+The figure uses the same 0.025 us candidate step for all mode counts; the table
+also reports the 500-mode result at the halved step. All 201 original samples are
+used. The failing transverse response is displayed without alignment, rescaling
+or changing the existing small-signal floor. Raw predictions, full metrics, plot
+source, a PDF and the plotted CSV are archived together.
+
+`tools/recompare-native-modal-prediction.py` is queued behind the current native
+h = 0.5 mm spatial/time solves. It reuses the unchanged saved 500-mode prediction
+and checks both successive native refinements. This separates changes in the
+reference from changes in the model. Its first comparison against the original
+h = 0.75 mm reference reproduces every existing component/band metric exactly.
 
 An independent forcing diagnostic found that the original external-force kick
 scheme alone caused 6.934% vector error for the rectangular five-cycle case at a
