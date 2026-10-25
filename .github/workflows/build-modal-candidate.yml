@@ -12,6 +12,11 @@ on:
         required: true
         default: WorkAI-GraphModal-research-v11-baseline-ci.zip
         type: string
+      modes:
+        description: Candidate modes for the modal-convergence study (16 to 512)
+        required: true
+        default: '200'
+        type: string
       validate:
         description: Start the complete 20-case, 5 ms nonlinear prediction matrix after publication
         required: true
@@ -30,6 +35,7 @@ jobs:
       NUMBA_NUM_THREADS: '2'
       WORKAI_WEIGHTS: ${{ inputs.weights }}
       WORKAI_MODEL_ASSET: ${{ inputs.model_asset }}
+      WORKAI_MODES: ${{ inputs.modes }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -46,6 +52,8 @@ jobs:
           value=os.environ['WORKAI_WEIGHTS']
           assert re.fullmatch(r'research/comsol-validation/training/[a-z0-9-]+/candidate-weights[.]npz',value)
           assert Path(value).is_file()
+          modes=os.environ['WORKAI_MODES']
+          assert re.fullmatch(r'[0-9]{2,3}',modes) and 16<=int(modes)<=512
           PY
       - name: Compile the candidate graph basis without COMSOL arrays
         run: >-
@@ -53,7 +61,7 @@ jobs:
           --input research/comsol-validation/data/eigen-graded20-030-v11/input.json
           --weights "$WORKAI_WEIGHTS" --degree 6 --h-mm 1
           --axis-elements 12 3 3 --grading-ratios 50 12 12
-          --quarter-domain --modes 200 --output model
+          --quarter-domain --modes "$WORKAI_MODES" --output model
       - name: Package and read back the frozen model and source snapshot
         run: |
           python tools/package-modal-candidate.py --model model --output "release/$WORKAI_MODEL_ASSET"
@@ -66,7 +74,7 @@ jobs:
           inputs={'model_asset':name,'model_sha256':metadata['sha256'],
                   'reference':'eigen-graded20-030-v11','refinement':'eigen-graded20-035-v11',
                   'plan':'research/comsol-validation/plans/v11-quarter-driven.json',
-                  'step_us':'0.1','modes':'200'}
+                  'step_us':'0.1','modes':os.environ['WORKAI_MODES']}
           Path('dispatch.json').write_text(json.dumps({'ref':os.environ['GITHUB_REF_NAME'],'inputs':inputs}))
           PY
       - name: Publish distinct research assets without replacing existing software
