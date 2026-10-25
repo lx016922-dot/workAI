@@ -1,0 +1,54 @@
+{
+  "schema": "workai.paired_physics_validation.v2",
+  "degree": 6,
+  "validation_seed": 2026102514,
+  "maximum_displacement_polynomial_degree": 4,
+  "cubic_fields": 144,
+  "quartic_fields": 144,
+  "validation_samples": 288,
+  "component_checks_per_candidate": 15840,
+  "training_selection_uses_validation": false,
+  "unchanged_material_mass_time_and_other_degree_filters_verified": true,
+  "candidates": {
+    "same_grid_baseline": {
+      "weights_sha256": "1c7f99e25e6da42fe7f02b4f56a0000fd75d8db831e8d59c21bde642f8e7934e",
+      "maxima": {
+        "momentum_interior": 0.00020799671413495652,
+        "momentum_boundary": 0.0004308443050212983,
+        "traction": 4.392419216694308e-10,
+        "strain_energy": 1.989105591413152e-09,
+        "internal_power": 3.072783211403392e-09
+      },
+      "all_passed": true,
+      "failed_component_checks": 0,
+      "sbp": {
+        "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+        "maximum_absolute_residual": 2.066852431988378e-14,
+        "absolute_limit": 2e-12,
+        "passed": true,
+        "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+      }
+    },
+    "candidate_v10": {
+      "weights_sha256": "e2f0f2cfefea2ea2428a1771426f4959bb27c00875283b1003303a8747177bd2",
+      "maxima": {
+        "momentum_interior": 0.0056675200633199176,
+        "momentum_boundary": 0.024951200462632127,
+        "traction": 0.0001882185866503764,
+        "strain_energy": 5.0069749086793664e-05,
+        "internal_power": 0.0004996834652782231
+      },
+      "all_passed": true,
+      "failed_component_checks": 0,
+      "sbp": {
+        "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+        "maximum_absolute_residual": 1.8796131087274218e-14,
+        "absolute_limit": 2e-12,
+        "passed": true,
+        "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+      }
+    }
+  },
+  "scope": "Same fresh manufactured fields for both frozen P6 weights; not a long-waveform comparison",
+  "scientific_accuracy_certified": false
+}

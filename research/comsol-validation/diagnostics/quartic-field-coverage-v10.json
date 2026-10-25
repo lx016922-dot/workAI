@@ -1,0 +1,65 @@
+{
+  "schema": "workai.physical_field_coverage_diagnostic.v1",
+  "degree": 6,
+  "seed": 2026102510,
+  "samples": 24,
+  "fault_definition": "D + 10 * (outer(P5, w*P6) - outer(P6, w*P5)); Pk are Legendre polynomials at GLL nodes",
+  "fault_sbp": {
+    "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+    "maximum_absolute_residual": 2.0706941651333378e-14,
+    "absolute_limit": 2e-12,
+    "passed": true,
+    "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+  },
+  "records": {
+    "max_degree_3_analytic": {
+      "maximum_normalized_residual": {
+        "momentum_interior": 2.517867620570636e-09,
+        "momentum_boundary": 1.540609535527678e-08,
+        "traction": 1.6702969184784682e-10,
+        "strain_energy": 9.188090959388132e-10,
+        "internal_power": 2.0345889240265778e-09
+      },
+      "within_training_limit_2_5_percent": true,
+      "within_independent_limit_5_percent": true
+    },
+    "max_degree_3_deliberate_fault": {
+      "maximum_normalized_residual": {
+        "momentum_interior": 4.705680517020955e-05,
+        "momentum_boundary": 9.41452387431358e-05,
+        "traction": 1.362473468981883e-10,
+        "strain_energy": 5.250338764031257e-10,
+        "internal_power": 3.0235265323806666e-09
+      },
+      "within_training_limit_2_5_percent": true,
+      "within_independent_limit_5_percent": true
+    },
+    "max_degree_4_analytic": {
+      "maximum_normalized_residual": {
+        "momentum_interior": 7.418523728544953e-05,
+        "momentum_boundary": 0.00015366735343281163,
+        "traction": 3.030963772220956e-10,
+        "strain_energy": 1.534050472692817e-09,
+        "internal_power": 2.0345889240265778e-09
+      },
+      "within_training_limit_2_5_percent": true,
+      "within_independent_limit_5_percent": true
+    },
+    "max_degree_4_deliberate_fault": {
+      "maximum_normalized_residual": {
+        "momentum_interior": 0.018321937288856553,
+        "momentum_boundary": 0.04270169258676395,
+        "traction": 2.3529838685926973e-10,
+        "strain_energy": 2.209205999888482e-09,
+        "internal_power": 3.0235265323806666e-09
+      },
+      "within_training_limit_2_5_percent": false,
+      "within_independent_limit_5_percent": true
+    }
+  },
+  "baseline_weights_sha256": "1c7f99e25e6da42fe7f02b4f56a0000fd75d8db831e8d59c21bde642f8e7934e",
+  "diagnostic_source_sha256": "912ed05062581c583898f14312d9e308eb2e7b496dd652e669b769fa5fb6ff82",
+  "physics_source_sha256": "e7a3e7f558df040cc4a35c705398156e15b6b2b895a45ffd1f333304e3b7e7cd",
+  "scope": "Pretraining sensitivity diagnostic, not an optimized candidate or independent candidate acceptance dataset",
+  "scientific_accuracy_certified": false
+}
