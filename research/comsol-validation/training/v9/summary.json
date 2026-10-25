@@ -1,0 +1,111 @@
+{
+  "schema": "workai.comsol_training_summary.v1",
+  "weights_sha256": "9c1ec58c3cf93d27334ffbdcf3cc0ffad54ff1b816ff787acf3d296ab3f401be",
+  "candidate_degree": 5,
+  "candidate_h_mm": 1.6,
+  "actual_comsol_development_jobs": [
+    "comsol-e301253e89bc48fcbf3f7fde4fce4d18",
+    "comsol-7dad39c427024efbad336549f45d2b78"
+  ],
+  "training_mode_indices": [
+    5,
+    11,
+    20,
+    22,
+    25,
+    28,
+    29
+  ],
+  "training_initial_frequency_error_norm_hz": 419.25090924076835,
+  "training_final_frequency_error_norm_hz": 417.94984473406885,
+  "optimizer_success": true,
+  "feasibility_restoration": {
+    "method": "offline parameter backtracking toward the physically verified baseline",
+    "training_limit": 0.025,
+    "target_with_margin": 0.024975,
+    "trials": [
+      {
+        "scale": 1.0,
+        "maximum_training_residual": 0.025000000015550437
+      },
+      {
+        "scale": 0.999,
+        "maximum_training_residual": 0.024975009316267997
+      },
+      {
+        "scale": 0.998001,
+        "maximum_training_residual": 0.024950043619787504
+      }
+    ],
+    "validation_used_for_selection": false,
+    "inference_correction": false
+  },
+  "polynomial_consistency_order": 2,
+  "summation_by_parts_enforced": true,
+  "summation_by_parts_final": {
+    "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+    "maximum_absolute_residual": 4.2277768538814765e-15,
+    "absolute_limit": 2e-12,
+    "passed": true,
+    "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+  },
+  "parameter_bounds": [
+    -1.0,
+    1.0
+  ],
+  "dominant_phase_mode_index": 5,
+  "dominant_phase_residual_multiplier": 10.0,
+  "dominant_initial_frequency_error_hz": 84.3817979680316,
+  "dominant_final_frequency_error_hz": 84.17229084935389,
+  "dominant_unmodified_parent_frequency_error_hz": 84.38179797091288,
+  "initial_physics_feasibility_restoration": null,
+  "material_energy_coefficients_changed": false,
+  "transient_test_waveforms_used_for_training": false,
+  "nonlinear_longitudinal_transverse_physics_in_loss": true,
+  "physics_training_passed": true,
+  "hard_training_limit": 0.025,
+  "hard_training_limit_satisfied": true,
+  "physics_training_maxima": {
+    "momentum_interior": 0.01312607313648323,
+    "momentum_boundary": 0.024950043619787504,
+    "traction": 0.0002715041233273807,
+    "strain_energy": 4.2688607276022304e-05,
+    "internal_power": 0.00018965757766889542
+  },
+  "physics_validation_passed": true,
+  "physics_validation_maxima": {
+    "momentum_interior": 0.009587938420242663,
+    "momentum_boundary": 0.02494992198008089,
+    "traction": 0.0002786780170975457,
+    "strain_energy": 2.8302007923486507e-05,
+    "internal_power": 0.0002451999630088735
+  },
+  "finite_rigid_motion_checks_passed": true,
+  "rigid_motion_maxima": {
+    "force_l2_N": 4.700520345984614e-10,
+    "absolute_energy_J": 4.326208215844917e-28,
+    "strain_norm": 6.6713979753441964e-15,
+    "absolute_J_minus_one": 4.9960036108132044e-15
+  },
+  "reference_long_phase_converged": false,
+  "accepted_for_offline_release": false,
+  "long_record_accuracy_certified": false,
+  "scope": "P5 graph filter research candidate for the fixed-end 8 x 3 x 1.5 mm aluminum plate with h=1.6 mm; not a general geometry calibration",
+  "files_sha256": {
+    "history.json": "10f206a2bb835a0fc864259ef6b92a518d067571a4d9cae367afae2555cd11c4",
+    "rigid-final.json": "4582f06fbd59f4473c4cf385e28b0e8b38291f60d36de03b561be6d44ef5c1ff",
+    "physics-training-patches.npz": "74c4882585593b00afe08a66acdb8444c816a484cdd768239ba31ebe6c84f34f",
+    "config.json": "66b2f8c4309fec4c1807ab24b7efcc5acfe31aaa4adebd0871de6ba15ff4bee7",
+    "candidate-weights.npz": "9c1ec58c3cf93d27334ffbdcf3cc0ffad54ff1b816ff787acf3d296ab3f401be",
+    "physics-training.json": "2af71beec58382f2c81a0e828830a89371cae2c6430f8dd9507c85f3e49dcc59",
+    "physics-validation-patches.npz": "a3917f2b3a48277859e7d143e868494d09f7633c9de5829da3d0a647db359e8f",
+    "rigid-parent.json": "58c4e9870ce7e546ad0ec89402c8e1bda0c99afb087d8a7c6a294daaf3b12f60",
+    "frequencies.csv": "d98467dd989474e8b42ec976d18e9c48c5c1173dfb2679c815229d4a87ce80b6",
+    "physics-validation.json": "c9c9aef423695389ee00a59bb26f8ef6506686fd87990e758515f7f805651372",
+    "rigid-initial.json": "26623285def5b7ba097e5ff1a4627c5e3b9f346652bb862bbce415702c9ce00b",
+    "physics-initial.json": "4908bc302630d0b88561bf8f773e99f071c782c1283c1383865855e3bd81fd52",
+    "training.json": "aa0730180546941c377be5030aa377460e42d1b96b051136ee266b8afc613b66",
+    "source_snapshot/nonlinear_constraints.py": "279044b57bb78061d4d8cebc8e3fb6969c13a09d3190151a1dc8ca4c3f8912b9",
+    "source_snapshot/modal_calibration.py": "418b43502197a020a6f0ba61b43964504d6e64e18bf67e3299b1a9007dc39ffb"
+  }
+}
