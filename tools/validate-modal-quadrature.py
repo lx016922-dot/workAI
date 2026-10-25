@@ -57,10 +57,14 @@ def main():
     group.add_argument('--cubature', type=Path)
     parser.add_argument('--fields', type=int, default=64)
     parser.add_argument('--seed', type=int, required=True)
+    parser.add_argument('--minimum-gradient-norm', type=float, default=2e-5)
+    parser.add_argument('--maximum-gradient-norm', type=float, default=1e-4)
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     if args.fields < 64:
         parser.error('At least 64 fresh physical fields are required')
+    if not (0 < args.minimum_gradient_norm <= args.maximum_gradient_norm <= 9e-4):
+        parser.error('Manufactured gradient norms must be positive, ordered and below the strain guard')
     started = time.monotonic()
     config = json.loads((args.model / 'model.json').read_text())
     if not config.get('quarter_domain'):
@@ -131,7 +135,7 @@ def main():
     for index in range(args.fields):
         q = rng.normal(size=modes) * qscale
         g = (q @ reference_gradient).reshape(-1, 3, 3)
-        q *= rng.uniform(2e-5, 1e-4) / np.linalg.norm(g, axis=(1, 2)).max()
+        q *= rng.uniform(args.minimum_gradient_norm, args.maximum_gradient_norm) / np.linalg.norm(g, axis=(1, 2)).max()
         states.append(q)
         g = np.stack([(q @ reference_gradient).reshape(-1, 3, 3)] * 2)
         stress, energy, strain, jac = analytic_stresses(g, full['volume'], constants, laws)
@@ -155,6 +159,7 @@ def main():
               'selection': selection, 'source_sha256': hashes, 'base_weights_sha256': config['weights_sha256'],
               'base_basis_sha256': config['basis_sha256'], 'validation_seed': args.seed, 'fields': args.fields,
               'constraints_per_field': 39, 'hard_relative_limit': .025,
+              'manufactured_gradient_norm_interval': [args.minimum_gradient_norm, args.maximum_gradient_norm],
               'original_points': len(full['volume']), 'candidate_points': len(candidate['volume']),
               'reference_uses_learned_material_tensors': False, 'reference_uses_learned_spatial_derivative': False,
               'full_graph_passed': all(r['full_graph']['passed'] for r in rows),

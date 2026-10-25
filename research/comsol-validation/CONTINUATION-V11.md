@@ -58,12 +58,35 @@ constraints before acceptance.
 | Independent analytic physical admission, 300 modes and 64 fresh random fields | Original graph passes all 2,496 checks; maximum residual 0.6270%, below the unchanged 2.5% limit | Separate geometric/material/total increments, x/y/z/summed weak momentum, three modal norm scalings and nonlinear energy; not waveform certification |
 | Gauss 4 acceleration candidate on the same independent fields | Rejected; maximum raw weak-force error 47.422%, and cancellation-sensitive nonlinear energy error 368.473% | Original graph passes the same checks; reduced quadrature is not used in inference |
 | Positive-cubature sketch preflight, 247 retained points | Rejected; maximum independent residual 74.656% | Training states, weights, executed source and failed checks remain archived; no inference use |
+| Gauss 5 and Gauss 6 acceleration candidates, 64 fresh fields each | Rejected; maximum residuals 20.956% and 13.511%, respectively | Their original full-graph controls pass the same independent analytic checks; neither approximation is used in prediction |
 
 The first formal optimization changes the seven-mode frequency-error norm only
 from 2.433461 to 2.433270 Hz. The further run reduces this norm to 2.317378 Hz, with maximum training/independent
 physical residuals of 0.82185%. It reduces the soft physical loss weight while
 retaining the same 2.5% hard per-constraint limit and fresh independent validation
 fields. Neither training result is an accuracy certificate.
+
+The later manufactured-modal-field checks retain 39 separate constraints per
+field: geometric/material/total nonlinear increments, x/y/z/summed weak momentum
+in three modal norms, and each nonlinear energy. The initial Gauss 4/5/6 trials
+use maximum gradient norms between 2e-5 and 1e-4. Their archived reports preserve
+near-zero energy denominators and failures. The portable
+`tools/validate-modal-quadrature.py` additionally records absolute errors and
+reference norms, verifies model identity, and supports explicitly declared
+gradient ranges. A queued positive-cubature admission uses 128 new fields with
+gradient norms up to 8e-4. This is a separate physical check, not a change to the
+5% waveform criterion.
+
+A 500-mode candidate with the same phase-training weights and original mesh has
+been compiled in [run 40213705025](https://github.com/lx016922-dot/workAI/actions/runs/40213705025).
+The immutable release asset is `WorkAI-GraphModal-research-v11-phase500-ci.zip`
+(290,978,756 bytes; SHA-256
+`91c402ea990cc616650cabe06b084061073c786dfec96ae6960d8f1be16e2f84`).
+CI verifies the complete archive, and the published GitHub asset digest agrees.
+The follow-up [run 40214419484](https://github.com/lx016922-dot/workAI/actions/runs/40214419484)
+uses this single basis for 300/500-mode comparisons and a halved internal time
+step, against the same archived native 20 us COMSOL record. It cannot establish
+complete 5 ms accuracy. The default offline model remains unchanged.
 
 An independent forcing diagnostic found that the original external-force kick
 scheme alone caused 6.934% vector error for the rectangular five-cycle case at a

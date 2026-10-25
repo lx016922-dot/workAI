@@ -1,0 +1,57 @@
+{
+  "schema": "workai.independent_modal_physics_admission.v1",
+  "scope": "Geometric/material/full nonlinear increments; x,y,z and summed weak momentum; raw and frequency-weighted modal forces; nonlinear energies. Separate from waveform validation.",
+  "label": "gauss5",
+  "selection": {
+    "method": "Gauss-Legendre polynomial lift of learned gradient",
+    "points_per_axis": 5
+  },
+  "source_sha256": "bbd9ddfda8a4e01060b55110fff6135cde915434456b00a777ae2d5b3e354a87",
+  "base_weights_sha256": "e4d3426822bc716844b2d82eb81c74cba371ed33de43f536bdac89afad127e7a",
+  "base_basis_sha256": "dc1a106a4ef44a975a29b50a34a328ddee102dc27255968141c252388fc90cfa",
+  "validation_seed": 2026102567,
+  "fields": 64,
+  "constraints_per_field": 39,
+  "hard_relative_limit": 0.025,
+  "original_points": 37044,
+  "candidate_points": 13500,
+  "reference_uses_learned_material_tensors": false,
+  "reference_uses_learned_spatial_derivative": false,
+  "full_graph_passed": true,
+  "candidate_passed": false,
+  "maximum_full_graph_error": 0.0003910424039981984,
+  "maximum_candidate_error": 0.2095520362952441,
+  "elapsed_s": 502.90134328699787,
+  "scientific_accuracy_certified": false,
+  "independent_states_sha256": "e9ff86dbd882de246159abf70cb4197ca27cb3a8f46a67eb7af581aad556760c",
+  "per_group_maximum": {
+    "full_graph_errors": {
+      "geometric": {
+        "force": 0.0002585835712871895,
+        "energy": 0.00011682411147773673
+      },
+      "material": {
+        "force": 0.0003910424039981984,
+        "energy": 0.0001316383779638343
+      },
+      "total": {
+        "force": 0.0003786648570623505,
+        "energy": 0.00015695828849651277
+      }
+    },
+    "candidate_errors": {
+      "geometric": {
+        "force": 0.1611871851773707,
+        "energy": 0.0215334818198802
+      },
+      "material": {
+        "force": 0.2095520362952441,
+        "energy": 0.025505854326165055
+      },
+      "total": {
+        "force": 0.19770139338343637,
+        "energy": 0.04422226373352558
+      }
+    }
+  }
+}
