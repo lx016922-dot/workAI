@@ -48,9 +48,10 @@ constraints before acceptance.
 | Pinned offline runtime numerical tests | 29 tests pass | Force/energy consistency, sensitivity, mesh, symmetry and integrator checks |
 
 The first formal optimization changes the seven-mode frequency-error norm only
-from 2.433461 to 2.433270 Hz. A further run reduces the soft physical loss weight
-while retaining the same 2.5% hard per-constraint limit and fresh independent
-validation fields. Neither training result is an accuracy certificate.
+from 2.433461 to 2.433270 Hz. The further run reduces this norm to 2.317378 Hz, with maximum training/independent
+physical residuals of 0.82185%. It reduces the soft physical loss weight while
+retaining the same 2.5% hard per-constraint limit and fresh independent validation
+fields. Neither training result is an accuracy certificate.
 
 Native quarter-domain COMSOL spatial/time refinements and an explicitly graded
 quarter-domain reference pair are queued separately. The signed transport keeps

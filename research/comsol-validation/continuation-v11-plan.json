@@ -170,7 +170,7 @@
     "cross_section_grading": "uniform",
     "axial_grading_ratio": 20
   },
-  "last_updated_at_utc": "2026-10-25T14:02:21.112958+00:00",
+  "last_updated_at_utc": "2026-10-25T14:10:08.235457+00:00",
   "formal_training": {
     "first_run": "training/v11-quarter-physics",
     "first_result": {
@@ -329,10 +329,165 @@
       "elapsed_s": 502.1840902019976
     },
     "continuation_run": "training/v11-quarter-phase",
-    "continuation_status": "running",
+    "continuation_status": "completed",
     "continuation_physics_weight": 1,
     "unchanged_hard_physical_limit": 0.025,
-    "fresh_seed": 2026102543
+    "fresh_seed": 2026102543,
+    "continuation_result": {
+      "optimizer": "scipy_slsqp",
+      "optimizer_success": true,
+      "optimizer_message": "Converged constrained local frequency model",
+      "optimizer_evaluations": 2,
+      "total_forward_evaluations": 2,
+      "parameters": [
+        -0.00021710860630940322,
+        0.0010659838877837367,
+        0.00031500256648019754,
+        -0.0018347321309122157
+      ],
+      "weights_sha256": "e4d3426822bc716844b2d82eb81c74cba371ed33de43f536bdac89afad127e7a",
+      "raw_optimizer_parameters": [
+        -0.00021710860630940322,
+        0.0010659838877837367,
+        0.00031500256648019754,
+        -0.0018347321309122157
+      ],
+      "feasibility_restoration": {
+        "method": "offline parameter backtracking toward the physically verified baseline",
+        "training_limit": 0.025,
+        "target_with_margin": 0.024975,
+        "trials": [
+          {
+            "scale": 1.0,
+            "maximum_training_residual": 0.008218465898356384
+          }
+        ],
+        "validation_used_for_selection": false,
+        "inference_correction": false
+      },
+      "initial_frequency_errors_hz": [
+        -0.39288608462084085,
+        -1.0928854512167163,
+        -0.96408191381488,
+        1.6116482869256288,
+        -0.623269246192649,
+        -0.04835723573341966,
+        -0.8095090026035905,
+        -0.7151442806934938,
+        2.6406347503652796,
+        7.658790719229728,
+        3.1324455549474806,
+        17.353003550320864
+      ],
+      "final_frequency_errors_hz": [
+        -0.3928454587585293,
+        -1.0899505692650564,
+        -0.9026580684585497,
+        1.6252543840091676,
+        -0.352567714988254,
+        0.01911511947400868,
+        -0.6685880562290549,
+        0.1115327887237072,
+        5.390213109436445,
+        9.846801916137338,
+        6.080316270235926,
+        22.28205410321243
+      ],
+      "unmodified_parent_frequency_errors_hz": [
+        -0.3928860227752011,
+        -1.0928854183875956,
+        -0.9640819415217265,
+        1.611648240010254,
+        -0.6232692447956651,
+        -0.048357307561673224,
+        -0.8095090121496469,
+        -0.7151442989706993,
+        2.6406347297597677,
+        7.658790714573115,
+        3.132445538882166,
+        17.353003532858565
+      ],
+      "initial_physics_feasibility_restoration": null,
+      "training_mode_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "initial_training_error_norm_hz": 2.433460503698124,
+      "final_training_error_norm_hz": 2.3173783829101904,
+      "initial_mode_mac": [
+        0.9999999998906619,
+        0.9999999991192845,
+        0.9999999964766522,
+        0.9999998667080874,
+        0.999999983752604,
+        0.9999999893597087,
+        0.9999999858531496,
+        0.9999998970638733,
+        0.9999991176937738,
+        0.9999977880592322,
+        0.999997742006734,
+        0.9999934468922798
+      ],
+      "final_mode_mac": [
+        0.999999999890659,
+        0.9999999991193076,
+        0.9999999964154251,
+        0.9999998667935115,
+        0.9999999826573561,
+        0.9999999888603022,
+        0.9999999851794925,
+        0.9999998913790357,
+        0.9999990680900399,
+        0.9999977039878288,
+        0.999997491900607,
+        0.9999931278943565
+      ],
+      "material_parameters_changed": false,
+      "test_waveforms_loaded": false,
+      "nonlinear_longitudinal_transverse_physics_in_loss": true,
+      "physics_training_passed": true,
+      "hard_training_limit": 0.025,
+      "hard_training_limit_satisfied": true,
+      "physics_training_maxima": {
+        "momentum_interior": 0.00045378638116500816,
+        "momentum_boundary": 0.008218465898356384,
+        "traction": 5.6425256050206675e-05,
+        "strain_energy": 3.0674389247142986e-05,
+        "internal_power": 0.00020190659241114817
+      },
+      "physics_validation_passed": true,
+      "physics_validation_maxima": {
+        "momentum_interior": 0.0003599997025534341,
+        "momentum_boundary": 0.00821846612207316,
+        "traction": 4.876490709605456e-05,
+        "strain_energy": 2.6577903093744914e-05,
+        "internal_power": 0.0001884814453653593
+      },
+      "finite_rigid_motion_checks_passed": true,
+      "rigid_motion_maxima": {
+        "force_l2_N": 3.7836834117169276e-10,
+        "absolute_energy_J": 3.6566763447092753e-28,
+        "strain_norm": 9.64252537287692e-15,
+        "absolute_J_minus_one": 2.4424906541753444e-15
+      },
+      "summation_by_parts_enforced": true,
+      "summation_by_parts_final": {
+        "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+        "maximum_absolute_residual": 1.8681619174544734e-14,
+        "absolute_limit": 2e-12,
+        "passed": true,
+        "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+      },
+      "long_phase_reference_verified": false,
+      "accepted_for_offline_release": false,
+      "long_record_accuracy_certified": false,
+      "elapsed_s": 533.5999736390004
+    }
   },
   "quarter_development_result": {
     "linear_bandmatched_vector_passes": 19,
