@@ -1,0 +1,25 @@
+{
+  "scope": "Independent COMSOL-derived reference implementation tests only; native data admission and nonlinear 5ms accuracy remain unverified",
+  "command": "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 NUMBA_NUM_THREADS=2 pinned-offline-python -m unittest tests.test_comsol_nodal_reference -v",
+  "tests": 3,
+  "passed": 3,
+  "elapsed_s": 1.257,
+  "checked_at_utc": "2026-10-25T16:11:09.345343+00:00",
+  "python_runtime": "existing WorkAI Offline Linux Python 3.12 / NumPy 2.2.6 / SciPy 1.15.3 / Numba 0.63.1",
+  "checks": [
+    "Exact Q4 tensor polynomial and physical derivatives on anisotropic cells",
+    "Analytic Murnaghan nonlinear force against energy derivative",
+    "Sixth-order nonlinear flow against independent DOP853 Duffing integration"
+  ],
+  "detected_and_repaired": [
+    "Unit-traction native force integrals require multiplying the applied traction amplitude in pascals"
+  ],
+  "sources_sha256": {
+    "tools/comsol_nodal_reference.py": "30a5c5f598e63cd0c111e95cebb52d7091760c2b832cf901eb00ea1a5a6ec85d",
+    "tools/run-comsol-nodal-transient.py": "cf0bbe7f7e2e4814fbe9987974ce5f90c58ee90ac5eda1ee46e58d7906e118cc",
+    "tests/test_comsol_nodal_reference.py": "3f12eeb7a479b49cd73dc5e9736d505b62fe6235335eb8f382bc34ab302f53a8",
+    "spectral3d/long_reference_force.py": "fd86d68fc4c14706c4652c2236a0beab5ec6d6a73e5ce8f9edcfa836ed2d241d",
+    "graphwave/modal_forcing.py": "6246d5bf68f831e039ef40705bacfbc29a28e790478be3fb71af10af8fc9b574"
+  },
+  "scientific_accuracy_certified": false
+}

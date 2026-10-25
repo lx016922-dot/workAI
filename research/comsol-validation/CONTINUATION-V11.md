@@ -51,6 +51,9 @@ constraints before acceptance.
 | Corrected temporal layer, native 20 us scene, 200 candidate modes | 0.1 versus 0.025 us: maximum nonlinear-increment vector change 0.531%; complete component/band change 3.234% | Short temporal convergence only; not a COMSOL accuracy certificate |
 | Candidate versus new native quarter COMSOL, h = 0.75 mm, 20 us | Maximum vector errors: linear 0.530%, geometric increment 7.067%, material increment 5.645%, total nonlinear increment 5.210%; maximum complete check 28.926% | Fails; independent finer native mesh/time checks remain pending |
 | Explicit cross-section graded quarter COMSOL, h = 0.3 mm | Rejected: actual y spacing decreases toward the symmetry plane | Mesh orientation differs from the requested outer-surface refinement; excluded from training and convergence admission |
+| 300 candidate modes versus the same native h = 0.75 mm, 20 us record | Geometric increment 6.001%, material increment 4.979%, total nonlinear increment 4.761% maximum vector error; maximum complete check 21.368% | Still fails complete native comparison |
+| Candidate modal refinement, 200 to 300 modes at 20 us | Maximum complete change 7.758%; common-mode MAC at least 0.9999999999999967 and maximum common frequency change 7.46e-9 Hz | Truncation is not fully converged; improvement is from additional modes, not changed lower frequencies |
+| Independent reference reconstruction and evolution tests | Exact Q4 polynomial derivatives, Murnaghan energy/force derivative, and sixth-order flow versus adaptive Duffing integration all pass | Implementation tests only; actual native-reference admission is pending |
 
 The first formal optimization changes the seven-mode frequency-error norm only
 from 2.433461 to 2.433270 Hz. The further run reduces this norm to 2.317378 Hz, with maximum training/independent
@@ -90,6 +93,23 @@ components in double precision. Two prepared exports contain 78 modes at h =
 The 256 MiB decoded-export limit also remains enforced. They wait behind the native refinement queue.
 These are inputs to a future independently validated nonlinear modal reference,
 not completed nonlinear COMSOL transients.
+
+`tools/comsol_nodal_reference.py` reconstructs those native eigenfields on their
+actual Q4 cells using independently refined Gauss quadrature. It rejects a basis
+unless reconstructed modal mass and stiffness agree with the original COMSOL
+integrals. Its nonlinear force uses the analytic material constants and complete
+Murnaghan Piola stress, without candidate weights. `tools/run-comsol-nodal-transient.py`
+uses a sixth-order symmetric time composition, distinct from the candidate's
+fourth-order composition. Both use the independently tested forced-oscillator
+routine; reference modal force integrals are explicitly multiplied by traction
+amplitude in pascals. A Duffing comparison detected this required unit conversion
+before any actual reference prediction was admitted.
+
+The queued reference qualification retains separate native COMSOL, spatial,
+modal-count, quadrature and temporal checks. A successful model reconstruction or
+short transient calculation cannot certify the required complete nonlinear 5 ms
+matrix. All original reference budgets and the 5% acceptance criterion remain in
+force.
 
 The current complete nonlinear matrix is run
 [40204192440](https://github.com/lx016922-dot/workAI/actions/runs/40204192440),
