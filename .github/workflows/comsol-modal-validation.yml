@@ -25,7 +25,7 @@ on:
       step_us:
         description: Internal step in microseconds
         required: true
-        default: '0.2'
+        default: '0.1'
         type: choice
         options: ['0.2', '0.1', '0.05']
       modes:
@@ -47,7 +47,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     env:
-      OPENBLAS_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '4'
       OMP_NUM_THREADS: '1'
       NUMBA_NUM_THREADS: '2'
       WORKAI_MODEL_ASSET: ${{ inputs.model_asset }}

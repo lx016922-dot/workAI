@@ -65,8 +65,8 @@ jobs:
           (Path('release')/(name+'.sha256')).write_text(metadata['sha256']+'  '+name+'\n')
           inputs={'model_asset':name,'model_sha256':metadata['sha256'],
                   'reference':'eigen-graded20-030-v11','refinement':'eigen-graded20-035-v11',
-                  'plan':'research/comsol-validation/plans/v11-quarter-validation.json',
-                  'step_us':'0.2','modes':'200'}
+                  'plan':'research/comsol-validation/plans/v11-quarter-driven.json',
+                  'step_us':'0.1','modes':'200'}
           Path('dispatch.json').write_text(json.dumps({'ref':os.environ['GITHUB_REF_NAME'],'inputs':inputs}))
           PY
       - name: Publish distinct research assets without replacing existing software

@@ -16,7 +16,7 @@ from graphwave.modal_reduction import axial_reflection_subspace,attach_basis
 
 SOURCES=['graphwave/graded_mesh.py','graphwave/modal_calibration.py','graphwave/modal_reduction.py',
          'graphwave/modal_sensitivity.py','graphwave/buffered_inference.py','graphwave/inference.py',
-         'graphwave/signals.py','graphwave/modal_sparse.py','graphwave/quarter_symmetry.py',
+         'graphwave/signals.py','graphwave/modal_sparse.py','graphwave/quarter_symmetry.py','graphwave/modal_forcing.py',
          'spectral3d/mesh.py','tools/compile-modal-candidate.py']
 
 def digest(path):return hashlib.sha256(Path(path).read_bytes()).hexdigest()

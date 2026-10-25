@@ -89,7 +89,8 @@ class ModalReductionTest(unittest.TestCase):
         a, b, c = [branches(row['traces']) for row in values]
         errors = np.linalg.norm((a-b).reshape(4, -1), axis=1)
         refined = np.linalg.norm((b-c).reshape(4, -1), axis=1)
-        self.assertTrue(np.all(refined < errors*.3), (errors, refined))
+        self.assertLess(refined[0]/np.linalg.norm(c[0]),1e-10)
+        self.assertTrue(np.all(refined[1:] < errors[1:]*.3), (errors, refined))
         self.assertTrue(np.all(refined/np.linalg.norm(c.reshape(4, -1), axis=1) < .002))
         for row in values:self.assertLess(row['energy_relative_error'].max(), .01)
 

@@ -111,7 +111,7 @@
     "module": "graphwave/modal_reduction.py",
     "basis": "candidate graph tangent only, no COMSOL lookup",
     "constitutive_evaluation": "all learned quadratic/cubic energy entries at all original quadrature nodes",
-    "propagation": "exact candidate linear oscillator flow composed with conservative full nonlinear force kicks",
+    "propagation": "Accurately driven candidate linear flow plus conservative nonlinear increments; DOP853 forcing tolerance 1e-12 and exact candidate free evolution.",
     "verification": "force and energy match actual graph projection; energy gradients, reversibility and short-record temporal refinement tests pass",
     "scope": "Research architecture. Requires independent truncation, full-field and full-duration time checks before use as evidence."
   },
@@ -170,7 +170,7 @@
     "cross_section_grading": "uniform",
     "axial_grading_ratio": 20
   },
-  "last_updated_at_utc": "2026-10-25T14:10:08.235457+00:00",
+  "last_updated_at_utc": "2026-10-25T14:46:36.992293+00:00",
   "formal_training": {
     "first_run": "training/v11-quarter-physics",
     "first_result": {
@@ -503,5 +503,16 @@
     "native_reference_convergence_verified": false,
     "scientific_accuracy_certified": false
   },
-  "new_prediction_plan": "plans/v11-quarter-validation.json"
+  "new_prediction_plan": "plans/v11-quarter-driven.json",
+  "forcing_defect_and_repair": {
+    "diagnostic": "diagnostics/v11-original-forcing-step-diagnostic.json",
+    "old_rectangular_05_vector_error": 0.06933907261773485,
+    "cancelled_workflow_runs": [
+      40201236214,
+      40201622534
+    ],
+    "corrected_time_refinement": "diagnostics/v11-driven-native-time-refinement.json",
+    "new_full_record_internal_step_us": 0.1,
+    "scientific_accuracy_certified": false
+  }
 }

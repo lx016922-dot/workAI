@@ -64,6 +64,7 @@ def main():
         'maximum_nonlinear_strain':result['maximum_nonlinear_strain'].tolist(),'minimum_nonlinear_j':result['minimum_nonlinear_j'].tolist(),
         'maximum_fixed_displacement_m':0.,'mode_limit':args.modes,'active_modes':len(selected),'step_us':args.step_us,
         'mode_truncation_verified':False,'time_refinement_verified':False,'scientific_accuracy_certified':False}
+    prediction['forcing_integration']=result.get('forcing_integration',{'method':'archived external-force kick scheme'})
     save(directory/'prediction.json',prediction)
     # No reference arrays are read until the actual three-control record is saved.
     spec=importlib.util.spec_from_file_location('matrix',Path(__file__).with_name('validate-comsol-linear-matrix.py'))
