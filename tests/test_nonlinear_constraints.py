@@ -7,6 +7,55 @@ MATERIAL={'lambda_pa':58.1e9,'mu_pa':26.1e9,'l_pa':-143e9,'m_pa':-297e9,'n_pa':-
 
 
 class NonlinearMomentumTest(unittest.TestCase):
+    def test_quartic_fields_expose_an_sbp_consistent_high_order_error(self):
+        from numpy.polynomial.legendre import Legendre
+        from spectral3d.mesh import gll
+        from graphwave.modal_calibration import sbp_checks
+        root=Path(__file__).resolve().parents[1]
+        with np.load(root/'offline/model/continued-weights.npz',allow_pickle=False) as saved:weights=dict(saved)
+        x,w,exact,_=gll(6);a,b=Legendre.basis(5)(x),Legendre.basis(6)(x)
+        altered=exact+10*(np.outer(a,w*b)-np.outer(b,w*a))
+        self.assertTrue(sbp_checks(altered,w)['passed'])
+        cubic=make_dataset(MATERIAL,24,2026102510,degree=6)
+        extended=make_dataset(MATERIAL,24,2026102510,degree=6,polynomial_degree=4)
+        self.assertEqual({int(p['polynomial_degree']) for p in extended},{3,4})
+        _,baseline=evaluate(exact,weights,extended,details=True)
+        _,old=evaluate(altered,weights,cubic,details=True)
+        _,new=evaluate(altered,weights,extended,details=True)
+        self.assertTrue(baseline['all_physical_checks_within_5_percent'])
+        self.assertLess(max(old['maximum_normalized_residual'].values()),.025)
+        self.assertGreater(max(new['maximum_normalized_residual'].values()),.025)
+
+    def test_sixth_order_tangent_and_full_nonlinear_constraints(self):
+        import json
+        from graphwave.modal_calibration import stiffness,filter_basis,sbp_checks
+        from graphwave.nonlinear_constraints import rigid_motion_checks
+        from graphwave.buffered_inference import graph_message
+        from graphwave.inference import inverse_mapping
+        from spectral3d.mesh import make_mesh,gll
+        root=Path(__file__).resolve().parents[1]
+        scene=json.loads((root/'research/comsol-validation/data/eigen-030-v7/scene.json').read_text())['scene']
+        with np.load(root/'offline/model/continued-weights.npz',allow_pickle=False) as saved:weights=dict(saved)
+        nodes,w,exact,_=gll(6);basis=filter_basis(nodes,2,w)
+        self.assertEqual(len(basis),4)
+        learned=exact+np.einsum('a,aij->ij',[.02,-.015,.03,-.01],basis)
+        self.assertTrue(sbp_checks(learned,w)['passed'])
+        self.assertTrue(rigid_motion_checks(learned,weights)['passed'])
+        rng=np.random.default_rng(2026102510)
+        for _ in range(20):
+            u,v=rng.normal(size=(2,7))
+            self.assertAlmostEqual(float(u@(w*(learned@v))+(learned@u)@(w*v)),
+                                   float(u[-1]*v[-1]-u[0]*v[0]),places=12)
+        mesh=make_mesh(scene,6,8.)
+        field=rng.normal(size=mesh['points'].shape)*1e-9
+        matrix=stiffness(mesh,learned,weights['quadratic_tensor'])
+        force,_,_,_=graph_message(field,mesh['elements'],learned,inverse_mapping(mesh),mesh['volume_weight'],
+                                  weights['quadratic_tensor'],weights['cubic_tensor'],0)
+        self.assertLess(np.linalg.norm(matrix@field.ravel()-force.ravel())/np.linalg.norm(force),1e-12)
+        patches=make_dataset(MATERIAL,12,2026102510,degree=6)
+        _,report=evaluate(exact,weights,patches,details=True)
+        self.assertTrue(report['all_physical_checks_within_5_percent'])
+
     def test_sbp_training_preserves_boundary_flux_for_arbitrary_fields(self):
         from graphwave.modal_calibration import filter_basis,sbp_checks
         from spectral3d.mesh import gll

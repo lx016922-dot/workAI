@@ -1,0 +1,28 @@
+{
+  "schema": "workai.new_degree_initialization.v1",
+  "parent_weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+  "weights_sha256": "1c7f99e25e6da42fe7f02b4f56a0000fd75d8db831e8d59c21bde642f8e7934e",
+  "new_filter": "derivative_6",
+  "degree": 6,
+  "initialization": "Analytic GLL interpolation derivative; not yet trained against COMSOL",
+  "all_parent_arrays_preserved_exactly": true,
+  "preserved_parent_arrays": [
+    "cubic_tensor",
+    "derivative_3",
+    "derivative_4",
+    "derivative_5",
+    "quadratic_tensor",
+    "state_weights"
+  ],
+  "polynomial_consistency_max_absolute": 6.217248937900877e-15,
+  "summation_by_parts": {
+    "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+    "maximum_absolute_residual": 2.066852431988378e-14,
+    "absolute_limit": 2e-12,
+    "passed": true,
+    "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+  },
+  "initialization_source_sha256": "34925f2dc2749872b37aa874dfa216bcb67748ce99a8b5db4ba8e0a3d1119938",
+  "accepted_for_offline_release": false,
+  "scientific_accuracy_certified": false
+}

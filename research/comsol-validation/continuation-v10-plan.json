@@ -1,0 +1,86 @@
+{
+  "schema": "workai.comsol_training_continuation_plan.v4",
+  "candidate_degree": 6,
+  "candidate_h_mm": 1.6,
+  "candidate_elements": 10,
+  "candidate_nodes": 2821,
+  "initial_weights": "training/v10-untrained/candidate-weights.npz",
+  "initial_weights_sha256": "1c7f99e25e6da42fe7f02b4f56a0000fd75d8db831e8d59c21bde642f8e7934e",
+  "initialization_parent_weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+  "changed_parameters": [
+    "derivative_6"
+  ],
+  "unchanged": [
+    "all original degree 3/4/5 filters",
+    "material energy tensors",
+    "nodal mass rule",
+    "time weights",
+    "inference implementation",
+    "physical scene"
+  ],
+  "reference_pair": [
+    "data/eigen-035-v7",
+    "data/eigen-030-v7"
+  ],
+  "reference_convergence_certified": false,
+  "spatial_choice": "P6 h=1.6 reduces analytic dominant-mode discrepancy from P5 h=1.6 84.3818 Hz to 48.6601 Hz, with 2821 nodes and 53 internal substeps/sample; chosen only from development eigenpairs, before transient validation.",
+  "exact_training_constraints": [
+    "constant, affine and quadratic polynomial derivatives",
+    "centroskew parity",
+    "GLL discrete integration by parts"
+  ],
+  "trainable_parameters": 4,
+  "physical_field_extension": "Alternate six-family cubic and quartic displacement blocks. Quartic gradients generate degree-six leading nonlinear stress and constrain high-order directions nearly invisible to cubic fields.",
+  "preflight": {
+    "physics_samples": 48,
+    "validation_samples": 24,
+    "seed": 2026102511,
+    "maximum_iterations": 30
+  },
+  "formal": {
+    "physics_samples": 576,
+    "validation_samples": 288,
+    "seed": 2026102513,
+    "maximum_iterations": 80
+  },
+  "training": {
+    "maximum_displacement_polynomial_degree": 4,
+    "hard_physical_limit": 0.025,
+    "independent_physical_limit": 0.05,
+    "consistency_order": 2,
+    "summation_by_parts": true,
+    "dominant_phase_residual_multiplier": 10,
+    "parameter_increment_bound": 1,
+    "finite_difference_step": 0.0001,
+    "slsqp_tolerance": 1e-07,
+    "constraint_form": "rms",
+    "transient_validation_waveforms_used": false
+  },
+  "validation": {
+    "plan": "plans/v10-p6-h16.json",
+    "signals": [
+      "hann",
+      "gaussian",
+      "rectangular",
+      "chirp"
+    ],
+    "cycles": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "duration_us": 5000,
+    "sample_step_us": 0.2,
+    "same_grid_baseline_required": true,
+    "new_physics_holdout_seed": 2026102514,
+    "native_short_reference": "data/nonlinear-20us-check-01",
+    "phase_alignment": false,
+    "amplitude_rescaling": false,
+    "workflow_timeout_minutes": 150
+  },
+  "reference_server_scope": "Signed live health is ready with unrecognized source c7140d6c...; use verified archived COMSOL development data, do not overwrite the remote version.",
+  "accepted_for_offline_release": false,
+  "scientific_accuracy_certified": false
+}

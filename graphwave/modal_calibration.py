@@ -280,8 +280,10 @@ def train(args):
     (output/'source_snapshot').mkdir()
     shutil.copyfile(Path(__file__),output/'source_snapshot/modal_calibration.py')
     shutil.copyfile(Path(physics.__file__),output/'source_snapshot/nonlinear_constraints.py')
-    physical_training=physics.make_dataset(scene['material'],args.physics_samples,args.physics_seed,degree=args.degree)
-    physical_validation=physics.make_dataset(scene['material'],args.physics_validation_samples,args.physics_seed+1,degree=args.degree)
+    physical_training=physics.make_dataset(scene['material'],args.physics_samples,args.physics_seed,
+        degree=args.degree,polynomial_degree=args.physics_polynomial_degree)
+    physical_validation=physics.make_dataset(scene['material'],args.physics_validation_samples,args.physics_seed+1,
+        degree=args.degree,polynomial_degree=args.physics_polynomial_degree)
     initial_restoration=None
     if args.optimizer=='slsqp':
         # A previously valid candidate may violate a newly expanded training
@@ -339,6 +341,8 @@ def train(args):
             'physics_constraints':{'equation':'rho*u_tt = Div(F*S) + b; full Murnaghan Green strain; all mixed derivatives retained',
                 'branches':list(physics.BRANCHES),'projections':list(physics.DIRECTIONS),
                 'families':list(physics.FAMILIES),'training_samples':args.physics_samples,
+                'maximum_displacement_polynomial_degree':args.physics_polynomial_degree,
+                'polynomial_degree_mix':'alternating complete six-family cubic/quartic blocks' if args.physics_polynomial_degree==4 else 'cubic fields',
                 'validation_samples':args.physics_validation_samples,'seed':args.physics_seed,
                 'loss_weight':args.physics_weight,'maximum_normalized_component_residual':.05,
                 'optimizer':args.optimizer,'hard_training_limit':args.physics_limit if args.optimizer=='slsqp' else None,
@@ -484,12 +488,14 @@ if __name__=='__main__':
     p.add_argument('--weights',type=Path,default=Path('offline/model/continued-weights.npz'))
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--action',choices=['audit','train'],default='audit')
-    p.add_argument('--degree',type=int,choices=[4,5],default=4)
+    p.add_argument('--degree',type=int,choices=[4,5,6],default=4)
     p.add_argument('--h-mm',type=float,default=2.5)
     p.add_argument('--check-reference',type=Path)
     p.add_argument('--consistency-order',type=int,choices=[1,2],default=2)
     p.add_argument('--summation-by-parts',action='store_true',help='Constrain W D + D^T W to the exact boundary flux matrix for arbitrary nodal fields')
     p.add_argument('--physics-samples',type=int,default=48)
+    p.add_argument('--physics-polynomial-degree',type=int,choices=[3,4],default=3,
+                   help='4 adds quartic nonlinear fields alternating with cubic controls; requires degree 6')
     p.add_argument('--physics-validation-samples',type=int,default=24)
     p.add_argument('--physics-seed',type=int,default=2026102413)
     p.add_argument('--physics-weight',type=float,default=30.)
@@ -503,6 +509,7 @@ if __name__=='__main__':
     p.add_argument('--max-iterations',type=int,default=150)
     args=p.parse_args()
     if args.action=='train':
+        if args.physics_polynomial_degree==4 and args.degree<6:p.error('Quartic manufactured constraints require spatial degree 6')
         if not .8<=args.h_mm<=2.5:p.error('Training mesh size must be in [0.8, 2.5] mm')
         if not args.check_reference:p.error('--check-reference is required for training')
         if args.physics_samples<6 or args.physics_validation_samples<6 or not np.isfinite(args.physics_weight) or args.physics_weight<=0:

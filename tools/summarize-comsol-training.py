@@ -71,6 +71,8 @@ def main():
              'polynomial_consistency_order':config.get('polynomial_consistency_order',2),
              'summation_by_parts_enforced':config.get('summation_by_parts_enforced',False),
              'summation_by_parts_final':training.get('summation_by_parts_final'),
+             'physics_maximum_displacement_polynomial_degree':config.get('physics_constraints',{}).get('maximum_displacement_polynomial_degree',3),
+             'physics_polynomial_degree_mix':config.get('physics_constraints',{}).get('polynomial_degree_mix','cubic fields'),
              'parameter_bounds':config.get('parameter_bounds'),
              'dominant_phase_mode_index':config.get('dominant_phase_mode_index'),
              'dominant_phase_residual_multiplier':config.get('dominant_phase_residual_multiplier',1.),

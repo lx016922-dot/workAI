@@ -97,23 +97,36 @@ def polynomial_field(coefficients,exponents,coordinates,size):
     return u,gradient,hessian
 
 
-def make_dataset(material,count=48,seed=2026102413,degree=4):
+def make_dataset(material,count=48,seed=2026102413,degree=4,polynomial_degree=3):
+    if polynomial_degree not in [3,4] or (polynomial_degree==4 and degree<6):
+        raise ValueError('Quartic manufactured fields require at least sixth-order spatial differentiation')
     rng=np.random.default_rng(seed);nodes,w,_,_=gll(degree);n=len(nodes)
     xyz=np.stack(np.meshgrid(nodes,nodes,nodes,indexing='ij'),-1).reshape(-1,3)
-    exponents=np.array([p for p in product(range(4),repeat=3) if 1<=sum(p)<=3])
+    exponents=np.array([p for p in product(range(polynomial_degree+1),repeat=3) if 1<=sum(p)<=polynomial_degree])
     cells=np.arange(n**3,dtype=np.int32).reshape(1,n,n,n);items=[]
     interior=np.all(abs(xyz)<1-1e-12,axis=1)
     for index in range(count):
         family=FAMILIES[index%len(FAMILIES)];size=rng.uniform(1.2,2.5,3)*1e-3
+        # Complete six-family blocks alternate between cubic controls and
+        # quartic fields. Quartic gradients produce sixth-degree leading
+        # nonlinear stresses, exposing high-order derivative errors that
+        # cubic displacement fields can leave almost unconstrained.
+        field_degree=4 if polynomial_degree==4 and (index//len(FAMILIES))%2 else 3
         coefficients=np.zeros((3,len(exponents)))
         if family in FAMILIES[:3]:
             axis=FAMILIES.index(family)
             for exponent,value in [((2,0,0),1.),((3,0,0),.35)]:
                 coefficients[axis,np.flatnonzero(np.all(exponents==exponent,axis=1))[0]]=value
+            if field_degree==4:
+                coefficients[axis,np.flatnonzero(np.all(exponents==(4,0,0),axis=1))[0]]=.18
         elif family=='torsion':
             coefficients[1,np.flatnonzero(np.all(exponents==(1,0,1),axis=1))[0]]=-1
             coefficients[2,np.flatnonzero(np.all(exponents==(1,1,0),axis=1))[0]]=1
+            if field_degree==4:
+                coefficients[1,np.flatnonzero(np.all(exponents==(3,0,1),axis=1))[0]]=-.2
+                coefficients[2,np.flatnonzero(np.all(exponents==(3,1,0),axis=1))[0]]=.2
         else:coefficients=rng.normal(size=coefficients.shape)/np.maximum(1,exponents.sum(1))
+        coefficients[:,exponents.sum(1)>field_degree]=0
         amplitude=10**rng.uniform(-6,-4)
         _,gradient,_=polynomial_field(coefficients,exponents,xyz,size)
         coefficients*=amplitude/np.max(np.linalg.norm(gradient,axis=(-2,-1)))
@@ -159,7 +172,8 @@ def make_dataset(material,count=48,seed=2026102413,degree=4):
                       'target_force':target,'density_scale':density_scale,'interior':interior,'frame':frame,
                       'face_nodes':np.array(face_nodes),'normals':np.array(normals),'traction':target_traction,
                       'traction_scale':traction_scale,'energy_target':energy_target,'energy_scale':energy_scale,
-                      'amplitude':amplitude,'size':size,'analytic_gradient':gradient,'analytic_hessian':hessian,
+                      'amplitude':amplitude,'size':size,'polynomial_degree':np.array(field_degree),
+                      'analytic_gradient':gradient,'analytic_hessian':hessian,
                       'acceleration':acceleration,'velocity':velocity,'body_force_density':body_force,
                       'boundary_load':face_load,'rho':np.array(material['rho_kg_m3']),
                       'sample_time_s':np.array(phase/omega),'angular_frequency':np.array(omega),
@@ -206,6 +220,7 @@ def evaluate(derivative,weights,dataset,*,details=False):
         power=(np.einsum('bnc,nc->b',force_parts,item['velocity'])-item['power_target'])/item['power_scale']
         groups['internal_power']=abs(power);residuals.append(power/np.sqrt(power.size*len(dataset)))
         if details:reports.append({'family':item['family'],'gradient_amplitude':float(item['amplitude']),
+                                   'polynomial_degree':int(item.get('polynomial_degree',3)),
                                    'element_size_m':item['size'].tolist(),'time_s':float(item['sample_time_s']),
                                    **{key:value.tolist() for key,value in groups.items()}})
     residual=np.concatenate(residuals)

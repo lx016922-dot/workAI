@@ -30,7 +30,7 @@ jobs:
         signal: [hann, gaussian, rectangular, chirp]
         cycles: ['01', '03', '05', '10', '20']
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 150
     env:
       OPENBLAS_NUM_THREADS: '1'
       OMP_NUM_THREADS: '1'
