@@ -1,0 +1,94 @@
+name: Compile and publish a reproducible graph modal research candidate
+on:
+  workflow_dispatch:
+    inputs:
+      weights:
+        description: Committed candidate weights
+        required: true
+        default: research/comsol-validation/training/v10-untrained/candidate-weights.npz
+        type: string
+      model_asset:
+        description: Unique research ZIP filename on release v0.3.0
+        required: true
+        default: WorkAI-GraphModal-research-v11-baseline-ci.zip
+        type: string
+      validate:
+        description: Start the complete 20-case, 5 ms nonlinear prediction matrix after publication
+        required: true
+        default: true
+        type: boolean
+permissions:
+  contents: write
+  actions: write
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      OPENBLAS_NUM_THREADS: '1'
+      OMP_NUM_THREADS: '1'
+      NUMBA_NUM_THREADS: '2'
+      WORKAI_WEIGHTS: ${{ inputs.weights }}
+      WORKAI_MODEL_ASSET: ${{ inputs.model_asset }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install pinned numerical runtime
+        run: python -m pip install numpy==2.2.6 scipy==1.15.3 numba==0.63.1 llvmlite==0.46.0
+      - name: Validate the explicit research inputs
+        run: |
+          python - <<'PY'
+          import os,re
+          from pathlib import Path
+          assert re.fullmatch(r'WorkAI-GraphModal-research-[a-z0-9-]+[.]zip',os.environ['WORKAI_MODEL_ASSET'])
+          value=os.environ['WORKAI_WEIGHTS']
+          assert re.fullmatch(r'research/comsol-validation/training/[a-z0-9-]+/candidate-weights[.]npz',value)
+          assert Path(value).is_file()
+          PY
+      - name: Compile the candidate graph basis without COMSOL arrays
+        run: >-
+          python tools/compile-modal-candidate.py
+          --input research/comsol-validation/data/eigen-graded20-030-v11/input.json
+          --weights "$WORKAI_WEIGHTS" --degree 6 --h-mm 1
+          --axis-elements 12 3 3 --grading-ratios 50 12 12
+          --quarter-domain --modes 200 --output model
+      - name: Package and read back the frozen model and source snapshot
+        run: |
+          python tools/package-modal-candidate.py --model model --output "release/$WORKAI_MODEL_ASSET"
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          name=os.environ['WORKAI_MODEL_ASSET']
+          metadata=json.loads((Path('release')/name).with_suffix('.json').read_text())
+          (Path('release')/(name+'.sha256')).write_text(metadata['sha256']+'  '+name+'\n')
+          inputs={'model_asset':name,'model_sha256':metadata['sha256'],
+                  'reference':'eigen-graded20-030-v11','refinement':'eigen-graded20-035-v11',
+                  'plan':'research/comsol-validation/plans/v11-quarter-validation.json',
+                  'step_us':'0.2','modes':'200'}
+          Path('dispatch.json').write_text(json.dumps({'ref':os.environ['GITHUB_REF_NAME'],'inputs':inputs}))
+          PY
+      - name: Publish distinct research assets without replacing existing software
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload v0.3.0 release/* --repo "$GITHUB_REPOSITORY"
+      - name: Start the frozen full-duration validation matrix once
+        if: ${{ inputs.validate }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh api --method POST
+          "repos/$GITHUB_REPOSITORY/actions/workflows/comsol-modal-validation.yml/dispatches"
+          --input dispatch.json
+      - name: Preserve the compiled identity and dispatch inputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: modal-compilation-identity
+          path: |
+            model/model.json
+            release/*.json
+            release/*.sha256
+            dispatch.json
+          retention-days: 30
