@@ -93,7 +93,7 @@ included below; these are not vector-only scores.
 
 | Complete candidate, 0.0125 us step | Maximum error | Material nonlinear error |
 | --- | ---: | ---: |
-| Trained 264-mode space | 1.9557% | 1.3511% |
+| Trained 264-mode space | 1.9561% | 1.3511% |
 | Trained 392-mode space | 1.6212% | 0.8078% |
 
 Halving the candidate step from 0.025 to 0.0125 us changes the complete checks
@@ -127,15 +127,35 @@ failed checks are under `diagnostics/v12-enriched-native-validation/`.
 
 ## Offline research package and next complete records
 
-The locally built 153,983,846-byte research archive includes the trained model,
+The original locally built 153,983,846-byte research archive includes the trained model,
 training provenance, frozen inference code, all 20 complete 5 ms cases and a
 network-free CLI. Every packaged file and archive readback has been verified.
 It uses the pinned Python runtime from the existing offline distribution; it
 does not need COMSOL, credentials or network access for prediction. The default
-internal step is 0.05 us. Package identity is recorded in
+internal step was 0.05 us. Package identity is recorded in
 `research/release-validation/v12-enriched-offline-local.json`.
 
-The dedicated workflow first trains and admits the same research architecture,
+Additional actual-step checks after resumption found that 0.05 us fails the
+short native material/total nonlinear checks (5.2194% / 5.3150%) and the finer
+time comparison (5.4532%). The replacement 0.025 us record passes all native
+checks (maximum 1.9561%) and changes by at most 0.3047% on refinement to 0.0125 us.
+The original coarse CI run was cancelled. The local coarse record is retained
+only for research/time-refinement comparison.
+
+The replacement 153,984,037-byte offline archive derives its default 0.025 us
+step from a new frozen plan. All file hashes, archive readback and offline CLI
+help were verified. Its identity is in
+`research/release-validation/v12-enriched-step025-offline-local.json`.
+
+New complete 5 ms linear-only diagnostics for both learned spaces pass 19/20
+vector-waveform checks and 11/20 complete component/band checks. Worst relative
+errors are 35.4677% for 264 modes and 40.1145% for 392 modes; unresolved reference
+truncation/mesh failures prevent interpreting those references as converged
+training labels. Full diagnostics and both successful/failed time-step checks
+are retained in `diagnostics/v12-step-admission/`.
+
+The dedicated replacement workflow first trains and admits the same research architecture,
+including native and refinement checks at the actual long-run time step,
 then runs all 20 complete 5 ms cases, independently audits their saved records,
 and preserves distinct research assets. Short native success does not certify
 the pending full 5 ms nonlinear comparisons. The default production weights

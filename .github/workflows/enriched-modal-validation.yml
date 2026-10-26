@@ -1,8 +1,8 @@
-name: Train enriched graph basis and validate complete 5 ms records
+name: Train enriched graph basis and validate 5 ms at admitted step
 on:
   workflow_dispatch:
   push:
-    branches: [validation-v12-enriched-nodal-20261026]
+    branches: [validation-v12-enriched-step025-20261026]
 permissions:
   contents: read
   actions: read
@@ -49,6 +49,13 @@ jobs:
           python -m unittest tests.test_modal_enrichment tests.test_modal_nodal_force tests.test_modal_audit
           python tools/check-modal-nodal-force.py --model candidate --output checks/force-equivalence
           python tools/validate-modal-full-physics.py --model candidate --seed 2026102606 --output checks/analytic-physics
+      - name: Check the actual long-run step against archived native COMSOL
+        run: >-
+          python tools/run-modal-nodal-case.py --model candidate
+          --plan research/comsol-validation/plans/v12-enriched-nodal-native.json
+          --case native-20us --modes 264 --step-us 0.025
+          --native-reference research/comsol-validation/data/native-quarter-050-time-20us-v11
+          --output checks/native-step025
       - name: Compare actual short prediction against archived native COMSOL
         run: >-
           python tools/run-modal-nodal-case.py --model candidate
@@ -56,25 +63,31 @@ jobs:
           --case native-20us --modes 264 --step-us 0.0125
           --native-reference research/comsol-validation/data/native-quarter-050-time-20us-v11
           --output checks/native
+      - name: Check time refinement with the same model and force implementation
+        run: >-
+          python tools/check-modal-time-refinement.py
+          --coarse checks/native-step025/native-20us --fine checks/native/native-20us
+          --output checks/time-refinement
       - name: Require physical and short native admission before the long research run
         run: |
           python - <<'PY'
           import json
           from pathlib import Path
-          for path in ['checks/force-equivalence/report.json','checks/analytic-physics/report.json']:
+          for path in ['checks/force-equivalence/report.json','checks/analytic-physics/report.json','checks/time-refinement/summary.json']:
               assert json.loads(Path(path).read_text())['passed']
-          native=json.loads(Path('checks/native/native-20us/metrics.json').read_text())
-          assert all(x['passed'] for x in native['native_comparison'].values())
-          assert not native['scientific_accuracy_certified']
+          for path in ['checks/native-step025/native-20us/metrics.json','checks/native/native-20us/metrics.json']:
+              native=json.loads(Path(path).read_text())
+              assert all(x['passed'] for x in native['native_comparison'].values())
+              assert not native['scientific_accuracy_certified']
           PY
       - name: Package network-free research prediction code and complete model
         id: package
         run: |
-          python tools/package-enriched-offline.py --model candidate --plan research/comsol-validation/plans/v12-enriched-nodal-driven.json --output release/WorkAI-GraphModal-research-v12-enriched264-offline.zip
+          python tools/package-enriched-offline.py --model candidate --plan research/comsol-validation/plans/v12-enriched-nodal-step025.json --output release/WorkAI-GraphModal-research-v12-enriched264-step025-offline.zip
           python - <<'PY'
           import json,os
           from pathlib import Path
-          receipt=json.loads(Path('release/WorkAI-GraphModal-research-v12-enriched264-offline.json').read_text())
+          receipt=json.loads(Path('release/WorkAI-GraphModal-research-v12-enriched264-step025-offline.json').read_text())
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('archive_sha256='+receipt['sha256']+'\n')
           PY
       - name: Publish distinct research package without changing default weights
@@ -126,7 +139,7 @@ jobs:
           python - <<'PY'
           import hashlib,os,stat,zipfile
           from pathlib import Path,PurePosixPath
-          path=Path('package/WorkAI-GraphModal-research-v12-enriched264-offline.zip')
+          path=Path('package/WorkAI-GraphModal-research-v12-enriched264-step025-offline.zip')
           assert hashlib.sha256(path.read_bytes()).hexdigest()==os.environ['MODEL_ARCHIVE_SHA256']
           with zipfile.ZipFile(path) as z:
               assert len(z.infolist())<=256 and sum(x.file_size for x in z.infolist())<=512*1024**2
@@ -138,8 +151,8 @@ jobs:
       - name: Complete nonlinear prediction before reading reference labels
         run: >-
           python tools/run-modal-nodal-case.py --model offline/model
-          --plan research/comsol-validation/plans/v12-enriched-nodal-driven.json
-          --case '${{ matrix.signal }}-${{ matrix.cycles }}' --modes 264 --step-us 0.05
+          --plan research/comsol-validation/plans/v12-enriched-nodal-step025.json
+          --case '${{ matrix.signal }}-${{ matrix.cycles }}' --modes 264 --step-us 0.025
           --reference research/comsol-validation/data/eigen-graded20-030-v11
           --check-reference research/comsol-validation/data/eigen-graded20-035-v11
           --reference-truncation 160 --output validation
@@ -182,7 +195,7 @@ jobs:
           paths=list(Path('downloaded-validation').glob('graph-modal-*'))
           assert len(paths)==20
           assert sum(p.stat().st_size for root in paths for p in root.rglob('*') if p.is_file())<=4*1024**3
-          path=Path('package/WorkAI-GraphModal-research-v12-enriched264-offline.zip')
+          path=Path('package/WorkAI-GraphModal-research-v12-enriched264-step025-offline.zip')
           assert hashlib.sha256(path.read_bytes()).hexdigest()==os.environ['MODEL_ARCHIVE_SHA256']
           with zipfile.ZipFile(path) as z:
               assert len(z.infolist())<=256 and sum(x.file_size for x in z.infolist())<=512*1024**2
@@ -194,11 +207,11 @@ jobs:
       - name: Independently audit every complete saved trajectory
         run: >-
           python tools/audit-modal-matrix.py --ci-root downloaded-validation --model offline/model
-          --plan research/comsol-validation/plans/v12-enriched-nodal-driven.json
+          --plan research/comsol-validation/plans/v12-enriched-nodal-step025.json
           --reference research/comsol-validation/data/eigen-graded20-030-v11
           --refinement research/comsol-validation/data/eigen-graded20-035-v11 --output audit
       - name: Package complete evidence with explicit scientific status
-        run: python tools/package-enriched-evidence.py --root downloaded-validation --audit audit --output release-evidence
+        run: python tools/package-enriched-evidence.py --root downloaded-validation --audit audit --output release-evidence --plan research/comsol-validation/plans/v12-enriched-nodal-step025.json --step-label step025
       - name: Publish distinct long-record research evidence
         env:
           GH_TOKEN: ${{ github.token }}
