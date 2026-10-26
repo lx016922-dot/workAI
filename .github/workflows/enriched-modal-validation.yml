@@ -1,0 +1,215 @@
+name: Train enriched graph basis and validate complete 5 ms records
+on:
+  workflow_dispatch:
+  push:
+    branches: [validation-v12-enriched-nodal-20261026]
+permissions:
+  contents: read
+  actions: read
+env:
+  OPENBLAS_NUM_THREADS: '4'
+  OMP_NUM_THREADS: '1'
+  NUMBA_NUM_THREADS: '2'
+jobs:
+  prepare:
+    permissions:
+      contents: write
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    outputs:
+      archive_sha256: ${{ steps.package.outputs.archive_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install numpy==2.2.6 scipy==1.15.3 numba==0.63.1 llvmlite==0.46.0
+      - name: Download the unchanged published starting model
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v0.3.0 --repo "$GITHUB_REPOSITORY" --pattern WorkAI-GraphModal-research-v11-phase-ci.zip --dir starting-model
+          python - <<'PY'
+          import hashlib,stat,zipfile
+          from pathlib import Path,PurePosixPath
+          path=Path('starting-model/WorkAI-GraphModal-research-v11-phase-ci.zip')
+          assert hashlib.sha256(path.read_bytes()).hexdigest()=='990d8000130fad94d455da69f3608ccc277d9eaaa35bbbf981360b044625cfac'
+          with zipfile.ZipFile(path) as z:
+              assert len(z.infolist())<=256 and sum(x.file_size for x in z.infolist())<=512*1024**2
+              for item in z.infolist():
+                  p=PurePosixPath(item.filename)
+                  assert not p.is_absolute() and '..' not in p.parts and '\\' not in item.filename and not stat.S_ISLNK(item.external_attr>>16)
+              z.extractall('baseline')
+          PY
+      - name: Train from candidate physics alone
+        run: python tools/train-modal-enrichment.py --model baseline --output candidate
+      - name: Verify conservative algebra and independent physical constraints
+        run: |
+          python -m unittest tests.test_modal_enrichment tests.test_modal_nodal_force tests.test_modal_audit
+          python tools/check-modal-nodal-force.py --model candidate --output checks/force-equivalence
+          python tools/validate-modal-full-physics.py --model candidate --seed 2026102606 --output checks/analytic-physics
+      - name: Compare actual short prediction against archived native COMSOL
+        run: >-
+          python tools/run-modal-nodal-case.py --model candidate
+          --plan research/comsol-validation/plans/v12-enriched-nodal-native.json
+          --case native-20us --modes 264 --step-us 0.0125
+          --native-reference research/comsol-validation/data/native-quarter-050-time-20us-v11
+          --output checks/native
+      - name: Require physical and short native admission before the long research run
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          for path in ['checks/force-equivalence/report.json','checks/analytic-physics/report.json']:
+              assert json.loads(Path(path).read_text())['passed']
+          native=json.loads(Path('checks/native/native-20us/metrics.json').read_text())
+          assert all(x['passed'] for x in native['native_comparison'].values())
+          assert not native['scientific_accuracy_certified']
+          PY
+      - name: Package network-free research prediction code and complete model
+        id: package
+        run: |
+          python tools/package-enriched-offline.py --model candidate --plan research/comsol-validation/plans/v12-enriched-nodal-driven.json --output release/WorkAI-GraphModal-research-v12-enriched264-offline.zip
+          python - <<'PY'
+          import json,os
+          from pathlib import Path
+          receipt=json.loads(Path('release/WorkAI-GraphModal-research-v12-enriched264-offline.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('archive_sha256='+receipt['sha256']+'\n')
+          PY
+      - name: Publish distinct research package without changing default weights
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload v0.3.0 release/* --repo "$GITHUB_REPOSITORY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: enriched-model
+          path: release/
+          compression-level: 0
+          retention-days: 30
+      - name: Preserve short admission and training outcomes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: enriched-preparation-evidence
+          path: |
+            checks/
+            candidate/identity.json
+            candidate/report.json
+            candidate/model.json
+            candidate/manufactured-states.npz
+          retention-days: 30
+  compare:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        signal: [hann, gaussian, rectangular, chirp]
+        cycles: ['01', '03', '05', '10', '20']
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      MODEL_ARCHIVE_SHA256: ${{ needs.prepare.outputs.archive_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install numpy==2.2.6 scipy==1.15.3 numba==0.63.1 llvmlite==0.46.0
+      - uses: actions/download-artifact@v4
+        with:
+          name: enriched-model
+          path: package
+      - name: Verify and extract the same prepared model
+        run: |
+          python - <<'PY'
+          import hashlib,os,stat,zipfile
+          from pathlib import Path,PurePosixPath
+          path=Path('package/WorkAI-GraphModal-research-v12-enriched264-offline.zip')
+          assert hashlib.sha256(path.read_bytes()).hexdigest()==os.environ['MODEL_ARCHIVE_SHA256']
+          with zipfile.ZipFile(path) as z:
+              assert len(z.infolist())<=256 and sum(x.file_size for x in z.infolist())<=512*1024**2
+              for item in z.infolist():
+                  p=PurePosixPath(item.filename)
+                  assert not p.is_absolute() and '..' not in p.parts and '\\' not in item.filename and not stat.S_ISLNK(item.external_attr>>16)
+              z.extractall('offline')
+          PY
+      - name: Complete nonlinear prediction before reading reference labels
+        run: >-
+          python tools/run-modal-nodal-case.py --model offline/model
+          --plan research/comsol-validation/plans/v12-enriched-nodal-driven.json
+          --case '${{ matrix.signal }}-${{ matrix.cycles }}' --modes 264 --step-us 0.05
+          --reference research/comsol-validation/data/eigen-graded20-030-v11
+          --check-reference research/comsol-validation/data/eigen-graded20-035-v11
+          --reference-truncation 160 --output validation
+      - name: Retain complete or failed research evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: graph-modal-${{ matrix.signal }}-${{ matrix.cycles }}
+          path: validation/
+          compression-level: 0
+          retention-days: 30
+  audit:
+    permissions:
+      contents: write
+      actions: read
+    needs: [prepare, compare]
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MODEL_ARCHIVE_SHA256: ${{ needs.prepare.outputs.archive_sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install numpy==2.2.6 scipy==1.15.3 numba==0.63.1 llvmlite==0.46.0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: graph-modal-*
+          path: downloaded-validation
+      - uses: actions/download-artifact@v4
+        with:
+          name: enriched-model
+          path: package
+      - name: Verify the model package and retained data bounds
+        run: |
+          python - <<'PY'
+          import hashlib,os,stat,zipfile
+          from pathlib import Path,PurePosixPath
+          paths=list(Path('downloaded-validation').glob('graph-modal-*'))
+          assert len(paths)==20
+          assert sum(p.stat().st_size for root in paths for p in root.rglob('*') if p.is_file())<=4*1024**3
+          path=Path('package/WorkAI-GraphModal-research-v12-enriched264-offline.zip')
+          assert hashlib.sha256(path.read_bytes()).hexdigest()==os.environ['MODEL_ARCHIVE_SHA256']
+          with zipfile.ZipFile(path) as z:
+              assert len(z.infolist())<=256 and sum(x.file_size for x in z.infolist())<=512*1024**2
+              for item in z.infolist():
+                  p=PurePosixPath(item.filename)
+                  assert not p.is_absolute() and '..' not in p.parts and '\\' not in item.filename and not stat.S_ISLNK(item.external_attr>>16)
+              z.extractall('offline')
+          PY
+      - name: Independently audit every complete saved trajectory
+        run: >-
+          python tools/audit-modal-matrix.py --ci-root downloaded-validation --model offline/model
+          --plan research/comsol-validation/plans/v12-enriched-nodal-driven.json
+          --reference research/comsol-validation/data/eigen-graded20-030-v11
+          --refinement research/comsol-validation/data/eigen-graded20-035-v11 --output audit
+      - name: Package complete evidence with explicit scientific status
+        run: python tools/package-enriched-evidence.py --root downloaded-validation --audit audit --output release-evidence
+      - name: Publish distinct long-record research evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload v0.3.0 release-evidence/* --repo "$GITHUB_REPOSITORY"
+      - name: Preserve audit even if publication fails
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: enriched-full5ms-audit
+          path: |
+            audit/
+            release-evidence/*manifest.json
+            release-evidence/*SHA256SUMS.txt
+          retention-days: 30

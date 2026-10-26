@@ -79,7 +79,64 @@ error of 23.4683%. These are static representation metrics, not waveform errors.
 The complete executed source, states and failed admission are retained under
 `training/v12-nonlinear-basis264/`.
 
-A 392-mode candidate is being trained on the same manufactured samples to
-measure the effect of a larger learned space. Independent analytic checks and
-short native comparisons follow before any inference promotion. Neither
-candidate currently supports a new accuracy claim.
+A 392-mode candidate has also completed training on the same manufactured
+samples. Its maximum transverse static response error is 4.9747%, vector error
+1.7934%, and energy-norm error 15.9608%. The stricter static-coverage admission
+still fails. Its complete source identity, states and report are retained under
+`training/v12-nonlinear-basis392/`.
+
+## Completed short waveform and physical checks
+
+The complete trained spaces substantially improve the actual 20 us native
+comparison. All directions, nonlinear differences and frequency bands are
+included below; these are not vector-only scores.
+
+| Complete candidate, 0.0125 us step | Maximum error | Material nonlinear error |
+| --- | ---: | ---: |
+| Trained 264-mode space | 1.9557% | 1.3511% |
+| Trained 392-mode space | 1.6212% | 0.8078% |
+
+Halving the candidate step from 0.025 to 0.0125 us changes the complete checks
+by at most 0.3047% and 0.2753%, respectively. Comparing the two complete learned
+spaces changes them by at most 1.7863%. The larger space contains the smaller
+space to a maximum mass-norm residual of 1.292e-12; the same candidate weights,
+training fields and graph are used. This is a check of nested trained spaces.
+
+Keeping only the first 232 or 264 frequency coordinates of these richer spaces
+still fails: those prefix changes reach 26.52% and 20.07%. The trained high
+frequency directions therefore cannot be silently discarded. Both failed
+prefix tests remain archived alongside the successful complete-space check.
+
+Separate 64-field analytic admissions check 2,496 longitudinal/transverse
+momentum and energy residuals per candidate. Maximum complete-graph residuals
+are 0.03239% and 0.05976%, passing the fixed 2.5% physical limit. The alternative
+Gauss-9 contraction differs by up to 17.0612% for the first candidate and is
+not used in its prediction. These admissions do not establish quadrature or
+full-duration accuracy.
+
+`modal_nodal_force.py` preserves the same full graph operator while reconstructing
+nodal displacements and assembling forces before modal projection. No quadrature
+point or learned tensor entry is removed. Independent force/potential replay
+differs by at most 3.606e-11; the actual 20 us trajectory differs by at most
+7.128e-12 across the complete component/band checks. Its elapsed solve time is
+252.9 seconds versus 544.4 seconds for the dense-gradient implementation under
+the observed local load. This timing is not a general hardware guarantee.
+
+All raw short predictions, coordinates, energies, identities, successful and
+failed checks are under `diagnostics/v12-enriched-native-validation/`.
+
+## Offline research package and next complete records
+
+The locally built 153,983,846-byte research archive includes the trained model,
+training provenance, frozen inference code, all 20 complete 5 ms cases and a
+network-free CLI. Every packaged file and archive readback has been verified.
+It uses the pinned Python runtime from the existing offline distribution; it
+does not need COMSOL, credentials or network access for prediction. The default
+internal step is 0.05 us. Package identity is recorded in
+`research/release-validation/v12-enriched-offline-local.json`.
+
+The dedicated workflow first trains and admits the same research architecture,
+then runs all 20 complete 5 ms cases, independently audits their saved records,
+and preserves distinct research assets. Short native success does not certify
+the pending full 5 ms nonlinear comparisons. The default production weights
+remain unchanged.
