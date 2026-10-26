@@ -1,0 +1,34 @@
+name: Stop superseded step 0.05 research run
+on:
+  push:
+    branches: [control-v12-step050-20261026]
+    paths: [.github/workflows/stop-v12-step050.yml]
+permissions:
+  contents: read
+jobs:
+  stop-superseded-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Verify exact run identity and cancel only the superseded research batch
+        run: |
+          python - <<'PY'
+          import json,os,subprocess
+          repo=os.environ['GITHUB_REPOSITORY']
+          assert repo=='lx016922-dot/workAI'
+          path='repos/'+repo+'/actions/runs/40309994368'
+          run=json.loads(subprocess.check_output(['gh','api',path]))
+          assert run['id']==40309994368
+          assert run['head_sha']=='bee6331cbbb3047c339f367096de10ef3203fcbe'
+          assert run['head_branch']=='validation-v12-enriched-nodal-20261026'
+          assert run['path']=='.github/workflows/enriched-modal-validation.yml'
+          print(json.dumps({k:run[k] for k in ['id','head_sha','status','conclusion']}))
+          print('Superseded: actual 0.05 us step fails native material/total nonlinear and temporal checks; use admitted 0.025 us step.')
+          if run['status']!='completed':
+              subprocess.run(['gh','api','--method','POST',path+'/cancel'],check=True)
+          PY
