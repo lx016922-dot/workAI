@@ -205,3 +205,18 @@ model identity and separate reference-convergence checks. A linear reference can
 set the nonlinear accuracy flag. The research workflow is
 `.github/workflows/comsol-modal-validation.yml`; a successful workflow means the
 calculation completed, not that the scientific 5% gate passed.
+
+The 20 complete 5 ms predictions have now finished (run 40204192440). The first
+independent audit stopped on a near-zero numerical residual, with a difference
+of 3.8848e-12, before any evidence release was published. The repaired auditor
+checks every component/band diagnostic and preserves every acceptance decision;
+its numerical replay allowances do not modify the scientific 5% criterion.
+
+Both native 20 us refinements are collected and signature/hash verified. The
+h = 0.75 to 0.50 mm change is at most 0.8362%; halving the native time step from
+0.01 to 0.005 us changes the checks by at most 0.2197%. The unchanged 500-mode
+prediction still has 29.2749% maximum material-increment error against the finer
+time result. Reference convergence therefore does not explain that failure.
+The datasets and comparisons remain separate from training. A complete local
+5 ms Hann replay has also finished; cloud/offline comparison awaits evidence
+publication. Full 5 ms nonlinear COMSOL accuracy remains unverified.
