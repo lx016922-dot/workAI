@@ -1,0 +1,233 @@
+{
+  "case_id": "C-f0.25-T2.0",
+  "comsol_version": "COMSOL Multiphysics 6.4 (开发版本: 293)",
+  "source_provenance": {
+    "mode": "installed_v6_fingerprint_and_signed_receipts",
+    "source_sha256": "d36366154f8950e745a5bd35a6464172f4c96f21e67ecec555045274df614b23",
+    "java_source_archived": false,
+    "original_queue_fully_restored": false,
+    "original_remaining_job_submission_history": "unknown",
+    "training_started": false
+  },
+  "geometry": {
+    "length_mm": 48,
+    "width_mm": 2,
+    "thickness_mm": 2.0
+  },
+  "material": {
+    "rho_kg_m3": 2700,
+    "lambda_pa": 58100000000.0,
+    "mu_pa": 26100000000.0,
+    "l_pa": -143000000000.0,
+    "m_pa": -297000000000.0,
+    "n_pa": -345000000000.0
+  },
+  "receivers": [
+    {
+      "name": "P_far",
+      "point_mm": [
+        36,
+        1,
+        2.0
+      ]
+    },
+    {
+      "name": "top_0",
+      "point_mm": [
+        22,
+        1,
+        2.0
+      ]
+    },
+    {
+      "name": "top_1",
+      "point_mm": [
+        25,
+        1,
+        2.0
+      ]
+    },
+    {
+      "name": "top_2",
+      "point_mm": [
+        28,
+        1,
+        2.0
+      ]
+    },
+    {
+      "name": "top_3",
+      "point_mm": [
+        31,
+        1,
+        2.0
+      ]
+    },
+    {
+      "name": "top_4",
+      "point_mm": [
+        34,
+        1,
+        2.0
+      ]
+    },
+    {
+      "name": "top_5",
+      "point_mm": [
+        37,
+        1,
+        2.0
+      ]
+    },
+    {
+      "name": "mid_0",
+      "point_mm": [
+        22,
+        1,
+        1.0
+      ]
+    },
+    {
+      "name": "mid_1",
+      "point_mm": [
+        25,
+        1,
+        1.0
+      ]
+    },
+    {
+      "name": "mid_2",
+      "point_mm": [
+        28,
+        1,
+        1.0
+      ]
+    },
+    {
+      "name": "mid_3",
+      "point_mm": [
+        31,
+        1,
+        1.0
+      ]
+    },
+    {
+      "name": "mid_4",
+      "point_mm": [
+        34,
+        1,
+        1.0
+      ]
+    },
+    {
+      "name": "mid_5",
+      "point_mm": [
+        37,
+        1,
+        1.0
+      ]
+    }
+  ],
+  "load": {
+    "type": "nominal_dead_traction_per_reference_area",
+    "sources": [
+      {
+        "face": "zmax",
+        "spatial": "full_face_gaussian",
+        "center_mm": [
+          13,
+          1
+        ],
+        "sigma_mm": 1.5,
+        "direction": [
+          0,
+          0,
+          -1
+        ],
+        "delay_us": 0
+      },
+      {
+        "face": "zmax",
+        "spatial": "full_face_gaussian",
+        "center_mm": [
+          19,
+          1
+        ],
+        "sigma_mm": 1.5,
+        "direction": [
+          0,
+          0,
+          1
+        ],
+        "delay_us": 1
+      }
+    ]
+  },
+  "absorbing": {
+    "faces": "xmin+xmax",
+    "alpha_max_per_s": 22075615.536638446
+  },
+  "integration_order": 20,
+  "runs": {
+    "linear": {
+      "job_id": "comsol-aa0ddfacbc2f4a3da09ad00d68cb1da7",
+      "result_origin": "new_supplement",
+      "source_provenance": {
+        "mode": "installed_v6_fingerprint_and_signed_receipts",
+        "source_sha256": "d36366154f8950e745a5bd35a6464172f4c96f21e67ecec555045274df614b23",
+        "java_source_archived": false,
+        "original_queue_fully_restored": false,
+        "original_remaining_job_submission_history": "unknown",
+        "training_started": false
+      },
+      "source_sha256": "d36366154f8950e745a5bd35a6464172f4c96f21e67ecec555045274df614b23",
+      "scene_sha256": "7a69dadcfb86fa2ff58143b98023c0dd6c0ea04931310302f69cde8310c31aa7",
+      "parameters_sha256": "94e3f5c673a4674b7d25e4ac4228617ec49425c317a14ec2ccf7311fa401f9bf",
+      "server_signature_verified": true,
+      "element": {
+        "element_family": "nodal serendipity",
+        "shape_function": "shnserp",
+        "degree": 4,
+        "volume_hexahedra": 540,
+        "dofs": 30711,
+        "max_element_size_mm": {
+          "x": 0.8,
+          "y": 0.6666666666666666,
+          "z": 0.6666666666666666
+        },
+        "evidence": "signed completed.properties; shape function cross-checked against signed scene"
+      },
+      "max_step_us": 0.01,
+      "time_method": "generalized-alpha",
+      "rho_infinity": 1.0,
+      "time_steps_mode": "strict",
+      "relative_tolerance": 1e-06,
+      "absolute_tolerance_m": 1e-18,
+      "newton_tolerance_factor": 0.001,
+      "solve_time_s": 98712.75360730001,
+      "max_green_strain": 3.5032929920411744e-05,
+      "min_J": 0.9999902930486598,
+      "guard_output_times": 601,
+      "csv_sha256": "bd091dc278decabbb1e154408eafd2ae4698f02b5aeb426423f4c1bb455ac478",
+      "data_rows": 601,
+      "columns": 40,
+      "time_steps": 11935,
+      "logged_output_hits": 601,
+      "maximum_logged_step_us": 0.01,
+      "collected_at_utc": "2026-10-30T11:10:57.723646+00:00"
+    }
+  },
+  "element": {
+    "element_family": "nodal serendipity",
+    "shape_function": "shnserp",
+    "degree": 4,
+    "volume_hexahedra": 540,
+    "dofs": 30711,
+    "max_element_size_mm": {
+      "x": 0.8,
+      "y": 0.6666666666666666,
+      "z": 0.6666666666666666
+    },
+    "evidence": "signed completed.properties; shape function cross-checked against signed scene"
+  }
+}
