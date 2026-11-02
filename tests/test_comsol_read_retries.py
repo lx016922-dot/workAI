@@ -39,4 +39,13 @@ class VerifiedReadRecovery(unittest.TestCase):
             self.assertEqual(run.call_count, 2)
 
 
+    def test_exhausted_reads_raise_a_transient_error_the_poller_can_wait_on(self):
+        failure = subprocess.CompletedProcess([], 1, '', 'HTTP 503 temporarily unavailable')
+        with patch.object(collector.subprocess, 'run', side_effect=[failure] * 11 + [subprocess.TimeoutExpired('client', 45)]) as run, patch.object(collector.time, 'sleep'):
+            with self.assertRaises(collector.TransientReadError):
+                collector.request_json(['client'], 'status')
+            self.assertEqual(run.call_count, 12)
+        self.assertTrue(issubclass(collector.TransientReadError, RuntimeError))
+
+
 if __name__ == '__main__': unittest.main()
