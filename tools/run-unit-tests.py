@@ -10,11 +10,16 @@ Groups:
 
 Every module is run in its own interpreter so a failure or a numba compilation cache in one
 module cannot affect another; the exit code is non-zero if any module fails.
+
+graphwave.test_network reads `candidate.pt` from WORKAI_GRAPH_MODEL; when that is unset, the
+shipped checkpoint offline/model/best.pt is provided under that name in a temporary directory.
 """
 import argparse
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -49,13 +54,22 @@ def main():
     modules = [m for g, mods in GROUPS.items() if args.group in (g, 'all') for m in mods]
     if args.list:
         print('\n'.join(modules)); return
-    env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', PYTHONUTF8='1'); failures = []
+    env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', PYTHONUTF8='1')
+    with tempfile.TemporaryDirectory() as scratch:
+        if 'WORKAI_GRAPH_MODEL' not in env:
+            shutil.copyfile(REPO / 'offline' / 'model' / 'best.pt', Path(scratch) / 'candidate.pt'); env['WORKAI_GRAPH_MODEL'] = scratch
+        failures = run(modules, env)
+    print(f'{len(modules) - len(failures)}/{len(modules)} modules passed'); sys.exit(1 if failures else 0)
+
+
+def run(modules, env):
+    failures = []
     for module in modules:
         started = time.monotonic(); done = subprocess.run([sys.executable, '-m', 'unittest', module], cwd=REPO, env=env, capture_output=True, text=True)
         status = 'ok' if done.returncode == 0 else 'FAILED'; summary = (done.stderr.strip().splitlines() or [''])[-1]
         print(f'{status:6s} {module:40s} {time.monotonic() - started:7.1f} s  {summary}', flush=True)
         if done.returncode: failures.append(module); print(done.stderr[-4000:], flush=True)
-    print(f'{len(modules) - len(failures)}/{len(modules)} modules passed'); sys.exit(1 if failures else 0)
+    return failures
 
 
 if __name__ == '__main__': main()
