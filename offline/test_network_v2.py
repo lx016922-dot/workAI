@@ -33,6 +33,17 @@ class NetworkV2Requests(unittest.TestCase):
             with self.assertRaises(ValueError): validate_request({'scene': bad, 'degree': 3})
         with self.assertRaises(ValueError): validate_request({'scene': v2_plate(), 'degree': 2})
 
+    def test_long_v2_records_are_accepted_up_to_20_ms(self):
+        for duration, step in ((5000., .2), (20000., .1), (1200., .05)):
+            s = v2_plate(); s['acquisition'] = {'duration_us': duration, 'sample_step_us': step}
+            result = validate_request({'scene': s, 'degree': 4})
+            self.assertEqual(result['scene']['acquisition'], {'duration_us': duration, 'sample_step_us': step})
+        s = v2_plate(); s['acquisition'] = {'duration_us': 5000., 'sample_step_us': .2}; s['source']['frequency_mhz'] = .4
+        with self.assertRaises(ValueError): validate_request({'scene': s, 'degree': 4})  # 2f needs 8 samples per period
+        s = v2_plate(); s['acquisition'] = {'duration_us': 5000., 'sample_step_us': .2}; s['numerics']['h_mm'] = 2.5; s['source']['frequency_mhz'] = .25
+        s['sources'][0]['frequency_mhz'] = .25
+        with self.assertRaises(ValueError): validate_request({'scene': s, 'degree': 3})  # mesh screen still applies on long records
+
     def test_local_job_runs_through_the_v2_input_layer(self):
         request = validate_request({'scene': v2_plate(), 'degree': 3})
         with tempfile.TemporaryDirectory() as tmp:

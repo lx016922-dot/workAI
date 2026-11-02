@@ -13,7 +13,7 @@
 
 | 部分 | 状态 | 关键结果 | 详细 |
 |---|---|---|---|
-| 离线软件 0.3.0 | 研究预发布版，Windows / Linux 便携包 | 默认权重的 5 ms 长记录：20 组 0 组达到 5%，全场相对 L2 24.83%–141.97%，能量收支全部通过；原 0.2.0 模型 14 μs 误差 0.438% | [5 ms 验证](research/long-validation/README.md)、[离线说明](offline/README-OFFLINE.txt) |
+| 离线软件 0.3.0 | 研究预发布版，Windows / Linux 便携包；界面已重建为仿真工作台（模型树、三维模型视图、属性面板、激励信号预览、2f 分辨率与验收范围检查），可在界面中编辑多源、任意信号、对称面和吸收层 | 默认权重的 5 ms 长记录：20 组 0 组达到 5%，全场相对 L2 24.83%–141.97%，能量收支全部通过；原 0.2.0 模型 14 μs 误差 0.438% | [5 ms 验证](research/long-validation/README.md)、[离线说明](offline/README-OFFLINE.txt) |
 | 冻结图网络继续训练 v6–v10 | 均未采纳为发布模型 | 最好的 v10（六阶、h 1.6 mm）5 ms 每组最差接收点差异 15.01%–105.71%，0/20 | [第 10 轮](research/comsol-validation/CONTINUATION-V10.md)、[路线总表](research/comsol-validation/README.md) |
 | 模态降阶 v11–v12 | 研究候选，未采纳 | v12 原生 COMSOL 20 μs 核对 1.96% / 1.62%；5 ms 线性对照波形向量 19/20，全部分量与频带 11/20，最差 35%–40%；尚无收敛的 5 ms 非线性参考 | [第 11 轮](research/comsol-validation/CONTINUATION-V11.md)、[第 12 轮](research/comsol-validation/CONTINUATION-V12.md) |
 | 数值求解器 | 可用，含收敛复核 | 谱元线性解与 COMSOL 三个 P1 线性结果相差 0.01%–0.3% | [激励 v2](docs/solver-excitation-v2.md)、[扫描与收敛复核](docs/sweep-and-datasets.md) |
