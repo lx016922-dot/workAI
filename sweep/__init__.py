@@ -1,4 +1,9 @@
-"""Parameter sweeps and training-data campaigns over the plane-strain solver.
+"""Parameter sweeps, training-data campaigns and mesh-convergence checks.
+
+Engines: the plane-strain spectral solver (`2d_plane_strain`), the 3-D GLL spectral
+solver (`3d_spectral`), the tetrahedral solver (`3d_tetra`) and the frozen graph
+network through its version-2 input layer (`3d_graph`); `sweep.convergence` reruns
+cases with a finer mesh, a higher degree and a smaller time step.
 
 A sweep specification (`sweep.spec`) expands a base scene into immutable cases
 (full-factorial grid, explicit overrides, Latin-hypercube or uniform sampling,

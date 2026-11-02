@@ -5,7 +5,7 @@
     python -m coarsegraph.comsol import  DATA_DIR --output OUT          # convert to the sweep/run label layout
     python -m coarsegraph.comsol compare --comsol OUT [--labels DIR ...]  # COMSOL vs spectral labels, and COMSOL convergence
 
-File contract (docs/comsol-data-request.md):
+File contract (docs/comsol/comsol-data-request.md):
   DATA_DIR/<case_id>_<control>[_<variant>].csv   control ∈ linear, stvk, murnaghan; variant ∈ mesh2, dt2, amp2
   DATA_DIR/<case_id>.json                        run metadata (template in docs/comsol/metadata-template.json)
 CSV: optional comment lines starting with % or #, then one header row
@@ -30,6 +30,23 @@ VARIANTS = ('mesh2', 'dt2', 'amp2')
 FAMILIES = {'A': 'labels-a-top-gaussian', 'B': 'labels-b-end-axial', 'C': 'labels-c-two-patch'}
 PRIORITY = {'P1': ['A-f0.40-T1.6', 'B-f0.40-T1.6', 'C-f0.25-T2.0'], 'P2': ['A-f0.30-T2.4', 'A-f0.40-T2.0', 'B-f0.30-T2.4', 'C-f0.35-T2.0']}
 METADATA_KEYS = ('comsol_version', 'element', 'max_element_size_mm', 'elements', 'dofs', 'integration_order', 'time_stepping', 'tolerances', 'load', 'absorbing', 'material_check', 'runs')
+# Equivalent locations accepted for each template field (the P1 campaign writes element data under
+# `element` and solver settings under each run).
+METADATA_ALTERNATIVES = {'max_element_size_mm': ('element.max_element_size_mm',), 'elements': ('element.volume_hexahedra', 'element.elements'),
+                         'dofs': ('element.dofs',), 'time_stepping': ('runs.*.time_method',), 'tolerances': ('runs.*.relative_tolerance',)}
+MIN_DIGITS = 12
+
+
+def _has(meta, path):
+    head, _, rest = path.partition('.')
+    if head == '*': return isinstance(meta, dict) and any(_has(v, rest) for v in meta.values())
+    if not isinstance(meta, dict) or head not in meta: return False
+    return _has(meta[head], rest) if rest else True
+
+
+def missing_metadata(meta):
+    """Template fields absent from a metadata file, accepting the documented equivalent locations."""
+    return [k for k in METADATA_KEYS if not _has(meta, k) and not any(_has(meta, alt) for alt in METADATA_ALTERNATIVES.get(k, ()))]
 
 
 def case_id(family, frequency, thickness):
@@ -162,7 +179,7 @@ def export_csv(case, times_us, U, path, comment=None):
     with Path(path).open('w', newline='', encoding='utf-8') as handle:
         if comment: handle.write(f'% {comment}\n')
         writer = csv.writer(handle); writer.writerow(columns(case))
-        for t, row in zip(times_us, U.reshape(len(times_us), -1)): writer.writerow([f'{t:.6f}'] + [f'{v:.10e}' for v in row])
+        for t, row in zip(times_us, U.reshape(len(times_us), -1)): writer.writerow([f'{t:.6f}'] + [f'{v:.16e}' for v in row])
 
 
 def projected(case, U):
@@ -175,8 +192,11 @@ def parse_name(path):
     return parts[0], parts[1], parts[2] if len(parts) == 3 else 'base'
 
 
-def check(directory):
-    """Per-file errors and warnings; returns (report, ok)."""
+def check(directory, partial=False):
+    """Per-file errors and warnings; returns (report, ok).
+
+    partial=True accepts an incomplete delivery: missing base runs, missing metadata fields and missing
+    convergence variants become warnings; format, time grid, precision and finiteness errors stay errors."""
     directory = Path(directory); report = {'files': [], 'cases': {}, 'errors': [], 'warnings': []}
     files = sorted(directory.glob('*.csv')); require(files, f'{directory} 中没有 CSV 文件。')
     for path in files:
@@ -188,7 +208,7 @@ def check(directory):
                                                                         'sha256': hashlib.sha256(path.read_bytes()).hexdigest()}
         report['files'].append(row); report['cases'].setdefault(cid, {}).setdefault(variant, []).append(control)
         digits = significant_digits(path); row['significant_digits'] = digits
-        if digits is not None and digits < 10: report['errors'].append(f'{path.name}：数值只有约 {digits} 位有效数字；非线性增量约为位移的 1e-4，需要至少 12 位有效数字导出（科学计数法）。')
+        if digits is not None and digits < MIN_DIGITS: report['errors'].append(f'{path.name}：数值只有约 {digits} 位有效数字；非线性增量约为位移的 1e-4，需要至少 {MIN_DIGITS} 位有效数字导出（科学计数法）。')
         ref = case.get('reference'); expected_max = (ref or {}).get('max_abs_projected_nm', 30.) * 1e-9
         if peak > 1e-5 or peak > 100 * expected_max: report['warnings'].append(f'{path.name}：位移峰值 {peak:.3g} m，约为预期（{expected_max:.2g} m 量级）的 {peak / expected_max:.0f} 倍；请确认单位是米而不是毫米，载荷是 1 MPa。')
         if peak < 1e-11 or peak < expected_max / 100: report['warnings'].append(f'{path.name}：位移峰值 {peak:.3g} m，远小于预期（{expected_max:.2g} m 量级）；请确认载荷幅值 1 MPa 与单位。')
@@ -206,15 +226,16 @@ def check(directory):
                     if ratio < 1e-7: report['warnings'].append(f'{path.name}：与线性对照几乎完全相同（相对差 {ratio:.1e}）；请确认几何非线性和 Murnaghan 本构已开启，且求解器容差足够小。')
                     if ratio > 1e-2: report['warnings'].append(f'{path.name}：与线性对照差别 {ratio:.1e}，远大于 1 MPa 下的预期（约 1e-4）；请检查本构参数与载荷。')
                 except ValueError: pass
+    soft = report['warnings'] if partial else report['errors']
     for cid, variants in report['cases'].items():
         missing = [c for c in ('linear', 'murnaghan') if c not in variants.get('base', [])]
-        if missing: report['errors'].append(f'{cid}：缺少基准运行 {missing}。')
+        if missing: soft.append(f'{cid}：缺少基准运行 {missing}。')
         meta = directory / f'{cid}.json'
-        if not meta.is_file(): report['errors'].append(f'{cid}：缺少元数据文件 {cid}.json。')
+        if not meta.is_file(): soft.append(f'{cid}：缺少元数据文件 {cid}.json。')
         else:
             try:
-                m = json.loads(meta.read_text(encoding='utf-8')); absent = [k for k in METADATA_KEYS if k not in m]
-                if absent: report['errors'].append(f'{cid}.json：缺少字段 {absent}。')
+                m = json.loads(meta.read_text(encoding='utf-8')); absent = missing_metadata(m)
+                if absent: soft.append(f'{cid}.json：缺少模板字段 {absent}。')
             except json.JSONDecodeError as error: report['errors'].append(f'{cid}.json：不是合法 JSON（{error}）。')
     for cid in PRIORITY['P1']:
         if cid not in report['cases']: report['warnings'].append(f'P1 工况 {cid} 尚未提供。')
@@ -239,7 +260,8 @@ def import_data(directory, output):
         campaign = output / row['variant']; cid = f'{row["case_id"]}-{row["control"]}'; out = campaign / 'cases' / cid / 'out'
         out.parent.mkdir(parents=True, exist_ok=True); (out.parent / 'scene.json').write_text(json.dumps(scene, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
         runs = meta.get('runs') or {}; run_meta = runs.get(f'{row["control"]}{"" if row["variant"] == "base" else "_" + row["variant"]}', {})
-        diagnostics = {'source': 'COMSOL', 'nodes': meta.get('dofs', 0) // 3 if meta.get('dofs') else None, 'internal_steps': run_meta.get('time_steps'), 'elapsed_s': run_meta.get('solve_time_s'),
+        dofs = meta.get('dofs') or (meta.get('element') or {}).get('dofs')
+        diagnostics = {'source': 'COMSOL', 'nodes': dofs // 3 if dofs else None, 'internal_steps': run_meta.get('time_steps'), 'elapsed_s': run_meta.get('solve_time_s'),
                        'external_work_balance_relative': None, 'max_strain': run_meta.get('max_green_strain'), 'comsol_metadata': meta}
         write_run_outputs({'scene': scene, 'mesh': {'points': np.zeros((0, 3))}, 'receivers': receivers,
                            'computed': {'probes_m': U, 'fields_m': None, 'times_us': times, 'diagnostics': diagnostics}}, out, 'workai.comsol.import.v1', 'comsol_import', '3d',
@@ -270,6 +292,37 @@ def _load_pair(pair, names):
     return times, N, L
 
 
+def compare_linear(data_dir, label_dirs):
+    """Linear runs only: spectral linear labels against COMSOL linear results (COMSOL as reference).
+
+    Waveform relative L2 per receiver, exact-frequency f amplitude and the 2f content of the linear record
+    (the burst's own spectrum at 2f), all with the relative reporting floor of coarsegraph.evaluate; plus the
+    three-component record error over all receivers."""
+    from .evaluate import compare as gate
+    data_dir = Path(data_dir); labels = {}
+    for d in label_dirs: labels.update(_pairs(d))
+    rows = []
+    for path in sorted(data_dir.glob('*_linear.csv')):
+        cid, control, variant = parse_name(path)
+        if variant != 'base': continue
+        case = load_case(cid); times, U = read_csv(path, case); row = {'case_id': cid, 'comsol_file': path.name}
+        if cid not in labels: row['note'] = 'no spectral label for this case'; rows.append(row); continue
+        names = [r['name'] for r in case['output']['receivers']]
+        record = json.loads((Path(labels[cid]['linear']) / 'out' / 'result.json').read_text(encoding='utf-8')); lines = np.load(Path(labels[cid]['linear']) / 'out' / 'lines.npz')
+        S = np.zeros_like(U)
+        for r in record['receivers']: S[:, names.index(r['name'])] = np.stack([r['u_x_m'], r['u_y_m'], r['u_z_m']], 1)
+        for line in record['receiver_lines']:
+            u = lines[f'line_{line["name"]}_u_m']
+            for i in range(u.shape[1]): S[:, names.index(f'{line["name"]}[{i}]')] = u[:, i]
+        f = case['sources'][0]['frequency_mhz']; result = gate(times, projected(case, S), projected(case, U), f, ('waveform', 'a1', 'a2'))
+        row.update(record_l2_projected=float(np.linalg.norm(projected(case, S) - projected(case, U)) / np.linalg.norm(projected(case, U))),
+                   record_l2_three_components=float(np.linalg.norm(S - U) / np.linalg.norm(U)), worst_waveform_l2=result['waveform']['worst'],
+                   worst_a1=result['a1']['worst'], worst_linear_2f=result['a2']['worst'], gate_5_percent=result['pass'],
+                   receivers_above_floor=result['waveform']['receivers'])
+        rows.append(row)
+    return rows
+
+
 def compare(comsol_dir, label_dirs=()):
     """Spectral labels against COMSOL (COMSOL as reference), and COMSOL base against its own refined variants."""
     from .evaluate import case_metrics
@@ -292,18 +345,20 @@ def compare(comsol_dir, label_dirs=()):
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0]); sub = parser.add_subparsers(dest='command', required=True)
     c = sub.add_parser('cases'); c.add_argument('--labels', type=Path, nargs='*', default=[])
-    k = sub.add_parser('check'); k.add_argument('directory', type=Path)
+    k = sub.add_parser('check'); k.add_argument('directory', type=Path); k.add_argument('--partial', action='store_true', help='accept an incomplete delivery (missing runs and metadata fields become warnings)')
+    n = sub.add_parser('compare-linear'); n.add_argument('directory', type=Path); n.add_argument('--labels', type=Path, nargs='+', required=True)
     i = sub.add_parser('import'); i.add_argument('directory', type=Path); i.add_argument('--output', type=Path, required=True)
     m = sub.add_parser('compare'); m.add_argument('--comsol', type=Path, required=True); m.add_argument('--labels', type=Path, nargs='*', default=[])
     args = parser.parse_args()
     if args.command == 'cases': print(json.dumps({'cases': len(build_cases(args.labels))}))
     elif args.command == 'check':
-        report, ok = check(args.directory)
+        report, ok = check(args.directory, args.partial)
         for row in report['files']: print(f"✓ {row['file']}  峰值 {row['max_abs_displacement_m']:.3g} m" + (f"  非线性/线性相对差 {row['max_increment_over_linear']:.2e}" if 'max_increment_over_linear' in row else ''))
         for w in report['warnings']: print('注意：' + w)
         for e in report['errors']: print('错误：' + e)
         print('检查通过' if ok else '检查未通过'); sys.exit(0 if ok else 1)
     elif args.command == 'import': print(json.dumps(import_data(args.directory, args.output)))
+    elif args.command == 'compare-linear': print(json.dumps(compare_linear(args.directory, args.labels), ensure_ascii=False, indent=1))
     else: print(json.dumps(compare(args.comsol, args.labels), ensure_ascii=False, indent=1))
 
 

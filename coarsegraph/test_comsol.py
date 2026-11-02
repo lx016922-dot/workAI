@@ -68,4 +68,17 @@ class ComsolDataTests(unittest.TestCase):
             wrong = root / 'wrong'; wrong.mkdir(); deliver(wrong, case, t[:-1], linear[:-1], nonlinear[:-1]); self.assertFalse(comsol.check(wrong)[1])
 
 
+    def test_partial_delivery_and_linear_comparison(self):
+        case = comsol.load_case(CID); t, linear, nonlinear = synthetic(case)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); full = root / 'full'; full.mkdir(); deliver(full, case, t, linear, nonlinear)
+            comsol.import_data(full, root / 'import'); (root / 'import' / 'base').rename(root / 'labels')
+            partial = root / 'partial'; partial.mkdir(); comsol.export_csv(case, t, linear, partial / f'{CID}_linear.csv')
+            (partial / f'{CID}.json').write_text('{"case_id": "%s"}' % CID)
+            strict, ok = comsol.check(partial); self.assertFalse(ok); self.assertTrue(any('murnaghan' in e for e in strict['errors']))
+            relaxed, ok = comsol.check(partial, partial=True); self.assertTrue(ok, relaxed['errors']); self.assertTrue(any('模板字段' in w for w in relaxed['warnings']))
+            rows = comsol.compare_linear(partial, [root / 'labels'])
+            self.assertEqual(rows[0]['case_id'], CID); self.assertTrue(rows[0]['gate_5_percent']); self.assertLess(rows[0]['record_l2_three_components'], 1e-12)
+
+
 if __name__ == '__main__': unittest.main()
