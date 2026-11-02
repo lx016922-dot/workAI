@@ -1,7 +1,10 @@
 """Matrix-free GLL energy derivative and explicit full hyperelastic dynamics.
 
 This solver is separate from the historical P1 teacher. No modal reduction,
-neural correction, mass scaling, damping, or artificial hourglass terms.
+neural correction, mass scaling or artificial hourglass terms. Version-2
+scenes may add several sources, arbitrary signals, symmetry constraints and a
+mass-proportional absorbing layer (see `spectral3d.loads`); version-1 scenes
+take exactly the original path.
 """
 import math
 import time
@@ -67,9 +70,9 @@ def internal_force(u,elements,derivative,sizes,volume_weight,constants,law):
     return force,energy,max_strain,min_j
 
 
-def solve(scene,mesh,cfl=.3,keep_fields=False,callback=None):
+def solve(scene,mesh,cfl=.3,keep_fields=False,callback=None,excitation=None):
     if not .05<=cfl<=.35: raise ValueError('Use CFL 0.05–0.35.')
-    start=time.monotonic();material=scene['material'];mass=mesh['mass'];load,fixed,area=boundary_data(mesh,scene)
+    start=time.monotonic();material=scene['material'];mass=mesh['mass']
     constants=np.array([material[k] for k in ['lambda_pa','mu_pa','l_pa','m_pa','n_pa']])
     law={'linear':0,'stvk':1,'murnaghan':2}[scene['constitutive']]
     curved=str(mesh.get('mapping_kind',''))=='isoparametric'
@@ -82,29 +85,49 @@ def solve(scene,mesh,cfl=.3,keep_fields=False,callback=None):
     frames=round(scene['acquisition']['duration_us']/scene['acquisition']['sample_step_us'])+1;steps=(frames-1)*subdivisions
     if steps>100000 or steps*mesh['elements'].size>2_000_000_000: raise ValueError('Spectral reference compute budget exceeded.')
     if keep_fields and frames*len(mass)*3*8>512*1024**2: raise ValueError('Field exceeds 512 MiB.')
+    if excitation is None:
+        load,fixed,area=boundary_data(mesh,scene);loads=[(load,scene['source'])];constrained=np.zeros((len(mass),3),dtype=bool);constrained[fixed]=True;alpha=None
+        values=[np.array([pulse(step*dt*1e6,scene['source']) for step in range(steps+1)])];summary={'excitation_model':'legacy_single_source'}
+    else:
+        from physics.signals import evaluate
+        loads=excitation['loads'];constrained=excitation['constrained'];alpha=excitation['alpha'];area=excitation['area_m2'];summary=excitation['summary']
+        times=np.arange(steps+1)*dt*1e6;values=[evaluate(src,times) for _,src in loads]
+    damping=None if alpha is None else mass*alpha
     fields=np.zeros((frames,len(mass),3)) if keep_fields else None
     probes=np.zeros((frames,len(scene['receivers']),3));receivers=[interpolation(mesh,r['point_mm']) for r in scene['receivers']]
-    u=np.zeros_like(load);v=u.copy();acc=u.copy();previous_ext=u.copy();work=0.;energies=[];max_strain=0.;min_j=1.
+    u=np.zeros((len(mass),3));v=u.copy();acc=u.copy();previous_ext=u.copy();work=0.;dissipated=0.;energies=[];max_strain=0.;min_j=1.
     for step in range(1,steps+1):
-        next_u=u+dt*v+.5*dt*dt*acc;next_u[fixed]=0
+        next_u=u+dt*v+.5*dt*dt*acc;next_u[constrained]=0
         fint,energy,strain,jac=force_function(next_u,mesh['elements'],mesh['derivative'],geometry,mesh['volume_weight'],constants,law)
         if not np.isfinite(energy) or strain>.001 or jac<=0: raise ValueError(f'Elastic guard failed: strain={strain}, J={jac}')
         max_strain=max(max_strain,strain);min_j=min(min_j,jac)
-        ext=load*pulse(step*dt*1e6,scene['source']);next_acc=(ext-fint)/mass[:,None];next_acc[fixed]=0
-        next_v=v+.5*dt*(acc+next_acc);next_v[fixed]=0
+        ext=loads[0][0]*values[0][step]
+        for k in range(1,len(loads)):ext=ext+loads[k][0]*values[k][step]
+        if damping is None:
+            next_acc=(ext-fint)/mass[:,None];next_acc[constrained]=0
+            next_v=v+.5*dt*(acc+next_acc);next_v[constrained]=0
+        else:
+            undamped=(ext-fint)/mass[:,None]
+            next_v=(v+.5*dt*(acc+undamped))/(1+.5*dt*alpha)[:,None];next_v[constrained]=0
+            next_acc=undamped-alpha[:,None]*next_v;next_acc[constrained]=0
+            dissipated+=float(np.sum(damping[:,None]*.5*(v+next_v)*(next_u-u)))
         work+=float(np.sum(.5*(ext+previous_ext)*(next_u-u)));u,v,acc=next_u,next_v,next_acc;previous_ext=ext
         if step%subdivisions==0:
             frame=step//subdivisions
             if fields is not None: fields[frame]=u
             for i,(ids,w) in enumerate(receivers): probes[frame,i]=w@u[ids]
-            energies.append([step*dt*1e6,float(np.sum(.5*mass[:,None]*v*v)),energy,work])
+            energies.append([step*dt*1e6,float(np.sum(.5*mass[:,None]*v*v)),energy,work]+([dissipated] if damping is not None else []))
             if callback and (frame%40==0 or frame==frames-1): callback({'frame':frame,'frames':frames,'elapsed_s':time.monotonic()-start})
-    energies=np.array(energies);scale=max(np.max(abs(energies[:,3])),np.max(abs(energies[:,1]+energies[:,2])),1e-30)
-    balance=float(np.max(abs(energies[:,1]+energies[:,2]-energies[:,3]))/scale)
+    energies=np.array(energies);stored=energies[:,1]+energies[:,2]+(energies[:,4] if damping is not None else 0.)
+    scale=max(np.max(abs(energies[:,3])),np.max(abs(stored)),1e-30)
+    balance=float(np.max(abs(stored-energies[:,3]))/scale)
     diagnostics={'method':'curved_gll_spectral_total_lagrangian_velocity_verlet_v2' if curved else 'cartesian_gll_spectral_total_lagrangian_velocity_verlet_v1','degree':mesh['degree'],'h_mm':mesh['h_mm'],
         'nodes':len(mass),'elements':len(mesh['elements']),'quadrature_points':int(mesh['elements'].size),'internal_steps':steps,'internal_step_us':dt*1e6,
         'min_node_spacing_mm':mesh['min_node_spacing']*1000,'loaded_area_mm2':area*1e6,'volume_mm3':float(mesh['volume_weight'].sum()*1e9),
         'max_strain':max_strain,'min_J':min_j,'external_work_balance_relative':balance,'energy_balance_within_1_percent':balance<=.01,
         'elapsed_s':time.monotonic()-start,'calculation_dtype':'float64','output_dtype':'float64','accepted_for_solver_routing':False,
         'spatial_convergence_verified':False,'temporal_convergence_verified':False,'energy_samples':energies.tolist()}
+    if excitation is not None:
+        diagnostics.update(summary,energy_columns=['time_us','kinetic_j','strain_j','external_work_j']+(['dissipated_j'] if damping is not None else []),
+                           dissipated_energy_j=dissipated,signal_peaks=[float(np.max(abs(v))) for v in values])
     return {'probes_m':probes,'fields_m':fields,'times_us':np.arange(frames)*scene['acquisition']['sample_step_us'],'diagnostics':diagnostics}

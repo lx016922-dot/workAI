@@ -3,8 +3,9 @@ import { createModelUI } from './model-ui.js';
 import { buildOfflineReport } from './offline-report.js';
 import { renderTraining } from './training-ui.js';
 import { createSolidUI } from './solid-ui.js';
+import { createPlaneUI } from './plane-ui.js';
 const $ = selector => document.querySelector(selector);
-const names = { model: '建模', physics: '物理场', study: '研究', overview: '研究总览', jobs: '仿真任务', results: '结果', connection: '服务连接', training: 'AI 训练', solid: '三维超弹性' };
+const names = { model: '建模', physics: '物理场', study: '研究', overview: '研究总览', jobs: '仿真任务', results: '结果', connection: '服务连接', training: 'AI 训练', solid: '三维超弹性', plane: '二维平面应变' };
 const state = { view: 'overview', bootstrap: null, health: null, jobs: [], selected: '', job: null, series: null, seriesError: '', jobError: '', metric: 'reflection', loadingSeries: false };
 let pollTimer, toastTimer, selectionVersion = 0, previewVersion = 0, refreshBusy = false, submitBusy = false;
 let trainingTimer, trainingBusy = false;
@@ -131,9 +132,10 @@ function render() {
     link.classList.toggle('active', active);
     if (active) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
   });
-  solidUI.leave(view!=='solid');
-  $('#main').innerHTML = { model: modelUI.renderModel, physics: modelUI.renderPhysics, study: modelUI.renderStudy, overview: renderOverview, jobs: renderJobs, results: renderResults, connection: renderConnection, training: () => renderTraining(state, escape, heading), solid: solidUI.markup }[view]();
+  solidUI.leave(view!=='solid'); planeUI.leave(view!=='plane');
+  $('#main').innerHTML = { model: modelUI.renderModel, physics: modelUI.renderPhysics, study: modelUI.renderStudy, overview: renderOverview, jobs: renderJobs, results: renderResults, connection: renderConnection, training: () => renderTraining(state, escape, heading), solid: solidUI.markup, plane: planeUI.markup }[view]();
   if(view==='solid')solidUI.mount();
+  if(view==='plane')planeUI.mount();
   if (view !== 'training') clearTimeout(trainingTimer);
   else if (!state.training && !state.trainingError && !trainingBusy) void loadTraining();
   if (state.savingModel) document.querySelectorAll('#main input, #main select, #main [data-model-action], #main [data-model-add], #main [data-model-remove]').forEach(control => { control.disabled = true; });
@@ -308,7 +310,8 @@ document.addEventListener('change', event => {
 const waveformUI = createWaveformUI({ state, e: escape });
 const modelUI = createModelUI({ state, api, render, toast, escape, heading, jobTable, submitStudy: () => submitJob(true) });
 const solidUI = createSolidUI({state,api,render,toast,e:escape,heading});
-$('#refresh').addEventListener('click', () => void (state.view === 'solid' ? solidUI.refresh() : state.view === 'training' ? loadTraining() : refresh()));
+const planeUI = createPlaneUI({state,api,render,toast,e:escape,heading});
+$('#refresh').addEventListener('click', () => void (state.view === 'solid' ? solidUI.refresh() : state.view === 'plane' ? planeUI.refresh() : state.view === 'training' ? loadTraining() : refresh()));
 $('#submit-job').addEventListener('click', () => void submitJob());
 try {
   state.bootstrap = await api('/api/bootstrap');

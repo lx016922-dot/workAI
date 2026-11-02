@@ -1,0 +1,51 @@
+{
+ "schema": "workai.comsol.spectral_linear_comparison.v1",
+ "created_at_utc": "2026-11-02T01:54:41.552954+00:00",
+ "reference": "COMSOL 6.4, quartic serendipity hexahedra, h about 0.8 mm (research/comsol-p1-20261024/recovery-rebuild-20261029)",
+ "compared": "spectral GLL labels, degree 4, h 1.5 mm (coarsegraph/specs/labels-*.json, regenerate with python -m sweep run)",
+ "metric": "coarsegraph.evaluate.compare with a 10% relative reporting floor; COMSOL is the reference; 0-30 us full record",
+ "scope": "linear constitutive control only; nonlinear increments need the murnaghan runs, which were not computed",
+ "tool": "python -m coarsegraph.comsol compare-linear",
+ "tool_sha256": "1b4bfd4d8c913101277951889f8ba836825d8165d27ca4f1dafee4c3ee0ecddc",
+ "rows": [
+  {
+   "case_id": "A-f0.40-T1.6",
+   "comsol_file": "A-f0.40-T1.6_linear.csv",
+   "record_l2_projected": 0.00013935696777486647,
+   "record_l2_three_components": 0.00034608928446252184,
+   "worst_waveform_l2": 0.0003445127217116106,
+   "worst_a1": 0.0007477107911327635,
+   "worst_linear_2f": 0.0030652562958604795,
+   "gate_5_percent": true,
+   "receivers_above_floor": 13,
+   "comsol_csv_sha256": "48d0ea5f98def11435ae2d83bb7083767874e3c8142c338e1abde83404c5e755",
+   "spectral_label_result_sha256": "4ecffe1335365279b022a96c0fb6eb07f165c4b85c0a776c1b151a293e97e821"
+  },
+  {
+   "case_id": "B-f0.40-T1.6",
+   "comsol_file": "B-f0.40-T1.6_linear.csv",
+   "record_l2_projected": 0.00019265931689749438,
+   "record_l2_three_components": 0.00019965120502393526,
+   "worst_waveform_l2": 0.0002509848944349724,
+   "worst_a1": 3.650803441188298e-05,
+   "worst_linear_2f": 0.0029692048685183215,
+   "gate_5_percent": true,
+   "receivers_above_floor": 8,
+   "comsol_csv_sha256": "5de50724e8b83904a61473b2abf56c7472f835cfa80ac6ccfe9c34e6ae395e8d",
+   "spectral_label_result_sha256": "cfdeef6de335be0b83b73c0a12c7fccbc3bb167e64ffdb0750122f0191ba9df3"
+  },
+  {
+   "case_id": "C-f0.25-T2.0",
+   "comsol_file": "C-f0.25-T2.0_linear.csv",
+   "record_l2_projected": 0.00011948570728502945,
+   "record_l2_three_components": 0.00011988036546351549,
+   "worst_waveform_l2": 0.00013134400961827954,
+   "worst_a1": 0.00010848735778901457,
+   "worst_linear_2f": 0.0013730087283627106,
+   "gate_5_percent": true,
+   "receivers_above_floor": 7,
+   "comsol_csv_sha256": "bd091dc278decabbb1e154408eafd2ae4698f02b5aeb426423f4c1bb455ac478",
+   "spectral_label_result_sha256": "094095888b849bb3928cb2f50b20ef6ae92c97f23821d92f65317f13c57e40c9"
+  }
+ ]
+}

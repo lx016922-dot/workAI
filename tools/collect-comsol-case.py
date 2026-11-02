@@ -26,34 +26,44 @@ def save(path, value):
     tmp.replace(path)
 
 
+class TransientReadError(RuntimeError):
+    """A bounded group of read-only requests failed temporarily; the caller may keep polling the same job ID."""
+
+
+TRANSIENT = ['timeout', 'timed out', 'request was canceled', 'temporarily unavailable',
+             'http 502', 'http 503', 'http 504', 'connection reset']
+
+
 def request_json(command, action, *options):
-    """Retry only idempotent reads; an uncertain submission is never replayed."""
+    """Retry only idempotent reads with bounded backoff; an uncertain submission is never replayed.
+
+    A submit that errors or times out raises RuntimeError at once (query the original job ID).
+    Reads retry transient failures up to 12 times and then raise TransientReadError, so the
+    polling loop can record a connection gap and continue with the same signed identity.
+    """
     attempts = 1 if action == 'submit' else 12
-    transient = ['timeout', 'timed out', 'request was canceled', 'temporarily unavailable',
-                 'http 502', 'http 503', 'http 504', 'connection reset']
+    error = ''
     for attempt in range(attempts):
         try:
             result = subprocess.run(command + ['-Action', action, *map(str, options)],
                                     capture_output=True, text=True,
                                     timeout=1250 if action == 'download' else 45)
-        except subprocess.TimeoutExpired as error:
+        except subprocess.TimeoutExpired as exc:
             if action == 'submit':
-                raise RuntimeError('Submission outcome is unknown; query its original job ID before any further action.') from error
-            if attempt == attempts - 1:
-                raise
-            time.sleep(min(30, 3 * 2**attempt))
-            continue
-        if result.returncode:
+                raise RuntimeError('Submission outcome is unknown; query its original job ID before any further action.') from exc
+            error = f'Read-only {action} request timed out'
+        else:
+            if not result.returncode:
+                value = json.loads(result.stdout)
+                if not value.get('server_signature_verified'):
+                    raise ValueError('Unverified server response')
+                return value
             error = result.stderr.strip() or result.stdout[-2500:]
-            if action == 'submit' or attempt == attempts - 1 or not any(s in error.lower() for s in transient):
+            if action == 'submit' or not any(s in error.lower() for s in TRANSIENT):
                 raise RuntimeError(error)
+        if attempt < attempts - 1:
             time.sleep(min(30, 3 * 2**attempt))
-            continue
-        value = json.loads(result.stdout)
-        if not value.get('server_signature_verified'):
-            raise ValueError('Unverified server response')
-        return value
-    raise RuntimeError('Read request exhausted its bounded retry window')
+    raise TransientReadError(error or 'Read request exhausted its bounded retry window')
 
 
 def run(args):
@@ -79,10 +89,28 @@ def run(args):
         print(json.dumps({'job_id':job,'submitted':result['http_status']==202}),flush=True)
     deadline=time.monotonic()+args.timeout
     while True:
-        status=request('status','-OutputFile',folder/'status.json')
+        try:
+            status=request('status','-OutputFile',folder/'status.json')
+        except TransientReadError as exc:
+            polling={'utc':datetime.now(timezone.utc).isoformat(),'job_id':job,
+                     'status':'waiting_for_connection','message':str(exc)}
+            save(folder/'polling-status.json',polling)
+            print(json.dumps(polling),flush=True)
+            if not args.wait or time.monotonic()>=deadline:
+                raise
+            time.sleep(30)
+            continue
         phase=status['body']['phase']
-        live=request('log','-OutputFile',folder/'solver-live.json')
-        body=live['body']
+        polling={'utc':datetime.now(timezone.utc).isoformat(),'job_id':job,
+                 'status':'connected','remote_phase':phase,'server_signature_verified':True}
+        save(folder/'polling-status.json',polling)
+        try:
+            live=request('log','-OutputFile',folder/'solver-live.json')
+            body=live['body']
+        except TransientReadError as exc:
+            # Live logs are optional diagnostics; signed status controls collection.
+            body={}
+            print(json.dumps({**polling,'log_warning':str(exc)}),flush=True)
         print(json.dumps({'utc':datetime.now(timezone.utc).isoformat(),'job_id':job,'phase':phase,
                           'log_bytes':body.get('total_bytes',0),'tail':body.get('tail_utf8','')[-700:]}),flush=True)
         if phase in ['completed','failed']:

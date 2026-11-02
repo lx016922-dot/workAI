@@ -1,0 +1,252 @@
+{
+  "schema": "workai.graph_modal_candidate.v1",
+  "scene": {
+    "schema": "workai.hyperelastic.solid.v1",
+    "name": "5 ms \u957f\u8bb0\u5f55\u9a8c\u8bc1 \u00b7 \u56fa\u5b9a\u7aef\u94dd\u677f",
+    "geometry": {
+      "kind": "plate",
+      "length_mm": 8.0,
+      "width_mm": 3.0,
+      "thickness_mm": 1.5,
+      "outer_radius_mm": 2.5,
+      "inner_radius_mm": 1.5,
+      "hole_radius_mm": 0.55,
+      "hole_x_mm": 5.0,
+      "hole_y_mm": 1.75,
+      "notch_x_mm": 5.0,
+      "notch_width_mm": 0.8,
+      "notch_depth_mm": 0.45
+    },
+    "material": {
+      "rho_kg_m3": 2700.0,
+      "lambda_pa": 58100000000.0,
+      "mu_pa": 26100000000.0,
+      "l_pa": -143000000000.0,
+      "m_pa": -297000000000.0,
+      "n_pa": -345000000000.0
+    },
+    "constitutive": "murnaghan",
+    "source": {
+      "face": "xmin",
+      "center_mm": [
+        0.0,
+        1.5,
+        0.75
+      ],
+      "radius_mm": 0.0,
+      "direction": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "amplitude_mpa": 1.0,
+      "frequency_mhz": 0.22,
+      "cycles": 2,
+      "delay_us": 0.2,
+      "phase_deg": 0.0
+    },
+    "boundary": {
+      "fixed_face": "xmax"
+    },
+    "acquisition": {
+      "duration_us": 10.0,
+      "sample_step_us": 0.1
+    },
+    "numerics": {
+      "h_mm": 2.5,
+      "cfl": 0.3,
+      "max_elements": 40000
+    },
+    "receivers": [
+      {
+        "name": "P1",
+        "point_mm": [
+          1.1,
+          0.7,
+          0.4
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P2",
+        "point_mm": [
+          2.0,
+          1.5,
+          0.75
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P3",
+        "point_mm": [
+          3.1,
+          2.3,
+          1.1
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P4",
+        "point_mm": [
+          4.2,
+          0.9,
+          1.2
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P5",
+        "point_mm": [
+          5.3,
+          2.1,
+          0.5
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P6",
+        "point_mm": [
+          6.0,
+          1.5,
+          0.75
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P7",
+        "point_mm": [
+          6.9,
+          0.6,
+          0.9
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "name": "P8",
+        "point_mm": [
+          7.6,
+          2.4,
+          0.3
+        ],
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ]
+      }
+    ],
+    "signal": {
+      "kind": "hann",
+      "end_frequency_mhz": 0.22
+    }
+  },
+  "degree": 6,
+  "h_mm": 1.0,
+  "axis_elements": [
+    12,
+    3,
+    3
+  ],
+  "grading_ratios": [
+    50.0,
+    12.0,
+    12.0
+  ],
+  "exported_modes": 392,
+  "quarter_domain": true,
+  "nodes": 26353,
+  "elements": 108,
+  "weights_sha256": "e4d3426822bc716844b2d82eb81c74cba371ed33de43f536bdac89afad127e7a",
+  "basis_sha256": "53b284043e21f320173bdcbb1642f02a994c5269fb6f2dce15faa34828ac351a",
+  "compilation_source_sha256": {
+    "tools/train-modal-enrichment.py": "0d17f366c5cf5477644a7df38168040f82223ed9f8f38c9c62d3b8bac4fb2322",
+    "graphwave/modal_enrichment.py": "b3236f58d4a846a08c0a21823a2cb23147c57fd095d7483841d14ffcadcabee2",
+    "graphwave/modal_reduction.py": "31fd6b8021daee7e15f1c040cbee35dab437047c793c5f481e47f29e28421197",
+    "graphwave/modal_sparse.py": "7e7d70e3c9185d52319076a24f2c68d82c16376f34a3a972da526c4bb6d11165",
+    "graphwave/buffered_inference.py": "c40eef7d283403b425e4c0627f4722497668675b554dfc5ce7143a033a531040",
+    "graphwave/inference.py": "ab7879deab1ae7893ca0fee58e68d4c882a1b6333903240a0d12fec220b4438b",
+    "graphwave/modal_calibration.py": "30126ec889cbf129f4daedf9326e14a7aaf75d6e3bcfa4ef9aac7ae6ee79448a",
+    "graphwave/modal_sensitivity.py": "00c5ffbb72c0ebabbccaa03ebdf7d685bf6e280ce4a1cc8f9b0fa56ea2518123",
+    "graphwave/quarter_symmetry.py": "4ffcf4a2258bfdb1aa882933fffd5316581bf732ab2e64a3e50a09315c627790",
+    "graphwave/graded_mesh.py": "664e1ba7ddee040143fee0ace7542bdd07dc0f97cd497f3ad020d793ff4c469b",
+    "spectral3d/mesh.py": "258bb3e36208aa6c20490280ab1ff256d1dbe29032f5f9ac48af2f86b556f828"
+  },
+  "symmetry": {
+    "method": "quarter-domain y/z reflection with component-wise essential constraints",
+    "original_modes": 392,
+    "retained_modes": 392,
+    "physical_domain_multiplicity": 4,
+    "transverse_displacements_preserved_with_reflection_signs": true,
+    "requires_full_basis_nonlinear_check": true
+  },
+  "mass_orthonormality_error": 2.095144310250076e-13,
+  "compilation_seconds": 923.5878613340028,
+  "comsol_arrays_used": false,
+  "numerical_prediction_corrector": false,
+  "material_tensor_entries_dropped": false,
+  "modal_truncation_convergence_verified": false,
+  "scientific_accuracy_certified": false,
+  "nonlinear_basis_training": {
+    "schema": "workai.nonlinear_basis_training.v1",
+    "input_model_sha256": "c8e988e57eed368375f13c51ad6f4727a7288e1bbed59b0a83d790b3fbdcfa40",
+    "input_basis_sha256": "7054a719a17ead822944dc1a8dfb10df3b28a5846eb1e2be39aa1b49e6018586",
+    "weights_sha256": "e4d3426822bc716844b2d82eb81c74cba371ed33de43f536bdac89afad127e7a",
+    "source_sha256": {
+      "tools/train-modal-enrichment.py": "0d17f366c5cf5477644a7df38168040f82223ed9f8f38c9c62d3b8bac4fb2322",
+      "graphwave/modal_enrichment.py": "b3236f58d4a846a08c0a21823a2cb23147c57fd095d7483841d14ffcadcabee2",
+      "graphwave/modal_reduction.py": "31fd6b8021daee7e15f1c040cbee35dab437047c793c5f481e47f29e28421197",
+      "graphwave/modal_sparse.py": "7e7d70e3c9185d52319076a24f2c68d82c16376f34a3a972da526c4bb6d11165",
+      "graphwave/buffered_inference.py": "c40eef7d283403b425e4c0627f4722497668675b554dfc5ce7143a033a531040",
+      "graphwave/inference.py": "ab7879deab1ae7893ca0fee58e68d4c882a1b6333903240a0d12fec220b4438b",
+      "graphwave/modal_calibration.py": "30126ec889cbf129f4daedf9326e14a7aaf75d6e3bcfa4ef9aac7ae6ee79448a",
+      "graphwave/modal_sensitivity.py": "00c5ffbb72c0ebabbccaa03ebdf7d685bf6e280ce4a1cc8f9b0fa56ea2518123",
+      "graphwave/quarter_symmetry.py": "4ffcf4a2258bfdb1aa882933fffd5316581bf732ab2e64a3e50a09315c627790",
+      "graphwave/graded_mesh.py": "664e1ba7ddee040143fee0ace7542bdd07dc0f97cd497f3ad020d793ff4c469b",
+      "spectral3d/mesh.py": "258bb3e36208aa6c20490280ab1ff256d1dbe29032f5f9ac48af2f86b556f828"
+    },
+    "training_fields": 48,
+    "holdout_fields": 64,
+    "added_modes": 192,
+    "train_seed": 2026102601,
+    "holdout_seed": 2026102602,
+    "gradient_norm_range": [
+      2e-05,
+      0.0008
+    ],
+    "comsol_data_used": false,
+    "validation_trajectories_used": false,
+    "quadrature_reduced": false,
+    "material_tensors_modified": false,
+    "online_correction": false,
+    "method": "POD of full candidate nonlinear static responses, then conservative Rayleigh-Ritz rotation"
+  },
+  "training_report_sha256": "8d65bf3515db2af4a3ff54bf8937f59310cd21bd7474a8ea361ff47c4ad33234"
+}

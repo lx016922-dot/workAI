@@ -38,7 +38,8 @@ export class SpectralService {
       input.numerics.h_mm=Math.max(.02,h/body.degree);
       const scene=await this.solid.command('validate',input);scene.numerics.h_mm=h;
       if(!['plate','pipe','hole','notch'].includes(scene.geometry.kind))throw new AppError(422,'高阶计算支持参数化板、管、通孔和缺口。');
-      if(!['xmin','xmax'].includes(scene.source.face)||scene.source.radius_mm!==0||!['none','xmin','xmax'].includes(scene.boundary.fixed_face))throw new AppError(422,'当前高阶计算使用完整 X 端面加载，固定面可选另一 X 端面。');
+      // Version-2 scenes (signals, extra sources, symmetry/absorbing faces) are admitted by the Python validator and worker.
+      if(scene.schema!=='workai.hyperelastic.solid.v2'&&(!['xmin','xmax'].includes(scene.source.face)||scene.source.radius_mm!==0||!['none','xmin','xmax'].includes(scene.boundary.fixed_face)))throw new AppError(422,'当前高阶计算使用完整 X 端面加载，固定面可选另一 X 端面。');
       const id='spectral-'+randomBytes(16).toString('hex'),path=this.path(id);await mkdir(path);
       await writeFile(join(path,'scene.json'),JSON.stringify(scene),{flag:'wx'});await writeFile(join(path,'settings.json'),JSON.stringify({degree:body.degree}),{flag:'wx'});
       await writeFile(join(path,'status.json'),JSON.stringify({job_id:id,phase:'starting',started_at_utc:new Date().toISOString()}),{flag:'wx'});

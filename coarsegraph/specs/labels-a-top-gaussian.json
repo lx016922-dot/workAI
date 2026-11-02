@@ -1,0 +1,206 @@
+{
+ "schema": "workai.sweep.v1",
+ "engine": "3d_spectral",
+ "degree": 4,
+ "analysis": {
+  "window": {
+   "mode": "fixed",
+   "start_us": 0.0,
+   "end_us": 30.0
+  }
+ },
+ "budget": {
+  "seconds_per_case": 3600,
+  "workers": 3
+ },
+ "name": "粗网格算子标签 A · 顶面高斯",
+ "base_scene": {
+  "schema": "workai.hyperelastic.solid.v2",
+  "name": "铝板",
+  "geometry": {
+   "kind": "plate",
+   "length_mm": 48.0,
+   "width_mm": 2.0,
+   "thickness_mm": 2.0,
+   "outer_radius_mm": 3.0,
+   "inner_radius_mm": 2.0,
+   "hole_radius_mm": 0.7,
+   "hole_x_mm": 6.0,
+   "hole_y_mm": 2.0,
+   "notch_x_mm": 6.0,
+   "notch_width_mm": 1.0,
+   "notch_depth_mm": 0.6
+  },
+  "material": {
+   "rho_kg_m3": 2700.0,
+   "lambda_pa": 58100000000.0,
+   "mu_pa": 26100000000.0,
+   "l_pa": -143000000000.0,
+   "m_pa": -297000000000.0,
+   "n_pa": -345000000000.0
+  },
+  "constitutive": "murnaghan",
+  "source": {
+   "face": "zmax",
+   "center_mm": [
+    16.0,
+    1.0,
+    2.0
+   ],
+   "radius_mm": 0.0,
+   "direction": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "amplitude_mpa": 1.0,
+   "frequency_mhz": 0.2,
+   "cycles": 5.0,
+   "delay_us": 0.0,
+   "phase_deg": 0.0,
+   "signal": {
+    "type": "tone_burst",
+    "window": "hann"
+   },
+   "profile": {
+    "type": "gaussian",
+    "sigma_mm": 2.0
+   }
+  },
+  "boundary": {
+   "fixed_face": "none"
+  },
+  "acquisition": {
+   "duration_us": 30.0,
+   "sample_step_us": 0.05
+  },
+  "numerics": {
+   "h_mm": 1.5,
+   "cfl": 0.3,
+   "max_elements": 40000
+  },
+  "receivers": [
+   {
+    "name": "P_far",
+    "point_mm": [
+     36.0,
+     1.0,
+     2.0
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   }
+  ],
+  "receiver_lines": [
+   {
+    "name": "top",
+    "from_mm": [
+     22.0,
+     1.0,
+     2.0
+    ],
+    "to_mm": [
+     37.0,
+     1.0,
+     2.0
+    ],
+    "count": 6,
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "mid",
+    "from_mm": [
+     22.0,
+     1.0,
+     1.0
+    ],
+    "to_mm": [
+     37.0,
+     1.0,
+     1.0
+    ],
+    "count": 6,
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   }
+  ],
+  "boundaries": [
+   {
+    "type": "absorbing",
+    "face": "xmin",
+    "length_mm": 8.0,
+    "ramp": "cubic",
+    "attenuation_db": 60.0
+   },
+   {
+    "type": "absorbing",
+    "face": "xmax",
+    "length_mm": 8.0,
+    "ramp": "cubic",
+    "attenuation_db": 60.0
+   },
+   {
+    "type": "symmetry",
+    "face": "ymax"
+   }
+  ]
+ },
+ "grid": {
+  "source.frequency_mhz": [
+   0.2,
+   0.3,
+   0.4
+  ],
+  "geometry.thickness_mm": [
+   1.6,
+   2.0,
+   2.4
+  ],
+  "constitutive": [
+   "linear",
+   "murnaghan"
+  ]
+ },
+ "links": {
+  "receivers.0.point_mm.2": {
+   "path": "geometry.thickness_mm",
+   "scale": 1.0,
+   "offset": 0.0
+  },
+  "receiver_lines.0.from_mm.2": {
+   "path": "geometry.thickness_mm",
+   "scale": 1.0,
+   "offset": 0.0
+  },
+  "receiver_lines.0.to_mm.2": {
+   "path": "geometry.thickness_mm",
+   "scale": 1.0,
+   "offset": 0.0
+  },
+  "receiver_lines.1.from_mm.2": {
+   "path": "geometry.thickness_mm",
+   "scale": 0.5,
+   "offset": 0.0
+  },
+  "receiver_lines.1.to_mm.2": {
+   "path": "geometry.thickness_mm",
+   "scale": 0.5,
+   "offset": 0.0
+  },
+  "source.center_mm.2": {
+   "path": "geometry.thickness_mm",
+   "scale": 1.0,
+   "offset": 0.0
+  }
+ }
+}

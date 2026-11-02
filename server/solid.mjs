@@ -20,7 +20,7 @@ export class SolidService {
   constructor(root) { this.root = join(root,'solid'); this.jobs = join(this.root,'jobs'); this.python = join(this.root,'venv/bin/python'); this.submitting = false; this.studies=new SolidStudies(this); }
   async init() { await mkdir(this.jobs,{recursive:true}); await this.studies.init(); }
   async exclusive(action){if(this.submitting)throw new AppError(409,'已有三维任务正在提交。');this.submitting=true;try{return await action();}finally{this.submitting=false;}}
-  async assertIdle(){if([...(await this.list()),...(await this.studies.list())].some(j=>!['completed','failed'].includes(j.phase)))throw new AppError(409,'已有三维计算或非线性对照正在运行或状态待确认，请先查看该任务。');if(this.spectral)await this.spectral.assertIdle();}
+  async assertIdle(){if([...(await this.list()),...(await this.studies.list())].some(j=>!['completed','failed'].includes(j.phase)))throw new AppError(409,'已有三维计算或非线性对照正在运行或状态待确认，请先查看该任务。');if(this.spectral)await this.spectral.assertIdle();if(this.plane)await this.plane.assertIdle();}
   async upload(body) {
     if(!body||Object.keys(body).sort().join(',')!=='data_base64,filename'||typeof body.filename!=='string'||body.filename.length>160||!/^.+\.(step|stp|stl)$/i.test(body.filename)||typeof body.data_base64!=='string'||body.data_base64.length>12*1024*1024||! /^[A-Za-z0-9+/]*={0,2}$/.test(body.data_base64))throw new AppError(400,'请上传不超过 8 MiB 的 STEP 或 STL 几何文件。');
     const bytes=Buffer.from(body.data_base64,'base64');if(bytes.length<20||bytes.length>8*1024*1024||bytes.toString('base64')!==body.data_base64)throw new AppError(400,'几何文件编码或大小无效。');

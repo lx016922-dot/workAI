@@ -41,7 +41,10 @@ def pulse(time_us,source):
     if tau<0 or tau>duration:return 0.
     return .5*(1-math.cos(2*math.pi*tau/duration))*math.sin(2*math.pi*source['frequency_mhz']*tau+math.radians(source['phase_deg']))
 
-def solve(scene,mesh,load,fixed_nodes,callback=None,output_precision='float32'):
+def solve(scene,mesh,load,fixed_nodes,callback=None,output_precision='float32',excitation=None):
+    """Explicit velocity-Verlet transient. `excitation=None` reproduces the version-1 path exactly;
+    a dictionary from `mesh.prepare_excitation` adds several sources, arbitrary signals,
+    symmetry constraints and mass-proportional absorbing damping."""
     material=scene['material'];rho=material['rho_kg_m3'];lam=material['lambda_pa'];mu=material['mu_pa']
     constants=np.array([material[k] for k in ['lambda_pa','mu_pa','l_pa','m_pa','n_pa']],dtype=np.float64)
     law={'linear':0,'stvk':1,'murnaghan':2}[scene['constitutive']]
@@ -54,31 +57,54 @@ def solve(scene,mesh,load,fixed_nodes,callback=None,output_precision='float32'):
     if output_precision not in ['float32','float64']:raise ValueError('场输出精度无效。')
     dtype=np.dtype(output_precision)
     if frames*len(mass)*3*dtype.itemsize>192*1024**2:raise ValueError('完整位移场超过 192 MiB；请减少输出采样数量或节点数。')
+    if excitation is None:
+        loads=[(load,scene['source'])];constrained=np.zeros((len(mass),3),dtype=bool);constrained[np.asarray(fixed_nodes,dtype=int)]=True;alpha=None
+        # Scalar evaluation per step keeps version-1 results bit-identical.
+        values=[np.array([pulse(step*dt*1e6,scene['source']) for step in range(steps+1)])];summary={'excitation_model':'legacy_single_source'}
+    else:
+        from physics.signals import evaluate
+        loads=excitation['loads'];constrained=excitation['constrained'].copy();alpha=excitation['alpha'];summary=excitation['summary']
+        if fixed_nodes is not None and len(fixed_nodes):constrained[np.asarray(fixed_nodes,dtype=int)]=True
+        times=np.arange(steps+1)*dt*1e6;values=[evaluate(src,times) for _,src in loads]
+    damping=None if alpha is None else mass*alpha
     fields=np.zeros((frames,len(mass),3),dtype=dtype)
     u=np.zeros((len(mass),3));v=np.zeros_like(u);a=np.zeros_like(u)
-    previous_ext=np.zeros_like(u);work=0.;energies=[];max_strain=0.;min_j=1.;max_quantization=0.
+    previous_ext=np.zeros_like(u);work=0.;dissipated=0.;energies=[];max_strain=0.;min_j=1.;max_quantization=0.
     if callback:callback({'phase':'running','step':0,'steps_total':steps,'internal_step_us':dt*1e6,'nodes':len(mass),'elements':len(mesh['tetra'])})
     for step in range(1,steps+1):
-        next_u=u+dt*v+.5*dt*dt*a;next_u[fixed_nodes]=0
+        next_u=u+dt*v+.5*dt*dt*a;next_u[constrained]=0
         fint,strain_energy,strain,jac=internal_force(next_u,mesh['tetra'],mesh['grad'],mesh['volume'],constants,law)
         if not np.isfinite(strain_energy) or strain>.001 or jac<=0:raise ValueError(f'超出当前铝弹性范围：应变={strain:.5g}, J={jac:.5g}；未发布有效结果。')
         max_strain=max(max_strain,strain);min_j=min(min_j,jac)
-        ext=load*pulse(step*dt*1e6,scene['source'])
-        next_a=(ext-fint)/mass[:,None];next_a[fixed_nodes]=0
-        next_v=v+.5*dt*(a+next_a);next_v[fixed_nodes]=0
+        ext=loads[0][0]*values[0][step]
+        for k in range(1,len(loads)):ext=ext+loads[k][0]*values[k][step]
+        if damping is None:
+            next_a=(ext-fint)/mass[:,None];next_a[constrained]=0
+            next_v=v+.5*dt*(a+next_a);next_v[constrained]=0
+        else:
+            # Velocity-implicit damping keeps the explicit stability limit unchanged.
+            undamped=(ext-fint)/mass[:,None]
+            next_v=(v+.5*dt*(a+undamped))/(1+.5*dt*alpha)[:,None];next_v[constrained]=0
+            next_a=undamped-alpha[:,None]*next_v;next_a[constrained]=0
+            dissipated+=float(np.sum(damping[:,None]*.5*(v+next_v)*(next_u-u)))
         work+=float(np.sum(.5*(ext+previous_ext)*(next_u-u)))
         previous_ext=ext;u,v,a=next_u,next_v,next_a
         if step%subdivisions==0:
             frame=step//subdivisions;fields[frame]=u
             max_quantization=max(max_quantization,float(np.max(abs(u-fields[frame]))))
             kinetic=float(np.sum(.5*mass[:,None]*v*v))
-            energies.append([step*dt*1e6,kinetic,strain_energy,work])
+            energies.append([step*dt*1e6,kinetic,strain_energy,work]+([dissipated] if damping is not None else []))
             if callback and (frame%10==0 or frame==frames-1):callback({'phase':'running','step':step,'steps_total':steps,'output_frame':frame,'frames_total':frames,'max_strain':max_strain,'min_J':min_j})
-    energies=np.array(energies);energy_scale=max(float(np.max(abs(energies[:,3]))),float(np.max(abs(energies[:,1]+energies[:,2]))),1e-30)
-    balance=float(np.max(abs(energies[:,1]+energies[:,2]-energies[:,3]))/energy_scale)
-    return fields,{'method':'total_lagrangian_p1_tetra_lumped_mass_velocity_verlet','calculation_dtype':'float64','output_dtype':output_precision,
-                   'internal_step_us':dt*1e6,'internal_steps':steps,'frames':frames,'mass_kg':float(mass.sum()),'min_altitude_mm':mesh['min_altitude']*1000,
-                   'max_strain':max_strain,'min_J':min_j,'external_work_balance_relative':balance,'max_export_roundoff_m':max_quantization,
-                   'energy_samples':energies.tolist(),'energy_balance_within_1_percent':balance<=.01,
-                   'spatial_convergence_verified':False,'temporal_convergence_verified':False,'comsol_agreement_verified':False,
-                   'surrogate_used':False,'accuracy_status':'requires_convergence_and_reference_checks'}
+    energies=np.array(energies);stored=energies[:,1]+energies[:,2]+(energies[:,4] if damping is not None else 0.)
+    energy_scale=max(float(np.max(abs(energies[:,3]))),float(np.max(abs(stored))),1e-30)
+    balance=float(np.max(abs(stored-energies[:,3]))/energy_scale)
+    diagnostics={'method':'total_lagrangian_p1_tetra_lumped_mass_velocity_verlet','calculation_dtype':'float64','output_dtype':output_precision,
+                 'internal_step_us':dt*1e6,'internal_steps':steps,'frames':frames,'mass_kg':float(mass.sum()),'min_altitude_mm':mesh['min_altitude']*1000,
+                 'max_strain':max_strain,'min_J':min_j,'external_work_balance_relative':balance,'max_export_roundoff_m':max_quantization,
+                 'energy_samples':energies.tolist(),'energy_balance_within_1_percent':balance<=.01,
+                 'spatial_convergence_verified':False,'temporal_convergence_verified':False,'comsol_agreement_verified':False,
+                 'surrogate_used':False,'accuracy_status':'requires_convergence_and_reference_checks'}
+    if excitation is not None:
+        diagnostics.update(summary,energy_columns=['time_us','kinetic_j','strain_j','external_work_j']+(['dissipated_j'] if damping is not None else []),
+                           dissipated_energy_j=dissipated,signal_peaks=[float(np.max(abs(v))) for v in values])
+    return fields,diagnostics

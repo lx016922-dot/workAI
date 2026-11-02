@@ -69,9 +69,45 @@ def templates():
     return result
 
 
+V2 = 'workai.hyperelastic.solid.v2'
+
+
+def validate_v2_request(body):
+    """Version-2 scenes for the v2 input layer: any planar-face sources, signals, profiles, symmetry and absorbing faces.
+
+    Geometry, material and mesh-size bounds stay those of the offline package; every v2 job runs as a
+    chunked record (bounded memory, resumable). Accuracy is governed by the mesh: check it with
+    `sweep converge` rather than relying on the original 14 μs acceptance."""
+    from graphnet.model import load
+    from graphnet.inputs import network_scene
+    from physics.scene import sources
+    from physics.signals import highest_frequency_mhz
+    raw = copy.deepcopy(body['scene'])
+    raw.pop('signal', None)  # version-1 form field; v2 signals live in each source
+    acquisition = raw.get('acquisition')
+    if not isinstance(acquisition, dict) or set(acquisition) != {'duration_us', 'sample_step_us'}:
+        raise ValueError('采样配置需要时长和采样间隔。')
+    duration, sample = acquisition['duration_us'], acquisition['sample_step_us']
+    if any(type(v) not in (int, float) or not math.isfinite(v) for v in (duration, sample)) or not 0 < duration <= 20000 or not .01 <= sample <= .2:
+        raise ValueError('v2 记录时长需在 20 ms（20000 μs）以内，采样间隔为 0.01–0.2 μs。')
+    ratio = duration / sample
+    if abs(ratio - round(ratio)) > 1e-7 or round(ratio) > 200000:
+        raise ValueError('时长需要为采样间隔的整数倍，最多 200001 个采样点。')
+    h = raw.get('numerics', {}).get('h_mm')
+    if type(h) not in (int, float) or not .8 <= h <= 2.5:
+        raise ValueError('网格尺寸需要在 0.8–2.5 mm 之间。')
+    s = network_scene(raw, body['degree'], load(body['degree'], long_record=True)['material'])
+    for src in sources(s):
+        if sample * 2 * highest_frequency_mhz(src) > 1 / 8 + 1e-12:
+            raise ValueError(f'{src.get("name", "主激励")}：二次谐波最高频率至少需要 8 个输出采样点/周期。')
+    return {'scene': s, 'degree': body['degree']}
+
+
 def validate_request(body):
     if not isinstance(body, dict) or set(body) != {'scene', 'degree'} or type(body['degree']) is not int or body['degree'] not in (3, 4, 5):
         raise ValueError('需要场景与 3/4/5 阶图设置。')
+    if isinstance(body['scene'], dict) and body['scene'].get('schema') == V2:
+        return validate_v2_request(body)
     raw = copy.deepcopy(body['scene'])
     signal = raw.pop('signal', {'kind': 'hann'})
     if not isinstance(signal, dict):
