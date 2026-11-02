@@ -1,0 +1,67 @@
+{
+  "schema": "workai.enriched_linear_diagnosis.v1",
+  "plan_sha256": "6d8e9db3ba3c312378520063f950184e513844e7173350565293dde7cbefa5a4",
+  "source_sha256": {
+    "graphwave/graded_mesh.py": "664e1ba7ddee040143fee0ace7542bdd07dc0f97cd497f3ad020d793ff4c469b",
+    "graphwave/modal_calibration.py": "30126ec889cbf129f4daedf9326e14a7aaf75d6e3bcfa4ef9aac7ae6ee79448a",
+    "graphwave/modal_reduction.py": "31fd6b8021daee7e15f1c040cbee35dab437047c793c5f481e47f29e28421197",
+    "graphwave/modal_sensitivity.py": "00c5ffbb72c0ebabbccaa03ebdf7d685bf6e280ce4a1cc8f9b0fa56ea2518123",
+    "graphwave/modal_sparse.py": "7e7d70e3c9185d52319076a24f2c68d82c16376f34a3a972da526c4bb6d11165",
+    "graphwave/quarter_symmetry.py": "4ffcf4a2258bfdb1aa882933fffd5316581bf732ab2e64a3e50a09315c627790",
+    "graphwave/buffered_inference.py": "c40eef7d283403b425e4c0627f4722497668675b554dfc5ce7143a033a531040",
+    "graphwave/inference.py": "ab7879deab1ae7893ca0fee58e68d4c882a1b6333903240a0d12fec220b4438b",
+    "graphwave/signals.py": "38dce98326fc587e3aa6988882aefdcba0207ba9b6510495e1dc41c02eeed19b",
+    "spectral3d/mesh.py": "258bb3e36208aa6c20490280ab1ff256d1dbe29032f5f9ac48af2f86b556f828",
+    "offline/model/time-coefficients.json": "025de9ed0a39c5a02500f287a1ce3fdacc5f81b244c64685b95de7139da34370",
+    "tools/run-modal-candidate-case.py": "daf82a747f9a72f6526e3e5e1c8b2aeaf625681a0cb1ac0a0672b088642ac04a",
+    "graphwave/modal_forcing.py": "6246d5bf68f831e039ef40705bacfbc29a28e790478be3fb71af10af8fc9b574",
+    "tools/comsol_modal_response.py": "f8273b47222b5575500ef7ee69d4f4cc832783c8c1444206178f2695587249f2",
+    "tools/validate-comsol-linear-matrix.py": "6860ccf5ba724c6f6da3f1f8b1f679f8ff93736ef403839b115e33b29e93fabf",
+    "tools/compare-comsol-reference.py": "85c0ec6cb36614d7a53393b451db6735bd8e4a3561a5c203783cb69db342f98f",
+    "tools/comsol_artifacts.py": "734edc3dcdfb1d41ea1f277701e332b9703e6ae4bbcb30a740b26ec1e51a642e",
+    "graphwave/modal_nodal_force.py": "776146fd8a3888462fc007fda8a8ae93d6f6530a72cac19ffffbb05f654bd117",
+    "graphwave/modal_nodal_runtime.py": "7925d199b29fe3a35b4b9f0fb9fee3b67b0c99ecf4093dd14687ad6a56225a5f",
+    "tools/run-modal-nodal-case.py": "3635741f3495e36cfece4b4bdd5830e09eb299e3a829beaee56833aa6185b9dc",
+    "tools/diagnose-enriched-linear-matrix.py": "2b11362eac4b26245407a5f846daf6d55640a814d9c9286c07ce0aafa3dd875a"
+  },
+  "models": {
+    "enriched264": {
+      "model_sha256": "e371f6cb2de69e1d545d3eddc1136a6474be7592e44bef837218acd23ead6061",
+      "basis_sha256": "5e9b13216b2d553049428a78daa5685ddbe15eba4754074b4560a996dbce2b77",
+      "weights_sha256": "e4d3426822bc716844b2d82eb81c74cba371ed33de43f536bdac89afad127e7a",
+      "modes": 264
+    },
+    "enriched392": {
+      "model_sha256": "8fc0c3fca41911b5af93a47788a2a96d0b85da569b918a13f2a7d6f13ae3a76e",
+      "basis_sha256": "53b284043e21f320173bdcbb1642f02a994c5269fb6f2dce15faa34828ac351a",
+      "weights_sha256": "e4d3426822bc716844b2d82eb81c74cba371ed33de43f536bdac89afad127e7a",
+      "modes": 392
+    }
+  },
+  "case_ids": [
+    "hann-01",
+    "hann-03",
+    "hann-05",
+    "hann-10",
+    "hann-20",
+    "gaussian-01",
+    "gaussian-03",
+    "gaussian-05",
+    "gaussian-10",
+    "gaussian-20",
+    "rectangular-01",
+    "rectangular-03",
+    "rectangular-05",
+    "rectangular-10",
+    "rectangular-20",
+    "chirp-01",
+    "chirp-03",
+    "chirp-05",
+    "chirp-10",
+    "chirp-20"
+  ],
+  "nonlinear_prediction": false,
+  "native_comsol_transient": false,
+  "scientific_accuracy_certified": false,
+  "scope": "Linear phase development diagnosis; all nonlinear and reference convergence checks remain required"
+}

@@ -24,6 +24,46 @@ comparison = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(comparison)
 
 
+# These bound reproducibility of recorded diagnostics, not scientific error.
+# The dimensionless allowance is 50 million times smaller than the 5% gate;
+# the displacement allowance matches the existing raw-reference replay check.
+METRIC_REPLAY_TOLERANCE = {'relative_rtol': 1e-8, 'relative_atol': 1e-9,
+                         'rms_atol_m': 1e-19}
+
+
+def check_recorded_metrics(recorded, recomputed, path='metrics'):
+    """Check every component/band and preserve every acceptance decision.
+
+    Re-solving a nearly identical pair of reference oscillators produces tiny
+    residuals whose *relative* difference is large. Use a small absolute
+    reproducibility allowance for those diagnostics, never for pass/fail.
+    """
+    if isinstance(recomputed, dict):
+        if not isinstance(recorded, dict) or recorded.keys() != recomputed.keys():
+            raise ValueError('Recorded metric schema differs: ' + path)
+        for key, value in recomputed.items():
+            check_recorded_metrics(recorded[key], value, path + '.' + key)
+    elif isinstance(recomputed, list):
+        if not isinstance(recorded, list) or len(recorded) != len(recomputed):
+            raise ValueError('Recorded metric rows differ: ' + path)
+        for index, value in enumerate(recomputed):
+            check_recorded_metrics(recorded[index], value, f'{path}[{index}]')
+    elif isinstance(recomputed, (bool, np.bool_)) or recomputed is None:
+        if type(recorded) is not type(recomputed) and not (
+                isinstance(recorded, bool) and isinstance(recomputed, np.bool_)):
+            raise ValueError('Recorded metric decision type differs: ' + path)
+        if recorded != recomputed:
+            raise ValueError('Recomputed acceptance or floor classification differs: ' + path)
+    else:
+        if isinstance(recorded, bool) or not np.isfinite([recorded, recomputed]).all():
+            raise ValueError('Nonfinite or invalid recorded metric: ' + path)
+        absolute = (METRIC_REPLAY_TOLERANCE['rms_atol_m'] if path.endswith('_m')
+                    else METRIC_REPLAY_TOLERANCE['relative_atol'])
+        np.testing.assert_allclose(recorded, recomputed,
+                                   rtol=METRIC_REPLAY_TOLERANCE['relative_rtol'],
+                                   atol=absolute, err_msg=path)
+
+
 def check_arrays(times, traces, energy, coordinates, scene, mode_count):
     acquisition = scene['acquisition']
     expected_times = np.arange(round(acquisition['duration_us'] / acquisition['sample_step_us']) + 1) * acquisition['sample_step_us']
@@ -131,9 +171,7 @@ def audit_case(folder, case, plan, plan_path, model_folder, config, model, refer
                'reference_mesh_refinement': comparison.check(expected, refined, scene)}
     recorded = json.loads((folder / 'metrics.json').read_text())
     for name, value in metrics.items():
-        if recorded[name]['passed'] != value['passed']:
-            raise ValueError('Recomputed acceptance differs from recorded metrics')
-        np.testing.assert_allclose(recorded[name]['maximum_relative_l2'], value['maximum_relative_l2'], rtol=1e-9, atol=1e-12)
+        check_recorded_metrics(recorded[name], value, name)
     result = {'case_id': case['id'], 'duration_us': 5000, 'frames': len(times),
               'controls': prediction['controls'], 'source_identity': identity,
               'energy_relative_error': residual.tolist(), 'receiver_reconstruction_verified': True,
@@ -141,6 +179,8 @@ def audit_case(folder, case, plan, plan_path, model_folder, config, model, refer
               'kinetic_energy_independently_reconstructed': False,
               'reference_identity': reference['identity'], 'refinement_identity': refinement['identity'],
               'reference_method': method, 'native_nonlinear_comsol_comparison': False,
+              'metric_replay_tolerance': METRIC_REPLAY_TOLERANCE,
+              'all_component_and_band_acceptance_decisions_reproduced': True,
               'scientific_accuracy_certified': False, **metrics,
               'files_sha256': {p.name: digest(p) for p in sorted(folder.iterdir()) if p.is_file()}}
     compact = {'case_id': case['id'], 'maximum_vector_error_percent': 100 * metrics['linear_comparison']['maximum_vector_waveform_relative_l2'],
