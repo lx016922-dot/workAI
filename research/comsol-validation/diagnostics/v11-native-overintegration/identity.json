@@ -1,0 +1,202 @@
+{
+  "base_model_sha256": "94613f33ca0fe7d253084e590c61a15502784770c51fd7d049c26e478792ea90",
+  "basis_sha256": "4b9e81d57bc05df35c0ff74e59f0442ae202e2ff49733040abec74508f84e2ce",
+  "weights_sha256": "e4d3426822bc716844b2d82eb81c74cba371ed33de43f536bdac89afad127e7a",
+  "script_sha256": "5bdcf5165901f29f0f5cbd24b9ed6b4a66e8085a37de1dc476744f2707c8c44c",
+  "case": {
+    "id": "native-20us",
+    "scene": {
+      "schema": "workai.hyperelastic.solid.v1",
+      "name": "5 ms \u957f\u8bb0\u5f55\u9a8c\u8bc1 \u00b7 \u56fa\u5b9a\u7aef\u94dd\u677f",
+      "geometry": {
+        "kind": "plate",
+        "length_mm": 8.0,
+        "width_mm": 3.0,
+        "thickness_mm": 1.5,
+        "outer_radius_mm": 2.5,
+        "inner_radius_mm": 1.5,
+        "hole_radius_mm": 0.55,
+        "hole_x_mm": 5.0,
+        "hole_y_mm": 1.75,
+        "notch_x_mm": 5.0,
+        "notch_width_mm": 0.8,
+        "notch_depth_mm": 0.45
+      },
+      "material": {
+        "rho_kg_m3": 2700.0,
+        "lambda_pa": 58100000000.0,
+        "mu_pa": 26100000000.0,
+        "l_pa": -143000000000.0,
+        "m_pa": -297000000000.0,
+        "n_pa": -345000000000.0
+      },
+      "constitutive": "murnaghan",
+      "source": {
+        "face": "xmin",
+        "center_mm": [
+          0.0,
+          1.5,
+          0.75
+        ],
+        "radius_mm": 0.0,
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "amplitude_mpa": 1.0,
+        "frequency_mhz": 0.22,
+        "cycles": 2,
+        "delay_us": 0.2,
+        "phase_deg": 0.0
+      },
+      "boundary": {
+        "fixed_face": "xmax"
+      },
+      "acquisition": {
+        "duration_us": 20.0,
+        "sample_step_us": 0.1
+      },
+      "numerics": {
+        "h_mm": 2.5,
+        "cfl": 0.3,
+        "max_elements": 40000
+      },
+      "receivers": [
+        {
+          "name": "P1",
+          "point_mm": [
+            1.1,
+            0.7,
+            0.4
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P2",
+          "point_mm": [
+            2.0,
+            1.5,
+            0.75
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P3",
+          "point_mm": [
+            3.1,
+            2.3,
+            1.1
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P4",
+          "point_mm": [
+            4.2,
+            0.9,
+            1.2
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P5",
+          "point_mm": [
+            5.3,
+            2.1,
+            0.5
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P6",
+          "point_mm": [
+            6.0,
+            1.5,
+            0.75
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P7",
+          "point_mm": [
+            6.9,
+            0.6,
+            0.9
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P8",
+          "point_mm": [
+            7.6,
+            2.4,
+            0.3
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "signal": {
+        "kind": "hann",
+        "end_frequency_mhz": 0.28
+      }
+    }
+  },
+  "source_sha256": {
+    "graphwave/graded_mesh.py": "664e1ba7ddee040143fee0ace7542bdd07dc0f97cd497f3ad020d793ff4c469b",
+    "graphwave/modal_calibration.py": "30126ec889cbf129f4daedf9326e14a7aaf75d6e3bcfa4ef9aac7ae6ee79448a",
+    "graphwave/modal_reduction.py": "31fd6b8021daee7e15f1c040cbee35dab437047c793c5f481e47f29e28421197",
+    "graphwave/modal_sensitivity.py": "00c5ffbb72c0ebabbccaa03ebdf7d685bf6e280ce4a1cc8f9b0fa56ea2518123",
+    "graphwave/modal_sparse.py": "7e7d70e3c9185d52319076a24f2c68d82c16376f34a3a972da526c4bb6d11165",
+    "graphwave/quarter_symmetry.py": "4ffcf4a2258bfdb1aa882933fffd5316581bf732ab2e64a3e50a09315c627790",
+    "graphwave/buffered_inference.py": "c40eef7d283403b425e4c0627f4722497668675b554dfc5ce7143a033a531040",
+    "graphwave/inference.py": "ab7879deab1ae7893ca0fee58e68d4c882a1b6333903240a0d12fec220b4438b",
+    "graphwave/signals.py": "38dce98326fc587e3aa6988882aefdcba0207ba9b6510495e1dc41c02eeed19b",
+    "spectral3d/mesh.py": "258bb3e36208aa6c20490280ab1ff256d1dbe29032f5f9ac48af2f86b556f828",
+    "offline/model/time-coefficients.json": "025de9ed0a39c5a02500f287a1ce3fdacc5f81b244c64685b95de7139da34370",
+    "tools/run-modal-candidate-case.py": "daf82a747f9a72f6526e3e5e1c8b2aeaf625681a0cb1ac0a0672b088642ac04a",
+    "graphwave/modal_forcing.py": "6246d5bf68f831e039ef40705bacfbc29a28e790478be3fb71af10af8fc9b574",
+    "tools/comsol_modal_response.py": "f8273b47222b5575500ef7ee69d4f4cc832783c8c1444206178f2695587249f2",
+    "tools/validate-comsol-linear-matrix.py": "6860ccf5ba724c6f6da3f1f8b1f679f8ff93736ef403839b115e33b29e93fabf",
+    "tools/compare-comsol-reference.py": "85c0ec6cb36614d7a53393b451db6735bd8e4a3561a5c203783cb69db342f98f",
+    "tools/comsol_artifacts.py": "734edc3dcdfb1d41ea1f277701e332b9703e6ae4bbcb30a740b26ec1e51a642e"
+  },
+  "step_us": 0.025,
+  "modes": 200,
+  "nonlinear_quadrature": "Gauss-Legendre 9 per axis after polynomial lifting of the learned nodal gradient",
+  "linear_graph_spectrum_unchanged": true,
+  "reference_arrays_loaded_before_prediction": false,
+  "scope": "Diagnostic of nonlinear quadrature only; mixed original linear tangent and overintegrated nonlinear potential, not a promoted candidate"
+}

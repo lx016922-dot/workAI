@@ -1,0 +1,64 @@
+{
+  "schema": "workai.graphwave_continuation_validation.v1",
+  "execution_engine": "buffered",
+  "planned_inputs_sha256": "c4a8b0fe7ee4b0ed5ff13d26128bf456c92b95025a5282040c366d20b1f11b43",
+  "weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+  "parent_weights_sha256": "abcf531d1c968786200e3a0a0bf944cd2b54000797fe7067bfef6f571b056a0d",
+  "threshold": 0.05,
+  "reporting_floor_m": 1e-13,
+  "test_used_for_weight_selection": false,
+  "evaluation_source_sha256": {
+    "continued_validation.py": "43d94f4e551cb02b87d26251f77773fb855819670058953479e70db46cc3ed60",
+    "evaluate_continuation.py": "5ad95829e85d9d43e288e5dd998b9c7eb05d76eeb123a604f87947a9dbcdfd60"
+  },
+  "promotion_policy_sha256": "0e22f883a016b4415f925ee5861921b0a6998ac177817a3f6b5fbe5d3dd52bff",
+  "case_count": 8,
+  "receivers": 64,
+  "all_reference_and_prediction_checks_passed": true,
+  "maximums": {
+    "parent": {
+      "worst_reported_relative_error": 0.0920924268331639,
+      "full_vector": 0.007730213370263992,
+      "material_vector": 0.010377493170407981,
+      "geometric_vector": 0.012365290773989032,
+      "material_2f_vector": 0.01794341212092157
+    },
+    "continued": {
+      "worst_reported_relative_error": 0.020220368216962183,
+      "full_vector": 0.0015317434484825893,
+      "material_vector": 0.003465563550112947,
+      "geometric_vector": 0.0039511674902811,
+      "material_2f_vector": 0.0038025232112991916
+    }
+  },
+  "improves_predeclared_metrics": true,
+  "eligible_for_further_release_checks": true,
+  "accepted_for_offline_release": false,
+  "completed_at_utc": "2026-10-24T05:06:31.128952+00:00",
+  "scope": "P4 parent versus trained P5 extension at equal element size; increased compute cost. Reference convergence is separately checked. No experimental or pointwise universal guarantee. All eight records are 14 us, not 5 ms. No long-record accuracy promotion.",
+  "physics_checks_passed": true,
+  "long_record_accuracy_certified": false,
+  "duration_us": 14,
+  "timing_note": "Observed per-case wall times under concurrent workloads; not a controlled speed benchmark.",
+  "initial_metrics_sha256": "33a83581beba7107487ba7fe39693c35590abeaa2fe76736af86b83e610f98ff",
+  "reference_refinement": {
+    "case_id": "continued-hole-fixed",
+    "protocol": {
+      "predeclared_plan_sha256": "c4a8b0fe7ee4b0ed5ff13d26128bf456c92b95025a5282040c366d20b1f11b43",
+      "unchanged_weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+      "old_reference_quality_sha256": "a546e57450a184bee086245239df34b62f8abecb1c2e9ce4cd73b51ece1e40f7",
+      "base_reuses_original_space_sha256": "5b7ee176e5a0b15e4a9a171b67b90fa8e276c2099a531424c5bf93b17d52fd14",
+      "threshold": 0.05,
+      "reporting_floor_m": 1e-13,
+      "h_base": 1.4,
+      "h_space": 1.0
+    },
+    "outcome": {
+      "reference_passed": true,
+      "parent_passed": false,
+      "continued_passed": true,
+      "original_failed_checks_retained": true
+    },
+    "initial_failure_preserved": true
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schema": "workai.historical_physics_regression.v1",
+  "candidate_weights_sha256": "9c1ec58c3cf93d27334ffbdcf3cc0ffad54ff1b816ff787acf3d296ab3f401be",
+  "historical_validation_seed": 2026102484,
+  "historical_samples": 96,
+  "scope": "Regression check on previously seen v8 validation fields after v9 weights were frozen; not a fresh independent holdout and not used to adjust v9",
+  "new_v9_maxima": {
+    "momentum_interior": 0.012356935413040617,
+    "momentum_boundary": 0.024949939057089553,
+    "traction": 0.0002836622494183077,
+    "strain_energy": 1.3160200627972644e-05,
+    "internal_power": 0.0009993373319191396
+  },
+  "all_historical_fields_passed": true,
+  "previous_failures": [
+    {
+      "sample_index": 21,
+      "family": "mixed",
+      "group": "internal_power",
+      "branch": "material",
+      "projection": null,
+      "normalized_residual": 0.053290941510883844,
+      "new_v9_normalized_residual": 0.0009993373319191396,
+      "new_v9_passed": true
+    },
+    {
+      "sample_index": 41,
+      "family": "mixed_shear",
+      "group": "momentum_boundary",
+      "branch": "material",
+      "projection": "transverse_2",
+      "normalized_residual": 0.05026290417789621,
+      "new_v9_normalized_residual": 0.023358901720945763,
+      "new_v9_passed": true
+    }
+  ],
+  "scientific_accuracy_certified": false
+}

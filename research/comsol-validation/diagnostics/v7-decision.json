@@ -1,0 +1,34 @@
+{
+  "schema": "workai.training_candidate_decision.v1",
+  "candidate": "training/v7",
+  "candidate_weights_sha256": "089ab948eb7983b9d6ebb53e1d7a46a1b063cef4acf6a23ea09bc15f834c63ff",
+  "decision": "reject_promotion",
+  "reason": "All 160 complete-record receiver vector comparisons became worse than frozen v6 against exactly the same COMSOL reference; no case passed the full waveform/spectrum check",
+  "formal_training_completed": true,
+  "optimizer_success": true,
+  "independent_physics_passed": true,
+  "native_20us_checks_passed": true,
+  "complete_5ms_cases": 20,
+  "long_comparison_passes": 0,
+  "improved_receiver_comparisons": 0,
+  "receiver_comparisons": 160,
+  "vector_difference_range": [
+    0.26243186692955045,
+    1.5063229903937294
+  ],
+  "case_maximum_regression_percentage_points": [
+    0.12891701967533975,
+    0.7273533830318479
+  ],
+  "converged_long_reference": false,
+  "accepted_for_offline_release": false,
+  "default_weights_changed": false,
+  "scientific_accuracy_certified": false,
+  "evidence_sha256": {
+    "training/v7/summary.json": "9403874fe3b580f08c4f69752a1f145bbfa6a1e088c5d432da1a999652964c3a",
+    "diagnostics/physics-validation-v6-v7.json": "a7f220b658dcbc237123c44cf8e3ff5035c5ccfcf4adfcdd2f3abcb6e8c123a5",
+    "diagnostics/native-nonlinear-20us-v7.json": "c611956e67b6ba85effc50c473e5feeabb634293b89d98b362c14698cad4bddd",
+    "candidate-matrix20-v7/summary.json": "e41534624e9263812f1c711482150c8e2fb91ce38ed98c89d70c247266053750",
+    "diagnostics/v6-v7-same-reference.json": "62af25891dd2eec5869f3957e8886402447b1b56671633a881f176b0c0ff69e6"
+  }
+}

@@ -1,0 +1,275 @@
+{
+  "schema": "workai.modal_publication_proof.v1",
+  "build_run": 40213705025,
+  "build_head": "1a88ed8492db364cbcb7df7144818f68cd680ec0",
+  "artifact_id": 12607026994,
+  "artifact_sha256": "ea531b311c1011d99c9d494951069f2a864c466d70a7201fce6c3428aed8e547",
+  "metadata_matches_published_release": true,
+  "model": {
+    "schema": "workai.graph_modal_candidate.v1",
+    "scene": {
+      "schema": "workai.hyperelastic.solid.v1",
+      "name": "5 ms \u957f\u8bb0\u5f55\u9a8c\u8bc1 \u00b7 \u56fa\u5b9a\u7aef\u94dd\u677f",
+      "geometry": {
+        "kind": "plate",
+        "length_mm": 8.0,
+        "width_mm": 3.0,
+        "thickness_mm": 1.5,
+        "outer_radius_mm": 2.5,
+        "inner_radius_mm": 1.5,
+        "hole_radius_mm": 0.55,
+        "hole_x_mm": 5.0,
+        "hole_y_mm": 1.75,
+        "notch_x_mm": 5.0,
+        "notch_width_mm": 0.8,
+        "notch_depth_mm": 0.45
+      },
+      "material": {
+        "rho_kg_m3": 2700.0,
+        "lambda_pa": 58100000000.0,
+        "mu_pa": 26100000000.0,
+        "l_pa": -143000000000.0,
+        "m_pa": -297000000000.0,
+        "n_pa": -345000000000.0
+      },
+      "constitutive": "murnaghan",
+      "source": {
+        "face": "xmin",
+        "center_mm": [
+          0.0,
+          1.5,
+          0.75
+        ],
+        "radius_mm": 0.0,
+        "direction": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "amplitude_mpa": 1.0,
+        "frequency_mhz": 0.22,
+        "cycles": 2,
+        "delay_us": 0.2,
+        "phase_deg": 0.0
+      },
+      "boundary": {
+        "fixed_face": "xmax"
+      },
+      "acquisition": {
+        "duration_us": 10.0,
+        "sample_step_us": 0.1
+      },
+      "numerics": {
+        "h_mm": 2.5,
+        "cfl": 0.3,
+        "max_elements": 40000
+      },
+      "receivers": [
+        {
+          "name": "P1",
+          "point_mm": [
+            1.1,
+            0.7,
+            0.4
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P2",
+          "point_mm": [
+            2.0,
+            1.5,
+            0.75
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P3",
+          "point_mm": [
+            3.1,
+            2.3,
+            1.1
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P4",
+          "point_mm": [
+            4.2,
+            0.9,
+            1.2
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P5",
+          "point_mm": [
+            5.3,
+            2.1,
+            0.5
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P6",
+          "point_mm": [
+            6.0,
+            1.5,
+            0.75
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P7",
+          "point_mm": [
+            6.9,
+            0.6,
+            0.9
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        },
+        {
+          "name": "P8",
+          "point_mm": [
+            7.6,
+            2.4,
+            0.3
+          ],
+          "direction": [
+            1.0,
+            0.0,
+            0.0
+          ]
+        }
+      ],
+      "signal": {
+        "kind": "hann",
+        "end_frequency_mhz": 0.22
+      }
+    },
+    "degree": 6,
+    "h_mm": 1.0,
+    "axis_elements": [
+      12,
+      3,
+      3
+    ],
+    "grading_ratios": [
+      50.0,
+      12.0,
+      12.0
+    ],
+    "exported_modes": 500,
+    "quarter_domain": true,
+    "nodes": 26353,
+    "elements": 108,
+    "weights_sha256": "e4d3426822bc716844b2d82eb81c74cba371ed33de43f536bdac89afad127e7a",
+    "basis_sha256": "c880d6da98a337ca83235d876e7e1a6beae9297b77c5591f9307502201c2574a",
+    "compilation_source_sha256": {
+      "graphwave/graded_mesh.py": "664e1ba7ddee040143fee0ace7542bdd07dc0f97cd497f3ad020d793ff4c469b",
+      "graphwave/modal_calibration.py": "30126ec889cbf129f4daedf9326e14a7aaf75d6e3bcfa4ef9aac7ae6ee79448a",
+      "graphwave/modal_reduction.py": "31fd6b8021daee7e15f1c040cbee35dab437047c793c5f481e47f29e28421197",
+      "graphwave/modal_sensitivity.py": "00c5ffbb72c0ebabbccaa03ebdf7d685bf6e280ce4a1cc8f9b0fa56ea2518123",
+      "graphwave/buffered_inference.py": "c40eef7d283403b425e4c0627f4722497668675b554dfc5ce7143a033a531040",
+      "graphwave/inference.py": "ab7879deab1ae7893ca0fee58e68d4c882a1b6333903240a0d12fec220b4438b",
+      "graphwave/signals.py": "38dce98326fc587e3aa6988882aefdcba0207ba9b6510495e1dc41c02eeed19b",
+      "graphwave/modal_sparse.py": "7e7d70e3c9185d52319076a24f2c68d82c16376f34a3a972da526c4bb6d11165",
+      "graphwave/quarter_symmetry.py": "4ffcf4a2258bfdb1aa882933fffd5316581bf732ab2e64a3e50a09315c627790",
+      "graphwave/modal_forcing.py": "6246d5bf68f831e039ef40705bacfbc29a28e790478be3fb71af10af8fc9b574",
+      "spectral3d/mesh.py": "258bb3e36208aa6c20490280ab1ff256d1dbe29032f5f9ac48af2f86b556f828",
+      "tools/compile-modal-candidate.py": "0925195a2e9722a1404a94bbb67f3fd2aa0586cc559292b123e8f8780dde03b6"
+    },
+    "symmetry": {
+      "method": "quarter-domain y/z reflection with component-wise essential constraints",
+      "original_modes": 500,
+      "retained_modes": 500,
+      "physical_domain_multiplicity": 4,
+      "transverse_displacements_preserved_with_reflection_signs": true,
+      "requires_full_basis_nonlinear_check": true
+    },
+    "mass_orthonormality_error": 6.8833827526759706e-15,
+    "compilation_seconds": 428.832492985,
+    "comsol_arrays_used": false,
+    "numerical_prediction_corrector": false,
+    "material_tensor_entries_dropped": false,
+    "modal_truncation_convergence_verified": false,
+    "scientific_accuracy_certified": false
+  },
+  "package": {
+    "schema": "workai.graph_modal_package.v1",
+    "archive": "WorkAI-GraphModal-research-v11-phase500-ci.zip",
+    "bytes": 290978756,
+    "sha256": "91c402ea990cc616650cabe06b084061073c786dfec96ae6960d8f1be16e2f84",
+    "files_sha256": {
+      "model.json": "13a1f85ab9460a9c933bd60649ae07b8839da3ea85ae2f7511f0a3d38d814199",
+      "basis.npz": "c880d6da98a337ca83235d876e7e1a6beae9297b77c5591f9307502201c2574a",
+      "weights.npz": "e4d3426822bc716844b2d82eb81c74cba371ed33de43f536bdac89afad127e7a",
+      "source_snapshot/graphwave/graded_mesh.py": "664e1ba7ddee040143fee0ace7542bdd07dc0f97cd497f3ad020d793ff4c469b",
+      "source_snapshot/graphwave/modal_calibration.py": "30126ec889cbf129f4daedf9326e14a7aaf75d6e3bcfa4ef9aac7ae6ee79448a",
+      "source_snapshot/graphwave/modal_reduction.py": "31fd6b8021daee7e15f1c040cbee35dab437047c793c5f481e47f29e28421197",
+      "source_snapshot/graphwave/modal_sensitivity.py": "00c5ffbb72c0ebabbccaa03ebdf7d685bf6e280ce4a1cc8f9b0fa56ea2518123",
+      "source_snapshot/graphwave/buffered_inference.py": "c40eef7d283403b425e4c0627f4722497668675b554dfc5ce7143a033a531040",
+      "source_snapshot/graphwave/inference.py": "ab7879deab1ae7893ca0fee58e68d4c882a1b6333903240a0d12fec220b4438b",
+      "source_snapshot/graphwave/signals.py": "38dce98326fc587e3aa6988882aefdcba0207ba9b6510495e1dc41c02eeed19b",
+      "source_snapshot/graphwave/modal_sparse.py": "7e7d70e3c9185d52319076a24f2c68d82c16376f34a3a972da526c4bb6d11165",
+      "source_snapshot/graphwave/quarter_symmetry.py": "4ffcf4a2258bfdb1aa882933fffd5316581bf732ab2e64a3e50a09315c627790",
+      "source_snapshot/graphwave/modal_forcing.py": "6246d5bf68f831e039ef40705bacfbc29a28e790478be3fb71af10af8fc9b574",
+      "source_snapshot/spectral3d/mesh.py": "258bb3e36208aa6c20490280ab1ff256d1dbe29032f5f9ac48af2f86b556f828",
+      "source_snapshot/tools/compile-modal-candidate.py": "0925195a2e9722a1404a94bbb67f3fd2aa0586cc559292b123e8f8780dde03b6"
+    },
+    "archive_readback_verified": true,
+    "requires_pinned_offline_python_runtime": true,
+    "scientific_accuracy_certified": false
+  },
+  "default_offline_model_changed": false,
+  "scientific_accuracy_certified": false,
+  "published_assets": [
+    {
+      "browser_download_url": "https://github.com/lx016922-dot/workAI/releases/download/v0.3.0/WorkAI-GraphModal-research-v11-phase500-ci.json",
+      "digest": "sha256:16d9c74ee0f0b5568075bc93a9625e2d43c281e416b58474cb80094010beb3e7",
+      "name": "WorkAI-GraphModal-research-v11-phase500-ci.json",
+      "size": 2043
+    },
+    {
+      "browser_download_url": "https://github.com/lx016922-dot/workAI/releases/download/v0.3.0/WorkAI-GraphModal-research-v11-phase500-ci.zip",
+      "digest": "sha256:91c402ea990cc616650cabe06b084061073c786dfec96ae6960d8f1be16e2f84",
+      "name": "WorkAI-GraphModal-research-v11-phase500-ci.zip",
+      "size": 290978756
+    },
+    {
+      "browser_download_url": "https://github.com/lx016922-dot/workAI/releases/download/v0.3.0/WorkAI-GraphModal-research-v11-phase500-ci.zip.sha256",
+      "digest": "sha256:934a6c42cd653383a5c6455b2f5ee71340664de15844d3baf319593a1a7a3ead",
+      "name": "WorkAI-GraphModal-research-v11-phase500-ci.zip.sha256",
+      "size": 113
+    }
+  ],
+  "github_asset_digest_matches_ci_package": true
+}

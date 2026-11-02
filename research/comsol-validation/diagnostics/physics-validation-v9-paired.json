@@ -1,0 +1,70 @@
+{
+  "schema": "workai.paired_physics_validation.v2",
+  "degree": 5,
+  "validation_seed": 2026102594,
+  "validation_samples": 192,
+  "component_checks_per_candidate": 10560,
+  "training_selection_uses_validation": false,
+  "unchanged_material_mass_time_and_other_degree_filters_verified": true,
+  "candidates": {
+    "same_grid_baseline": {
+      "weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+      "maxima": {
+        "momentum_interior": 0.00010126892260936092,
+        "momentum_boundary": 0.00019541701688791628,
+        "traction": 2.635865556304809e-10,
+        "strain_energy": 2.304052509009218e-09,
+        "internal_power": 2.9308874137566203e-09
+      },
+      "all_passed": true,
+      "failed_component_checks": 0,
+      "sbp": {
+        "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+        "maximum_absolute_residual": 7.315196478892448e-15,
+        "absolute_limit": 2e-12,
+        "passed": true,
+        "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+      }
+    },
+    "previous_v8": {
+      "weights_sha256": "da596ce8f7fe04990abb97a836e2b24daa62993e16cd7c8575f77c55ee4e0008",
+      "maxima": {
+        "momentum_interior": 0.016188579615714987,
+        "momentum_boundary": 0.03852388188344046,
+        "traction": 0.00026927340927684093,
+        "strain_energy": 0.0005371644878360069,
+        "internal_power": 0.0045221752033833655
+      },
+      "all_passed": true,
+      "failed_component_checks": 0,
+      "sbp": {
+        "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+        "maximum_absolute_residual": 0.17924175976999954,
+        "absolute_limit": 2e-12,
+        "passed": false,
+        "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+      }
+    },
+    "candidate_v9": {
+      "weights_sha256": "9c1ec58c3cf93d27334ffbdcf3cc0ffad54ff1b816ff787acf3d296ab3f401be",
+      "maxima": {
+        "momentum_interior": 0.009587938420242663,
+        "momentum_boundary": 0.02494992198008089,
+        "traction": 0.0002786780170975457,
+        "strain_energy": 2.8302007923486507e-05,
+        "internal_power": 0.0002451999630088735
+      },
+      "all_passed": true,
+      "failed_component_checks": 0,
+      "sbp": {
+        "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+        "maximum_absolute_residual": 4.2277768538814765e-15,
+        "absolute_limit": 2e-12,
+        "passed": true,
+        "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+      }
+    }
+  },
+  "scope": "Same fresh manufactured fields for all frozen weights; not a long-waveform comparison",
+  "scientific_accuracy_certified": false
+}

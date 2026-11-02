@@ -7,12 +7,34 @@ on:
         required: true
         default: v0.3.0
         type: string
+      evidence_only:
+        description: Add supplemental COMSOL evidence while preserving the original release archives
+        required: true
+        default: false
+        type: boolean
+      audit_subdir:
+        description: Committed COMSOL audit directory
+        required: true
+        default: candidate-matrix20
+        type: string
+      archive_label:
+        description: Distinct label for later evidence snapshots, such as training-v7
+        required: false
+        default: ''
+        type: string
+      baseline_audit_subdir:
+        description: Optional committed same-plan baseline audit to preserve paired records
+        required: false
+        default: ''
+        type: string
 permissions:
   contents: write
+  actions: read
 env:
   WORKAI_RELEASE_TAG: ${{ inputs.tag }}
 jobs:
   package:
+    if: ${{ !inputs.evidence_only }}
     strategy:
       fail-fast: false
       matrix:
@@ -46,11 +68,15 @@ jobs:
           with zipfile.ZipFile(package) as z:
               prefix='WorkAI-Offline-'+platform+'-x64/'
               manifest=json.loads(z.read(prefix+'MANIFEST.json'))
+              assert manifest['source_commit']==os.environ['GITHUB_SHA']
               for row in manifest['files']:
                   data=z.read(prefix+row['path'])
                   assert len(data)==row['bytes'] and hashlib.sha256(data).hexdigest()==row['sha256'],row['path']
               status=json.loads(z.read(prefix+'offline/examples/local-20261024000000000000000000000001/status.json'))
               assert status['phase']=='completed'
+              extension=json.loads(z.read(prefix+'offline/model/extension.json'))
+              assert status['weights_sha256']==extension['files_sha256']['continued-weights.npz']
+              assert status['controls_completed']==3 and status['numerical_correction'] is False
               record=json.loads(z.read(prefix+'offline/examples/local-20261024000000000000000000000001/record/recording.json'))
               assert record['phase']=='completed' and record['duration_us']==5000 and record['frame_count']==25001
           with package.open('rb') as stream:
@@ -62,8 +88,99 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$WORKAI_RELEASE_TAG" portable/*.zip portable/SHA256SUMS-${{ matrix.platform }}.txt --repo "$GITHUB_REPOSITORY" --clobber
+  evidence:
+    if: ${{ !inputs.evidence_only }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Retrieve the completed frozen 20-case validation
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: 40058525287
+          pattern: long-*
+          path: validation-artifacts
+      - name: Verify and preserve complete receiver evidence
+        run: python tools/package-validation-evidence.py --input validation-artifacts --output evidence
+      - name: Upload evidence to the prepared draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$WORKAI_RELEASE_TAG" evidence/*.zip evidence/SHA256SUMS-validation.txt --repo "$GITHUB_REPOSITORY" --clobber
+  comsol-evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      WORKAI_AUDIT_SUBDIR: ${{ inputs.audit_subdir }}
+      WORKAI_EVIDENCE_LABEL: ${{ inputs.archive_label }}
+      WORKAI_EVIDENCE_ONLY: ${{ inputs.evidence_only }}
+      WORKAI_BASELINE_AUDIT: ${{ inputs.baseline_audit_subdir }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Read the audited workflow identity
+        id: audited
+        shell: python
+        run: |
+          import json,os,re
+          from pathlib import Path
+          folder=os.environ['WORKAI_AUDIT_SUBDIR'];label=os.environ['WORKAI_EVIDENCE_LABEL']
+          assert re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}',folder)
+          assert not label or re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}',label)
+          if folder!='candidate-matrix20' or label:
+              assert label and os.environ['WORKAI_EVIDENCE_ONLY']=='true', 'Later snapshots must preserve original assets'
+          report=json.loads((Path('research/comsol-validation')/folder/'summary.json').read_text())
+          match=re.fullmatch(r'https://github.com/lx016922-dot/workAI/actions/runs/([0-9]+)',report['workflow_run_url'])
+          assert match and report['completed_cases']==20 and report['metrics_independently_recomputed']
+          with open(os.environ['GITHUB_OUTPUT'],'a') as output:
+              output.write('run_id='+match.group(1)+'\n')
+              baseline=os.environ['WORKAI_BASELINE_AUDIT']
+              if baseline:
+                  assert label and os.environ['WORKAI_EVIDENCE_ONLY']=='true'
+                  assert re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}',baseline)
+                  control=json.loads((Path('research/comsol-validation')/baseline/'summary.json').read_text())
+                  assert control['completed_cases']==20 and control['metrics_independently_recomputed']
+                  assert all(control[key]==report[key] for key in ['plan_sha256','reference_identity','refinement_identity'])
+                  match=re.fullmatch(r'https://github.com/lx016922-dot/workAI/actions/runs/([0-9]+)',control['workflow_run_url'])
+                  assert match
+                  output.write('baseline_run_id='+match.group(1)+'\n')
+      - name: Retrieve the completed constrained-candidate validation
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.audited.outputs.run_id }}
+          pattern: comsol-linear-*
+          path: comsol-artifacts
+      - name: Retrieve complete same-order baseline records
+        if: ${{ inputs.baseline_audit_subdir != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          github-token: ${{ github.token }}
+          run-id: ${{ steps.audited.outputs.baseline_run_id }}
+          pattern: comsol-linear-*
+          path: comsol-baseline-artifacts
+      - name: Verify and archive COMSOL and nonlinear physics evidence
+        env:
+          WORKAI_EVIDENCE_COMMIT: ${{ github.sha }}
+        shell: bash
+        run: |
+          args=()
+          if [ -n "$WORKAI_BASELINE_AUDIT" ]; then
+            args+=(--baseline-input comsol-baseline-artifacts --baseline-audit-subdir "$WORKAI_BASELINE_AUDIT")
+          fi
+          python tools/package-comsol-evidence.py --input comsol-artifacts --output comsol-evidence --audit-subdir "$WORKAI_AUDIT_SUBDIR" --archive-label "$WORKAI_EVIDENCE_LABEL" "${args[@]}" ${{ inputs.evidence_only && '--supplement' || '' }}
+      - name: Upload scientific evidence to the prepared draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$WORKAI_RELEASE_TAG" comsol-evidence/*.zip comsol-evidence/SHA256SUMS-comsol*.txt --repo "$GITHUB_REPOSITORY" --clobber
   checksums:
-    needs: package
+    needs: [package, evidence, comsol-evidence]
+    if: ${{ always() && (needs.package.result == 'success' || needs.package.result == 'skipped') && (needs.evidence.result == 'success' || needs.evidence.result == 'skipped') && needs.comsol-evidence.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Publish the combined checksum file

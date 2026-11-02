@@ -1,0 +1,109 @@
+{
+  "schema": "workai.comsol_training_continuation_plan.v2",
+  "reason": "The P4 v7 candidate regressed in every 5 ms receiver comparison. Examine higher spatial order instead of repeating its parameter update.",
+  "candidate_degree": 5,
+  "candidate_h_mm": 2.5,
+  "initial_weights": "offline/model/continued-weights.npz",
+  "changed_parameters": [
+    "derivative_5"
+  ],
+  "unchanged": [
+    "material quadratic and cubic energy tensors",
+    "mass rule",
+    "time coefficients",
+    "full nonlinear recurrence",
+    "physical scene"
+  ],
+  "reference_pair": [
+    "data/eigen-035-v7",
+    "data/eigen-030-v7"
+  ],
+  "reference_scope": "Actual COMSOL eigenpairs; long phase convergence not established; not native nonlinear transient truth",
+  "diagnostics": [
+    "separate mass and stiffness integration effects",
+    "actual COMSOL same-mesh eigencheck",
+    "fifth-order physical consistency and rigid motion"
+  ],
+  "preflight": {
+    "physics_samples": 48,
+    "validation_samples": 24,
+    "seed": 2026102481,
+    "maximum_iterations": 35,
+    "retry_reason": "First trial terminated when a trial step violated the 0.9 MAC gate. Retry enforces that same gate as an inequality and rechecks after final restoration; threshold not relaxed."
+  },
+  "formal": {
+    "physics_samples": 192,
+    "validation_samples": 96,
+    "seed": 2026102483,
+    "maximum_iterations": 80,
+    "constraint_form": "1 - normalized_RMS / 0.035 >= 0",
+    "conditioning_reason": "Preflight squared constraints have nearly zero gradients near the exact initial operator and take strongly infeasible trial steps. Use the equivalent RMS inequality for formal optimization, retaining the same physical limit and final checks; validation is not used to choose the form."
+  },
+  "training": {
+    "hard_physical_limit": 0.035,
+    "independent_physical_limit": 0.05,
+    "consistency_order": 1,
+    "dominant_phase_residual_multiplier": 10,
+    "parameter_increment_bound": 1,
+    "finite_difference_step": 0.0001,
+    "slsqp_tolerance": 1e-07,
+    "validation_waveforms_used_in_training": false,
+    "candidate_mode_matching": "Fixed geometric interpolation to archived COMSOL coordinates during offline training only"
+  },
+  "validation": {
+    "duration_us": 5000,
+    "sample_step_us": 0.2,
+    "signals": [
+      "hann",
+      "gaussian",
+      "rectangular",
+      "chirp"
+    ],
+    "cycles": [
+      1,
+      3,
+      5,
+      10,
+      20
+    ],
+    "same_order_baseline_required": true,
+    "distinguish_spatial_order_gain_from_training_gain": true,
+    "phase_alignment": false,
+    "amplitude_rescaling": false,
+    "native_nonlinear_short_check": "data/nonlinear-20us-check-01",
+    "reference_convergence_required_for_certification": true
+  },
+  "accepted_for_offline_release": false,
+  "scientific_accuracy_certified": false,
+  "independent_reference_improvement": {
+    "method": "Grade the reference-only COMSOL hex mesh toward the fixed end and symmetric transverse edges",
+    "cases": [
+      "eigen-graded-05-v8c",
+      "eigen-graded-04-v8c"
+    ],
+    "element_ratio": 20,
+    "modes_each": 80,
+    "verify_actual_axis_coordinates": true,
+    "physical_scene_unchanged": true,
+    "affects_neural_inference_mesh": false,
+    "used_for_current_training": false,
+    "selection_criterion": "Reference agreement only; no candidate waveform used to select a reference",
+    "phase_gate_hz": 0.5,
+    "report_even_if_failed": true,
+    "failed_attempts": [
+      "eigen-graded-05-v8"
+    ],
+    "retry_reason": "COMSOL rejected the unsupported distrib property before solving. Use the documented predefined Distribution API: method=geometric and elemcount. Preserve the failed job; no data from it used.",
+    "api_reference": "https://doc.comsol.com/6.4/doc/com.comsol.help.comsol/comsol_api_mesh.49.074.html",
+    "nominal_uniform_spacing_mm": [
+      0.5,
+      0.4
+    ],
+    "spacing_scope": "Nominal spacing determines element counts before grading; actual minimum and maximum cell widths are measured from exported mesh axes",
+    "earlier_mesh_diagnostic_cases": [
+      "eigen-graded-05-v8b",
+      "eigen-graded-04-v8b"
+    ],
+    "mapped_edge_revision": "Actual coordinates of the first v8b mesh show a warped cross-section: prescribing only one of each pair of parallel edges leaves opposite edges uniform. Apply the same symmetric distribution to both parallel source-face edges, then recheck all exported vertex coordinates. Earlier cases are retained."
+  }
+}

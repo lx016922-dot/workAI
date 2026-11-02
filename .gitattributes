@@ -3,3 +3,7 @@ offline/model/* -text
 graphwave/*.py text eol=lf
 spectral3d/*.py text eol=lf
 solid/*.py text eol=lf
+# Signed COMSOL artifacts and hashed research snapshots keep their exact bytes.
+research/comsol-validation/** -text
+research/comsol-validation/data/** -text -diff
+research/**/*.csv -text whitespace=cr-at-eol

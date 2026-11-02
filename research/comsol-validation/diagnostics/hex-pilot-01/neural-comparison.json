@@ -1,0 +1,82 @@
+{
+  "schema": "workai.comsol_graphwave_comparison.v1",
+  "method": "neural_prediction_vs_COMSOL",
+  "reference_job_id": "comsol-9cd100aa37324b8ba36619527d3f8674",
+  "comsol_version": "COMSOL Multiphysics 6.4 (\\u5F00\\u53D1\\u7248\\u672C: 293)",
+  "source_sha256": "f32d1ece3f6746989804f57f68ceea03bf29c313cc9b327fb66170a6bd42114e",
+  "duration_us": 8.0,
+  "sample_step_us": 0.05,
+  "receiver_count": 2,
+  "laws": [
+    0
+  ],
+  "threshold": 0.05,
+  "floor_m": 1e-13,
+  "candidate": {
+    "weights_sha256": "ee413a70b30e6402e174e8d16a92df9ddd96aaa4a6192df472b74f877311df83",
+    "temporal_sha256": "025de9ed0a39c5a02500f287a1ce3fdacc5f81b244c64685b95de7139da34370",
+    "degree": 4,
+    "h_mm": 2.5,
+    "internal_step_us": 0.007142857142857142
+  },
+  "all_waveform_checks_passed": true,
+  "maximum_reported_relative_l2": 0.0016518257686934487,
+  "comparisons": {
+    "linear": [
+      {
+        "x": {
+          "error_rms_m": 6.311833569993016e-11,
+          "reference_rms_m": 5.0565620002692105e-08,
+          "relative_l2": 0.0012482460552559178,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 5.515762498608303e-19,
+          "reference_rms_m": 7.369878543442309e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 1.5744518355966392e-19,
+          "reference_rms_m": 7.254767506290349e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 6.311833569993016e-11,
+          "reference_rms_m": 5.0565620002692105e-08,
+          "relative_l2": 0.0012482460552559178,
+          "passed": true
+        }
+      },
+      {
+        "x": {
+          "error_rms_m": 3.5995752336559443e-11,
+          "reference_rms_m": 2.1791494610857876e-08,
+          "relative_l2": 0.001651825768693448,
+          "passed": true
+        },
+        "y": {
+          "error_rms_m": 9.751979605759566e-19,
+          "reference_rms_m": 7.045200438043669e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "z": {
+          "error_rms_m": 3.099256036976316e-19,
+          "reference_rms_m": 5.645062955268445e-23,
+          "relative_l2": null,
+          "passed": true
+        },
+        "vector": {
+          "error_rms_m": 3.5995752336559456e-11,
+          "reference_rms_m": 2.1791494610857876e-08,
+          "relative_l2": 0.0016518257686934487,
+          "passed": true
+        }
+      }
+    ]
+  },
+  "reference_convergence_verified": false,
+  "scientific_accuracy_certified": false
+}

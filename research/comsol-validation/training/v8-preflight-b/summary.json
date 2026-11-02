@@ -1,0 +1,103 @@
+{
+  "schema": "workai.comsol_training_summary.v1",
+  "weights_sha256": "6ef37481d8e7d76b59671cd00a4989cea90aecb70b73c5aefe0a6d1f61bfaa31",
+  "candidate_degree": 5,
+  "candidate_h_mm": 2.5,
+  "actual_comsol_development_jobs": [
+    "comsol-e301253e89bc48fcbf3f7fde4fce4d18",
+    "comsol-7dad39c427024efbad336549f45d2b78"
+  ],
+  "training_mode_indices": [
+    5,
+    11,
+    20,
+    22,
+    25,
+    28,
+    29
+  ],
+  "training_initial_frequency_error_norm_hz": 549.3067740120155,
+  "training_final_frequency_error_norm_hz": 412.6799554551522,
+  "optimizer_success": true,
+  "feasibility_restoration": {
+    "method": "offline parameter backtracking toward the physically verified baseline",
+    "training_limit": 0.035,
+    "target_with_margin": 0.034965,
+    "trials": [
+      {
+        "scale": 1.0,
+        "maximum_training_residual": 0.035000001517624
+      },
+      {
+        "scale": 0.999,
+        "maximum_training_residual": 0.03496500522769556
+      },
+      {
+        "scale": 0.998001,
+        "maximum_training_residual": 0.034930044064614856
+      }
+    ],
+    "validation_used_for_selection": false,
+    "inference_correction": false
+  },
+  "polynomial_consistency_order": 1,
+  "parameter_bounds": [
+    -1.0,
+    1.0
+  ],
+  "dominant_phase_mode_index": 5,
+  "dominant_phase_residual_multiplier": 10.0,
+  "dominant_initial_frequency_error_hz": 111.56240948481718,
+  "dominant_final_frequency_error_hz": 103.45227767739561,
+  "dominant_unmodified_parent_frequency_error_hz": 111.56240948243067,
+  "initial_physics_feasibility_restoration": null,
+  "material_energy_coefficients_changed": false,
+  "transient_test_waveforms_used_for_training": false,
+  "nonlinear_longitudinal_transverse_physics_in_loss": true,
+  "physics_training_passed": true,
+  "hard_training_limit": 0.035,
+  "hard_training_limit_satisfied": true,
+  "physics_training_maxima": {
+    "momentum_interior": 0.017745768505903314,
+    "momentum_boundary": 0.034930044064614856,
+    "traction": 0.0002316427097916876,
+    "strain_energy": 0.0005072804552173744,
+    "internal_power": 0.003920671425885415
+  },
+  "physics_validation_passed": true,
+  "physics_validation_maxima": {
+    "momentum_interior": 0.018032201422057945,
+    "momentum_boundary": 0.03786400199227802,
+    "traction": 0.00023163491810885284,
+    "strain_energy": 0.0005072714054691172,
+    "internal_power": 0.0005072747783388642
+  },
+  "finite_rigid_motion_checks_passed": true,
+  "rigid_motion_maxima": {
+    "force_l2_N": 4.0558326225825276e-10,
+    "absolute_energy_J": 4.23848923994942e-28,
+    "strain_norm": 4.88293553547839e-15,
+    "absolute_J_minus_one": 5.662137425588298e-15
+  },
+  "reference_long_phase_converged": false,
+  "accepted_for_offline_release": false,
+  "long_record_accuracy_certified": false,
+  "scope": "P5 graph filter research candidate for the fixed-end 8 x 3 x 1.5 mm aluminum plate with h=2.5 mm; not a general geometry calibration",
+  "files_sha256": {
+    "history.json": "4a11a9c11f92ca45167a42f928af42402d72c43f6facf37ea9c0db0e8c94b7a5",
+    "rigid-final.json": "35ca13cc691410e4a6cac4c0dd6c6116298ce56b85ba149dd237acb9573e5ffb",
+    "physics-training-patches.npz": "ddaec33d21acc52ed679cb71d36254b6be8781025169cf2b5d56b66d0efe2ce2",
+    "config.json": "67e98dc4144ec75deeb7c36a271d21ff571d469c737e7fb2e92aa9aebe59009c",
+    "candidate-weights.npz": "6ef37481d8e7d76b59671cd00a4989cea90aecb70b73c5aefe0a6d1f61bfaa31",
+    "physics-training.json": "43d325cb3c1138e31722afdf28ae43ee67096f74f3cf06f55ace6d408eca13e7",
+    "physics-validation-patches.npz": "b0083acbbe891a52f0cafa134354fbeaa5309ebb8d4c938372fb906da3cb0839",
+    "rigid-parent.json": "58c4e9870ce7e546ad0ec89402c8e1bda0c99afb087d8a7c6a294daaf3b12f60",
+    "frequencies.csv": "6575e59b8ca88ff0c591d4760dbb746fe69c9bf5362bd3e8e994401691bc8685",
+    "physics-validation.json": "d19d9cfc16c4c6a75ed29c5d34a5ffd6d2e542f71c9bb8ed317f5b7f118fc4ae",
+    "rigid-initial.json": "e801a0a1140dae45bff43339d9d0966deb4b54b34c637be7b640c69642f67106",
+    "physics-initial.json": "1854c04b6ce49692299121eddfef13e6df70c6f26d186e9cc4fac13d2c5454ef",
+    "training.json": "0600f89e688bee2ca73ff1e1878380039e971ec7c892e97fa9887a0ac0503bc5",
+    "source_snapshot/nonlinear_constraints.py": "279044b57bb78061d4d8cebc8e3fb6969c13a09d3190151a1dc8ca4c3f8912b9",
+    "source_snapshot/modal_calibration.py": "2dfb4eb5c2e74564615c45fdb862b9678f00be42915e1d8565cb9b846f63266c"
+  }
+}

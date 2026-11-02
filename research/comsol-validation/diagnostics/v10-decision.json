@@ -1,0 +1,44 @@
+{
+  "schema": "workai.training_candidate_decision.v1",
+  "candidate": "training/v10",
+  "candidate_weights_sha256": "e2f0f2cfefea2ea2428a1771426f4959bb27c00875283b1003303a8747177bd2",
+  "decision": "reject_promotion",
+  "reason": "The candidate passes 0/20 complete long-record linear comparisons; native 20 us acceptance is False. The long COMSOL reference has not passed convergence and no complete native nonlinear 5 ms reference matrix exists. Physical, short native and paired long-record outcomes remain separate requirements.",
+  "formal_training_completed": true,
+  "optimizer_success": true,
+  "independent_physics_passed": true,
+  "independent_physics_maximum": 0.024951200462632127,
+  "failed_independent_physical_components": 0,
+  "summation_by_parts_passed": true,
+  "native_20us_checks_passed": false,
+  "native_20us_maximum_relative_l2": 0.09514221601921596,
+  "complete_5ms_cases": 20,
+  "same_grid_baseline_cases": 20,
+  "long_comparison_passes": 0,
+  "improved_case_maximum_comparisons": 20,
+  "improved_receiver_comparisons": 160,
+  "receiver_comparisons": 160,
+  "vector_difference_range": [
+    0.15007338209456775,
+    1.0571007682709108
+  ],
+  "case_maximum_change_percentage_points": [
+    -0.6279596577799418,
+    -0.11417542047780505
+  ],
+  "converged_long_reference": false,
+  "native_nonlinear_5ms_matrix_verified": false,
+  "accepted_for_offline_release": false,
+  "default_weights_changed": false,
+  "scientific_accuracy_certified": false,
+  "evidence_sha256": {
+    "training/v10/summary.json": "0c453e7aba4419ac518790e020943637d0bf4e8b23c43bab63a26e13d17c22e4",
+    "diagnostics/physics-validation-v10-paired.json": "388a6168dd557c7ec8dd86616ddde20fa8f037144d286e04679f00e48a7cdfe6",
+    "diagnostics/native-nonlinear-20us-v10.json": "84607e68d1cda620de3a08245e089fbb42d4b1807dd9a0ef6bb2892bd5a9265a",
+    "candidate-matrix20-v10/summary.json": "592fd6db94aea9ddec9a717d008ac9205b27eaac7f7c53ccd8754386502b43b4",
+    "candidate-matrix20-v10-untrained/summary.json": "6b3607f050f9c371625e78cb48dd7eb75d58aaebfcd6e8a079a2c5bd4b758d80",
+    "diagnostics/v10-same-grid-training.json": "63c289f81b508cf30c7c692fd8aa26136fc9b16eef5bca3fc02872b124b4fd85",
+    "diagnostics/spatial-resolution-v10.json": "a20fd70b3300c1c79ef9bffce07273829597b235c2c127a2f57270078fdbaa90",
+    "diagnostics/quartic-field-coverage-v10.json": "8ed6f699783fe3216ea8a42b2527919dae2f3b13ce4d9783d512f0f81dc3e6ce"
+  }
+}

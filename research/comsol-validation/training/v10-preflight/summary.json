@@ -1,0 +1,109 @@
+{
+  "schema": "workai.comsol_training_summary.v1",
+  "weights_sha256": "45358b794d56f5e59b4f637c9d63afe81330b5025443554b9c619eb7a8712e15",
+  "candidate_degree": 6,
+  "candidate_h_mm": 1.6,
+  "actual_comsol_development_jobs": [
+    "comsol-e301253e89bc48fcbf3f7fde4fce4d18",
+    "comsol-7dad39c427024efbad336549f45d2b78"
+  ],
+  "training_mode_indices": [
+    5,
+    11,
+    20,
+    22,
+    25,
+    28,
+    29
+  ],
+  "training_initial_frequency_error_norm_hz": 240.57862668528995,
+  "training_final_frequency_error_norm_hz": 238.13087317208607,
+  "optimizer_success": true,
+  "feasibility_restoration": {
+    "method": "offline parameter backtracking toward the physically verified baseline",
+    "training_limit": 0.025,
+    "target_with_margin": 0.024975,
+    "trials": [
+      {
+        "scale": 1.0,
+        "maximum_training_residual": 0.02499999848919547
+      },
+      {
+        "scale": 0.999,
+        "maximum_training_residual": 0.02497499865860314
+      }
+    ],
+    "validation_used_for_selection": false,
+    "inference_correction": false
+  },
+  "polynomial_consistency_order": 2,
+  "summation_by_parts_enforced": true,
+  "summation_by_parts_final": {
+    "identity": "W D + D^T W = diag(-1,0,...,0,1)",
+    "maximum_absolute_residual": 1.879624538855917e-14,
+    "absolute_limit": 2e-12,
+    "passed": true,
+    "scope": "Discrete integration by parts for all nodal fields, not a waveform accuracy certificate"
+  },
+  "physics_maximum_displacement_polynomial_degree": 4,
+  "physics_polynomial_degree_mix": "alternating complete six-family cubic/quartic blocks",
+  "parameter_bounds": [
+    -1.0,
+    1.0
+  ],
+  "dominant_phase_mode_index": 5,
+  "dominant_phase_residual_multiplier": 10.0,
+  "dominant_initial_frequency_error_hz": 48.6600717586698,
+  "dominant_final_frequency_error_hz": 48.244730390491895,
+  "dominant_unmodified_parent_frequency_error_hz": 48.66007175887353,
+  "initial_physics_feasibility_restoration": null,
+  "material_energy_coefficients_changed": false,
+  "transient_test_waveforms_used_for_training": false,
+  "nonlinear_longitudinal_transverse_physics_in_loss": true,
+  "physics_training_passed": true,
+  "hard_training_limit": 0.025,
+  "hard_training_limit_satisfied": true,
+  "physics_training_maxima": {
+    "momentum_interior": 0.006565993974725657,
+    "momentum_boundary": 0.02497499865860314,
+    "traction": 0.00017042200293989216,
+    "strain_energy": 9.358581024744751e-05,
+    "internal_power": 0.0014882199511597274
+  },
+  "physics_validation_passed": true,
+  "physics_validation_maxima": {
+    "momentum_interior": 0.0037069623070903725,
+    "momentum_boundary": 0.024400992528141725,
+    "traction": 0.00011074659486816947,
+    "strain_energy": 1.7376744805558402e-05,
+    "internal_power": 0.000189207908327096
+  },
+  "finite_rigid_motion_checks_passed": true,
+  "rigid_motion_maxima": {
+    "force_l2_N": 4.649975626152621e-10,
+    "absolute_energy_J": 6.304519503090905e-28,
+    "strain_norm": 1.3371306072740634e-14,
+    "absolute_J_minus_one": 4.218847493575595e-15
+  },
+  "reference_long_phase_converged": false,
+  "accepted_for_offline_release": false,
+  "long_record_accuracy_certified": false,
+  "scope": "P6 graph filter research candidate for the fixed-end 8 x 3 x 1.5 mm aluminum plate with h=1.6 mm; not a general geometry calibration",
+  "files_sha256": {
+    "history.json": "d839090739d7336c6dcf7bdc0d8b0596956d56cccc6663b94c4616ad5fce5a20",
+    "rigid-final.json": "d94302328b01014d7d18ba963dcab095653208b01972188515a5a980aa79e572",
+    "physics-training-patches.npz": "e876d1eeb113acd62de0eff615585da7b6e13fc2e30753e3d0ec7d6007365acd",
+    "config.json": "e8cefe7feb80ed75e506a10b4a6c52dba718987cc28b319ae83257e87990cc90",
+    "candidate-weights.npz": "45358b794d56f5e59b4f637c9d63afe81330b5025443554b9c619eb7a8712e15",
+    "physics-training.json": "8e4bcc5aac19aab7b93b36c63fff32aa938137daca888b8f26661f70849b7b6a",
+    "physics-validation-patches.npz": "38c951d6112b6a88301f5ca34d2c29406f4d05e8db4f095ad8930cfba3dd3646",
+    "rigid-parent.json": "2ff23d49d2b5294fade4cd50cf2aac9334773779b868ee7220cf9ba654853f98",
+    "frequencies.csv": "af70d742daa6a9e3d62c2a53e200d1e4d471f7ac1f8d5306b27b987ae4350cf9",
+    "physics-validation.json": "a8a76b3697645eb0cc76c390e2c8bc40e5c76274ae15f32af4a1f324ea2d4838",
+    "rigid-initial.json": "a230cb2fef3dcb2132cbcf70a6266ee29a85fd09912076b02adfa7bd4e15a9fa",
+    "physics-initial.json": "f7857c0421c45f22bbdcc5e7cc10d1a43319b4e922c8c9166c7cc3ac412188a5",
+    "training.json": "61d561ca05efb12ddfc83e31549a6d79c2c3f203b457bec388c1db04d41e9985",
+    "source_snapshot/nonlinear_constraints.py": "e7a3e7f558df040cc4a35c705398156e15b6b2b895a45ffd1f333304e3b7e7cd",
+    "source_snapshot/modal_calibration.py": "e64fec479f028156c5a71a98e930d863737c8a712585e73d60995af602db24af"
+  }
+}

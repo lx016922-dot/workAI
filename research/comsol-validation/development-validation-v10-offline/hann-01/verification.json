@@ -1,0 +1,75 @@
+{
+  "schema": "workai.offline_fresh_prediction_verification.v1",
+  "case_id": "hann-01",
+  "frames": 25001,
+  "duration_us": 5000,
+  "controls": [
+    "linear",
+    "stvk",
+    "full"
+  ],
+  "receivers": 8,
+  "original_probe_blocks_verified_per_run": 98,
+  "full_time_grid_matches_frozen_internal_step_formula": true,
+  "fresh_prediction_completed": true,
+  "code_loaded_from_independent_directory": true,
+  "runtime_kind": "Linux portable build using release-pinned dependencies",
+  "release_archive_downloaded_for_this_check": false,
+  "runtime_manifest_sha256": "cb68c9e8577dd91c6b7dbd36982686a01000a3495b6e2844007ee04adb9d35bc",
+  "runtime_manifest_files_verified": 7998,
+  "network_required": false,
+  "runtime": {
+    "python": "3.12.8",
+    "numpy": "2.2.6",
+    "scipy": "1.15.3",
+    "numba": "0.63.1"
+  },
+  "elapsed_s": 4791.159286422,
+  "weights_sha256": "e2f0f2cfefea2ea2428a1771426f4959bb27c00875283b1003303a8747177bd2",
+  "ci_workflow_run_url": "https://github.com/lx016922-dot/workAI/actions/runs/40170451669",
+  "ci_audit_sha256": "592fd6db94aea9ddec9a717d008ac9205b27eaac7f7c53ccd8754386502b43b4",
+  "ci_identity_sha256": "67afd95f1affb755a459dd96d50d5566bd1cea87bb35b70ba0874b9f4c508ca0",
+  "ci_metrics_sha256": "ca792a8441fc3098a5e9e3cd5095edf5466fba0a4cab8c89d0d9c216d1c5b4aa",
+  "relative_roundoff_tolerance": 1e-07,
+  "displacement_rms_absolute_floor_m": 1e-23,
+  "energy_rms_absolute_floor_j": 1e-23,
+  "all_72_displacement_component_checks_passed": true,
+  "maximum_component_difference_rms_m": 0.0,
+  "maximum_component_relative_l2": 0.0,
+  "weak_component_count_at_scientific_1e_13_m_floor": 12,
+  "maximum_nonweak_component_relative_l2": 0.0,
+  "all_energy_columns_match": true,
+  "maximum_energy_column_relative_l2": 0.0,
+  "original_scientific_verdicts_and_weak_signal_classifications_match": true,
+  "energy_within_1_percent": true,
+  "linear_comparison_passed": false,
+  "scientific_accuracy_certified": false,
+  "scope": "Fresh offline neural rollout compared with the audited CI rollout; runtime reproducibility is separate from COMSOL accuracy.",
+  "verification_source_sha256": "3ec5bfe8114e981d45ebd194d0679e29ab816f892f40bee28e9ce58a5dede728",
+  "retained_files": {
+    "comsol-modal-reference.npz": {
+      "bytes": 4654736,
+      "sha256": "e0a78b9cf91e0b1c9519d5bb7d88f6fce0ec39496385d46d3772017527d44a2d"
+    },
+    "identity.json": {
+      "bytes": 4718,
+      "sha256": "67afd95f1affb755a459dd96d50d5566bd1cea87bb35b70ba0874b9f4c508ca0"
+    },
+    "metrics.json": {
+      "bytes": 96614,
+      "sha256": "f7fd0911ef034b0f50594adbd8c56d9fafb29784287a9d34c4fff621cf7c7121"
+    },
+    "prediction.json": {
+      "bytes": 18837,
+      "sha256": "684359a1adee3a34ecc490f1289fb5a8aad67259a4d519a54c07eb935e50cbfd"
+    },
+    "progress.json": {
+      "bytes": 144,
+      "sha256": "405d1d816794ac8e3c8e495c0e7d7e80826a57b465d0992fba9d7b5ecd1403ed"
+    },
+    "traces.npz": {
+      "bytes": 15459692,
+      "sha256": "2250be353d3fba76c226c2a1f8a6b10a2b0b313f1aa3d1298bc5a68ac8267cdd"
+    }
+  }
+}

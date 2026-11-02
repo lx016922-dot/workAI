@@ -1,0 +1,19 @@
+{
+  "schema": "workai.training_unit_validation.v1",
+  "command": "python -m unittest tests.test_nonlinear_constraints tests.test_comsol_modal_response",
+  "tests": 11,
+  "result": "passed",
+  "scope": "P6 modal tangent matches actual neural linear force; arbitrary-field SBP, finite rigid motion, complete nonlinear equations and quartic-field sensitivity; not a waveform accuracy certificate",
+  "source_sha256": {
+    "graphwave/modal_calibration.py": "e64fec479f028156c5a71a98e930d863737c8a712585e73d60995af602db24af",
+    "graphwave/nonlinear_constraints.py": "e7a3e7f558df040cc4a35c705398156e15b6b2b895a45ffd1f333304e3b7e7cd",
+    "tests/test_nonlinear_constraints.py": "0faae929b06b8ef49df4721e1b3b11f0790fa3fde49f25866050c201446cf2d8"
+  },
+  "runtime": {
+    "python": "3.12.14",
+    "numpy": "2.3.5",
+    "scipy": "1.17.0",
+    "numba": "0.63.1"
+  },
+  "scientific_accuracy_certified": false
+}

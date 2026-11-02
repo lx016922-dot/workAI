@@ -1,0 +1,83 @@
+{
+  "schema": "workai.spatial_discretization_probe.v1",
+  "reference_identity": {
+    "job_id": "comsol-7dad39c427024efbad336549f45d2b78",
+    "source_sha256": "65e5633102be85ab21b670386c880dd9e75816634013b60e4a66c43e7f5ee529",
+    "scene_sha256": "6dd82cf9dea1ef8bb7f1f6a2682f88285626786bc6f5742cb87701af9a8d08b5",
+    "parameters_sha256": "51da08755b5254f39b81342246eda7bf2411fb67d14baf2387a7a536f8be572b",
+    "purpose": "reference_convergence",
+    "uses_test_data_for_training": false
+  },
+  "scope": "Analytic GLL discretization diagnosis using only archived development eigenpairs; no transient test records or accuracy certification",
+  "rows": [
+    {
+      "degree": 5,
+      "h_mm": 1.6,
+      "elements": 10,
+      "nodes": 1716,
+      "min_node_spacing_m": 0.00017620850705290115,
+      "subdivisions": 38,
+      "internal_step_us": 0.005263157894736842,
+      "dominant_difference_hz": 84.38179797216435,
+      "selected_difference_hz": [
+        84.38179797216435,
+        237.78133173112292,
+        219.24212043639272,
+        3.2753147579496726,
+        125.0050697484985,
+        19.38674388092477,
+        219.16004879993852
+      ],
+      "selected_error_norm_hz": 419.25090924191664,
+      "minimum_selected_mac": 0.9999903376407888,
+      "sbp_c2_free_parameters": 2,
+      "seconds": 1.4240279420009756
+    },
+    {
+      "degree": 6,
+      "h_mm": 2.5,
+      "elements": 8,
+      "nodes": 2275,
+      "min_node_spacing_m": 0.00012733207779107541,
+      "subdivisions": 53,
+      "internal_step_us": 0.0037735849056603774,
+      "dominant_difference_hz": 65.26051995225134,
+      "selected_difference_hz": [
+        65.26051995225134,
+        183.31256649136776,
+        166.77355974284,
+        1.3315693158656359,
+        95.68958052562084,
+        13.248902801657096,
+        167.2386664059013
+      ],
+      "selected_error_norm_hz": 320.90251883098904,
+      "minimum_selected_mac": 0.9999944065096918,
+      "sbp_c2_free_parameters": 4,
+      "seconds": 3.2102621019985236
+    },
+    {
+      "degree": 6,
+      "h_mm": 1.6,
+      "elements": 10,
+      "nodes": 2821,
+      "min_node_spacing_m": 0.00012733207779107541,
+      "subdivisions": 53,
+      "internal_step_us": 0.0037735849056603774,
+      "dominant_difference_hz": 48.660071757709375,
+      "selected_difference_hz": [
+        48.660071757709375,
+        137.0910678653745,
+        125.99322303780355,
+        0.7135779641103,
+        72.2530786790885,
+        10.024136649095453,
+        124.58137905411422
+      ],
+      "selected_error_norm_hz": 240.57862668593378,
+      "minimum_selected_mac": 0.9999970465226083,
+      "sbp_c2_free_parameters": 4,
+      "seconds": 3.7888461930015183
+    }
+  ]
+}
