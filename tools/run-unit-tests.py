@@ -25,7 +25,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 GROUPS = {
-    'core': ['physics.test_signals', 'physics.test_scene', 'dispersion.test_lamb', 'dispersion.test_analysis', 'coarsegraph.test_comsol'],
+    'core': ['physics.test_signals', 'physics.test_scene', 'physics.test_materials', 'dispersion.test_lamb', 'dispersion.test_analysis', 'coarsegraph.test_comsol'],
     'solvers': ['solid.test_excitation', 'solid.test_physics', 'spectral2d.test_plane_strain', 'spectral3d.test_curved', 'spectral3d.test_excitation',
                 'spectral3d.test_implicit', 'spectral3d.test_physics', 'waveguide.test_safe', 'waveguide.test_field', 'sweep.test_sweep', 'sweep.test_convergence'],
     'networks': ['graphnet.test_graphnet', 'coarsegraph.test_coarse', 'offline.test_long_record', 'offline.test_network_v2', 'offline.test_preview'],

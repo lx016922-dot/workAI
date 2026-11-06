@@ -28,6 +28,9 @@ def scope(scene):
         if kind == 'pipe' and path in ('geometry.width_mm', 'geometry.thickness_mm'): continue
         value = _get(scene, path)
         if isinstance(value, (int, float)) and not lo <= value <= hi: out.append(f'{label} {value:g} {unit}（原验收 {lo:g}–{hi:g}）')
+    from physics.materials import is_custom
+    if is_custom(scene.get('material')):
+        m = scene['material']; out.append('材料：' + ('自定义应变能 ' if m.get('model') == 'energy' else 'Murnaghan 自定义常数 ') + str(m.get('name') or ''))
     if scene.get('schema') == V2:
         extra = len(scene.get('sources') or []); faces = {s.get('face') for s in [scene.get('source', {}), *(scene.get('sources') or [])]}
         if extra: out.append(f'{extra + 1} 个激励源')
@@ -36,6 +39,19 @@ def scope(scene):
         signals = {(s.get('signal') or {}).get('type', 'tone_burst') for s in [scene.get('source', {}), *(scene.get('sources') or [])]}
         if signals - {'tone_burst'}: out.append('非猝发音信号')
     return out
+
+
+def _material(material):
+    """Constants, wave speeds, checks and reference stresses of the scene material, or the reason it is invalid."""
+    from physics.materials import describe, is_custom, validate_material
+    try:
+        normalized = validate_material(material) if is_custom(material) else material
+        out = describe(normalized); out['ok'] = True
+        out['engine'] = ('物理 AI：求导滤波器与时间层沿用训练结果，能量层使用该材料的二阶、三阶弹性常数。精度需用谱元参考或 COMSOL 逐例核对。'
+                         if is_custom(material) else '物理 AI：使用训练好的能量层（该多晶铝即训练材料）。')
+        return out
+    except (ValueError, KeyError, TypeError, ZeroDivisionError, OverflowError, np.linalg.LinAlgError) as error:
+        return {'ok': False, 'error': str(error)}
 
 
 def _signals(scene):
@@ -80,14 +96,14 @@ def _mesh(scene, degree):
 
 def preview(body, data_directory=None):
     """{'ok', 'errors', 'scope', 'signals', 'mesh', 'resolution', 'record'} for an editor scene; errors never raise."""
-    out = {'ok': False, 'errors': [], 'warnings': [], 'scope': [], 'signals': [], 'mesh': None, 'resolution': [], 'record': None}
+    out = {'ok': False, 'errors': [], 'warnings': [], 'scope': [], 'signals': [], 'mesh': None, 'resolution': [], 'record': None, 'material': None}
     if not isinstance(body, dict) or not isinstance(body.get('scene'), dict):
         out['errors'].append('需要场景对象。'); return out
     try:
         request = validate_request(copy.deepcopy(body)); scene = request['scene']; out['ok'] = True
     except (ValueError, KeyError, TypeError) as error:
         out['errors'].append(str(error)); scene = None
-    raw = scene or body['scene']; out['scope'] = scope(raw)
+    raw = scene or body['scene']; out['scope'] = scope(raw); out['material'] = _material(raw.get('material'))
     if raw.get('schema') == V2:
         try:
             out['signals'] = _signals(scene or raw)
@@ -99,7 +115,8 @@ def preview(body, data_directory=None):
             out['mesh'] = _mesh(scene, degree)
         except (ValueError, KeyError) as error:
             out['ok'] = False; out['errors'].append(f'网格：{error}')
-        m = scene['material']; shear = math.sqrt(m['mu_pa'] / m['rho_kg_m3']); spacing = scene['numerics']['h_mm'] / degree
+        from physics.materials import slowest_shear_speed
+        shear = slowest_shear_speed(scene['material']); spacing = scene['numerics']['h_mm'] / degree
         for row in out['signals']:
             nodes = shear / (2 * row['band_30db_mhz'] * 1e6) / (spacing * 1e-3)
             out['resolution'].append({'name': row['name'], 'band_30db_mhz': row['band_30db_mhz'], 'nodes_per_2f_shear_wavelength': nodes})

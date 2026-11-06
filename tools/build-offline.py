@@ -38,7 +38,7 @@ files = {'graphwave': ['__init__.py', 'inference.py', 'predict.py', 'buffered_in
          'solid': ['__init__.py', 'schema.py'],
          # Version-2 input layer of the frozen network and the excitation/boundary definitions it reads.
          'graphnet': ['__init__.py', 'model.py', 'inputs.py', 'recurrence.py', 'predict.py', 'rollout.py'],
-         'physics': ['__init__.py', 'scene.py', 'signals.py', 'loads.py', 'boundaries.py']}
+         'physics': ['__init__.py', 'scene.py', 'signals.py', 'loads.py', 'boundaries.py', 'materials.py']}
 for module, names in files.items():
     (target / module).mkdir()
     for name in names:

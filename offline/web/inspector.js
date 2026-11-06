@@ -4,7 +4,9 @@ import {
   getPath, setPath, sourceAt, setSignalType, setProfileType, setSourceFace, inwardNormal, parseSamples, extent,
 } from './scene-model.js';
 
-export const escapeHtml = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+import { escapeHtml } from './inspector-util.js';
+import { materialMarkup, bindMaterial } from './material-form.js';
+export { escapeHtml };
 const options = (entries, current) => Object.entries(entries).map(([k, v]) => `<option value="${k}" ${String(current) === String(k) ? 'selected' : ''}>${escapeHtml(v)}</option>`).join('');
 
 function num(label, path, value, { unit = '', min, max, step = 'any', hint = '', scale = 1 } = {}) {
@@ -37,13 +39,6 @@ function geometryForm(scene) {
   if (g.kind === 'notch') body += num('缺口中心 X', `${p}.notch_x_mm`, g.notch_x_mm, { unit: 'mm' }) + num('缺口宽度', `${p}.notch_width_mm`, g.notch_width_mm, { unit: 'mm' }) + num('缺口深度', `${p}.notch_depth_mm`, g.notch_depth_mm, { unit: 'mm' });
   return section('几何', body, g.kind === 'pipe' ? '管轴为 X，截面中心在 Y = Z = 0；管只能在 X 端面加载。' : '坐标原点在板的一角，X 为长度方向，Z 为厚度方向。') +
     section('名称', text('场景名称', 'name', scene.name, 100));
-}
-
-function materialForm(scene) {
-  const m = scene.material, rows = [['ρ₀', m.rho_kg_m3, 'kg/m³'], ['λ', m.lambda_pa / 1e9, 'GPa'], ['μ', m.mu_pa / 1e9, 'GPa'], ['l', m.l_pa / 1e9, 'GPa'], ['m', m.m_pa / 1e9, 'GPa'], ['n', m.n_pa / 1e9, 'GPa']];
-  return `<section class="wb-section"><h3>材料：多晶铝（Murnaghan 三阶）</h3><table class="wb-table">${rows.map(([k, v, u]) => `<tr><th>${k}</th><td>${(+v).toPrecision(4)}</td><td>${u}</td></tr>`).join('')}</table>
-    <p class="wb-note">物理 AI 网络学到的是这一种铝的能量系数，材料常数不能修改。每次计算同时给出三组响应：线性、StVK（只含几何非线性）和完整 Murnaghan，并由此分解出几何非线性增量和材料非线性增量，在结果页切换。</p>
-    <p class="wb-note">本构：W = ½(λ+2μ)i₁² − 2μi₂ + ⅓(l+2m)i₁³ − 2m·i₁i₂ + n·i₃，Green–Lagrange 应变不变量，P = F·S。</p></section>`;
 }
 
 function signalForm(src, p) {
@@ -119,10 +114,10 @@ function studyForm(scene, degree) {
 }
 
 /** HTML for the selected item. */
-export function inspectorMarkup(scene, selection, degree) {
+export function inspectorMarkup(scene, selection, degree, context = {}) {
   const [kind, raw] = selection.split(':'), index = Number(raw);
   if (kind === 'geometry') return geometryForm(scene);
-  if (kind === 'material') return materialForm(scene);
+  if (kind === 'material') return materialMarkup(scene, context.materials);
   if (kind === 'source') return sourceForm(scene, index);
   if (kind === 'boundary') return boundaryForm(scene, index);
   if (kind === 'receiver') return receiverForm(scene, index);
@@ -159,6 +154,7 @@ export function bindInspector(root, scene, state, onChange) {
       } catch (error) { onChange({ error }); }
     });
   });
+  if (state.selection === 'material') bindMaterial(root, scene, state.materials || {}, onChange);
   root.querySelectorAll('select[data-action="degree"]').forEach(el => el.addEventListener('change', () => { state.degree = Number(el.value); onChange('value'); }));
   root.querySelectorAll('button[data-action]').forEach(el => el.addEventListener('click', () => {
     const action = el.dataset.action;

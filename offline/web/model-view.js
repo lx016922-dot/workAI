@@ -103,6 +103,9 @@ export function drawScene(canvas, scene, view) {
     if (g.kind === 'notch') drawNotch(ctx, project, g, size, facing);
   }
 
+  // fibre direction of an anisotropic strain-energy material, drawn on the top face
+  if (scene.material?.model === 'energy' && g.kind !== 'pipe' && facing('zmax')) drawFibres(ctx, project, min, size, scene.material.fiber_angle_deg || 0);
+
   // absorbing layers: translucent gradient slabs
   (scene.boundaries || []).forEach((b, i) => {
     if (b.type !== 'absorbing') return;
@@ -150,6 +153,30 @@ export function drawScene(canvas, scene, view) {
     ctx.fillText(`显示放大：${['X', 'Y', 'Z'].map((a, i) => P.scale[i] > 1.0001 ? `${a} ×${P.scale[i].toFixed(1)}` : '').filter(Boolean).join('  ')}`, width - 170, height - 14);
   }
   return picks;
+}
+
+/** Line segments of direction angle θ (deg, from x about z) clipped to the top rectangle. */
+export function fibreSegments(min, size, angleDeg, count = 9) {
+  const t = angleDeg * Math.PI / 180, d = [Math.cos(t), Math.sin(t)], n = [-d[1], d[0]], c = [min[0] + size[0] / 2, min[1] + size[1] / 2];
+  const half = (Math.abs(size[0] * n[0]) + Math.abs(size[1] * n[1])) / 2, out = [];  // extent across the fibres
+  for (let k = 0; k < count; k++) {
+    const offset = (k - (count - 1) / 2) / (count - 1) * 2 * half * .92, p = [c[0] + n[0] * offset, c[1] + n[1] * offset];
+    let lo = -Infinity, hi = Infinity;
+    for (const axis of [0, 1]) {
+      const a = min[axis], b = min[axis] + size[axis];
+      if (Math.abs(d[axis]) < 1e-12) { if (p[axis] < a || p[axis] > b) { lo = 1; hi = 0; } continue; }
+      const s0 = (a - p[axis]) / d[axis], s1 = (b - p[axis]) / d[axis]; lo = Math.max(lo, Math.min(s0, s1)); hi = Math.min(hi, Math.max(s0, s1));
+    }
+    if (hi > lo) out.push([[p[0] + d[0] * lo, p[1] + d[1] * lo], [p[0] + d[0] * hi, p[1] + d[1] * hi]]);
+  }
+  return out;
+}
+
+function drawFibres(ctx, project, min, size, angle) {
+  const z = min[2] + size[2];
+  ctx.strokeStyle = 'rgba(30,30,30,.32)'; ctx.lineWidth = 1.2; ctx.setLineDash([7, 4]); ctx.beginPath();
+  for (const [a, b] of fibreSegments(min, size, angle, 11)) { const p = project([a[0], a[1], z]), q = project([b[0], b[1], z]); ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]); }
+  ctx.stroke(); ctx.setLineDash([]);
 }
 
 function drawGrid(ctx, project, face, min, size, grid) {

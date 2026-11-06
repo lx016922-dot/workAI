@@ -49,6 +49,7 @@ def internal_force(u, elements, derivative, sizes, area_weight, constants, law):
 
 
 def solve(scene, mesh, excitation, receivers, cfl=.3, keep_fields=False, callback=None):
+    from physics.materials import require_isotropic; require_isotropic(scene['material'], '二维平面应变谱元')
     """Per-unit-width plane-strain transient; `receivers` are dicts with point_mm and direction."""
     if not .05 <= cfl <= .35: raise ValueError('Use CFL 0.05–0.35.')
     start = time.monotonic(); material = scene['material']; mass = mesh['mass']

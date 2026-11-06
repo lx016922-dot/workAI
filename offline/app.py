@@ -179,6 +179,9 @@ def handler(application):
                     return self.reply(200, {'model': application.info, 'token': application.token, 'data_directory': str(application.data)})
                 if url.path == '/api/templates':
                     return self.reply(200, templates())
+                if url.path == '/api/materials':
+                    from physics.materials import presets
+                    return self.reply(200, presets())
                 if url.path == '/api/jobs':
                     rows = [application.status(p.name) for p in application.jobs.iterdir() if re.fullmatch(r'local-[a-f0-9]{32}', p.name)]
                     return self.reply(200, sorted(rows, key=lambda x: x['started_at_utc'], reverse=True))

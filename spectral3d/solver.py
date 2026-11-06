@@ -73,14 +73,21 @@ def internal_force(u,elements,derivative,sizes,volume_weight,constants,law):
 def solve(scene,mesh,cfl=.3,keep_fields=False,callback=None,excitation=None):
     if not .05<=cfl<=.35: raise ValueError('Use CFL 0.05–0.35.')
     start=time.monotonic();material=scene['material'];mass=mesh['mass']
-    constants=np.array([material[k] for k in ['lambda_pa','mu_pa','l_pa','m_pa','n_pa']])
     law={'linear':0,'stvk':1,'murnaghan':2}[scene['constitutive']]
     curved=str(mesh.get('mapping_kind',''))=='isoparametric'
     force_function=internal_force;geometry=mesh.get('size')
     if curved:
         from .curved_solver import internal_force as force_function
         geometry=mesh['inverse_jacobian']
-    speed=math.sqrt((material['lambda_pa']+2*material['mu_pa'])/material['rho_kg_m3'])
+    from physics.materials import is_custom,tensors,fastest_speed
+    if is_custom(material) and material['model']=='energy':
+        # Any strain-energy material: its second- and third-order constants (physics.materials).
+        from . import anisotropic
+        c2,c3,_=tensors(material);material_args=(np.ascontiguousarray(c2),np.ascontiguousarray(c3))
+        force_function=anisotropic.curved_internal_force if curved else anisotropic.internal_force;speed=fastest_speed(material)
+    else:
+        material_args=(np.array([material[k] for k in ['lambda_pa','mu_pa','l_pa','m_pa','n_pa']]),)
+        speed=math.sqrt((material['lambda_pa']+2*material['mu_pa'])/material['rho_kg_m3'])
     sample=scene['acquisition']['sample_step_us']*1e-6;subdivisions=math.ceil(sample/(cfl*mesh['min_node_spacing']/(speed*1.05)));dt=sample/subdivisions
     frames=round(scene['acquisition']['duration_us']/scene['acquisition']['sample_step_us'])+1;steps=(frames-1)*subdivisions
     if steps>100000 or steps*mesh['elements'].size>2_000_000_000: raise ValueError('Spectral reference compute budget exceeded.')
@@ -98,7 +105,7 @@ def solve(scene,mesh,cfl=.3,keep_fields=False,callback=None,excitation=None):
     u=np.zeros((len(mass),3));v=u.copy();acc=u.copy();previous_ext=u.copy();work=0.;dissipated=0.;energies=[];max_strain=0.;min_j=1.
     for step in range(1,steps+1):
         next_u=u+dt*v+.5*dt*dt*acc;next_u[constrained]=0
-        fint,energy,strain,jac=force_function(next_u,mesh['elements'],mesh['derivative'],geometry,mesh['volume_weight'],constants,law)
+        fint,energy,strain,jac=force_function(next_u,mesh['elements'],mesh['derivative'],geometry,mesh['volume_weight'],*material_args,law)
         if not np.isfinite(energy) or strain>.001 or jac<=0: raise ValueError(f'Elastic guard failed: strain={strain}, J={jac}')
         max_strain=max(max_strain,strain);min_j=min(min_j,jac)
         ext=loads[0][0]*values[0][step]

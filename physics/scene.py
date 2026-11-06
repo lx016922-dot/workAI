@@ -53,7 +53,8 @@ def extent_mm(geometry, axis):
     return geometry['width_mm'] if axis == 1 else geometry['thickness_mm']
 
 def _shear_speed(material):
-    return math.sqrt(material['mu_pa'] / material['rho_kg_m3'])
+    from .materials import slowest_shear_speed
+    return slowest_shear_speed(material)
 
 def _validate_source(raw, core):
     """Validate one source (primary or extra) with the version-1 rules plus signal/profile."""
@@ -62,6 +63,10 @@ def _validate_source(raw, core):
     require(name is None or (isinstance(name, str) and 1 <= len(name) <= 60), '激励 name 需为 1–60 个字符。')
     tone = signal is None or (isinstance(signal, dict) and signal.get('type') == 'tone_burst')
     probe = copy.deepcopy(core); probe['schema'] = V1; probe.pop('sources', None); probe.pop('boundaries', None)
+    from .materials import is_custom
+    if is_custom(probe['material']):
+        from solid.schema import MATERIAL
+        probe['material'] = dict(MATERIAL)  # source rules only; the material's own wave speeds are checked below
     probe['source'] = dict(stripped, cycles=stripped.get('cycles') if tone else 1)
     validated = validate_v1(probe)['source']
     if not tone: validated['cycles'] = number(stripped.get('cycles'), 1, 20, 'cycles')
@@ -134,7 +139,13 @@ def validate_scene(value):
     primary = s['source'] if isinstance(s.get('source'), dict) else {}
     s['source'] = {k: v for k, v in primary.items() if k not in ('signal', 'profile', 'name')}; s['schema'] = V1
     if isinstance(primary.get('signal'), dict) and primary['signal'].get('type') != 'tone_burst': s['source']['cycles'] = 1
+    from .materials import is_custom, validate_material
+    custom = s.get('material') if is_custom(s.get('material')) else None
+    if custom is not None:  # the version-1 core checks everything else against the reference material
+        from solid.schema import MATERIAL
+        s['material'] = dict(MATERIAL)
     core = validate_v1(s); core['schema'] = V2
+    if custom is not None: core['material'] = validate_material(custom)
     core['source'] = _validate_source(primary, core)
     core['sources'] = [_validate_source(src, core) for src in extra_sources]
     names = [src.get('name') for src in core['sources']]

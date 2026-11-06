@@ -20,6 +20,7 @@ from spectral3d.mesh import interpolation
 from graphwave.inference import inverse_mapping
 from .inputs import build, signal_table
 from .recurrence import three_segments
+from .model import energy_layer, speed_bound
 
 STATE = ('positions', 'velocities', 'accelerations', 'externals', 'works', 'dissipations', 'potentials', 'strains', 'jacobians')
 
@@ -59,10 +60,11 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
     composition = np.asarray(model['temporal']['weights'], dtype=np.float64)
     require(composition.shape == (3,) and np.isfinite(composition).all() and abs(composition.sum() - 1) <= 1e-13 and abs(np.sum(composition ** 3)) <= 1e-13, '时间组合权重无效。')
     cfl = scene['numerics']['cfl']; require(.05 <= cfl <= .3, '网络层间距的验证范围为 CFL 0.05–0.3。')
-    sample_s = sample * 1e-6; subdivisions = int(math.ceil(sample_s / (cfl * float(mesh['min_node_spacing']) / 10000.))); dt = sample_s / subdivisions
+    sample_s = sample * 1e-6; subdivisions = int(math.ceil(sample_s / (cfl * float(mesh['min_node_spacing']) / speed_bound(scene)))); dt = sample_s / subdivisions
     total_steps = (frames - 1) * subdivisions; require(total_steps <= 20000000, '长记录超过 2000 万层，请增大单元尺寸。')
     chunk_frames = max(2, min(256, 20000 // subdivisions))
     inputs = build(scene, mesh); damped = inputs['alpha'] is not None; alpha = inputs['alpha'] if damped else np.zeros(len(mesh['mass']))
+    quadratic, cubic, layer = energy_layer(scene, model)
     inverse = inverse_mapping(mesh); receivers = [interpolation(mesh, r['point_mm']) for r in scene['receivers']]
     sources = source_hashes()
     fingerprint = hashlib.sha256(json.dumps({'identity': identity, 'sources': sources, 'scene': scene, 'degree': int(mesh['degree']), 'h_mm': float(mesh['h_mm'])}, sort_keys=True).encode()).hexdigest()
@@ -85,7 +87,7 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
                     'degree': int(mesh['degree']), 'layer_step_us': dt * 1e6, 'time_order': 4, 'composition': composition.tolist(), 'fingerprint': fingerprint, 'identity': identity,
                     'execution_source_sha256': sources, 'mesh_sha256': digest(directory / 'mesh.npz'), 'input_layer': 'v2_multi_source', 'excitation': inputs['summary'],
                     'energy_columns': ['time_us', 'kinetic_j', 'strain_j', 'external_work_j', 'dissipated_j'], 'chunks': [], 'completed_frames': 0, 'elapsed_s': 0.,
-                    'raw_storage_upper_bound_bytes': estimate, 'numerical_correction': False, 'neural_forward_only': True}
+                    'raw_storage_upper_bound_bytes': estimate, 'numerical_correction': False, 'neural_forward_only': True, **layer}
     chunks_this_run = 0
     while next_frame < frames:
         last_frame = min(frames - 1, next_frame + chunk_frames - 1)
@@ -93,7 +95,7 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         stage_times = (np.arange(start_step, end_step)[:, None] + np.cumsum(composition)[None]) * dt * 1e6
         signals = signal_table(inputs, stage_times)
         fields, energies = three_segments(*(state[name] for name in STATE), mesh['elements'], weights['derivative_' + str(int(mesh['degree']))], inverse, mesh['volume_weight'], mesh['mass'],
-                                          inputs['loads'], inputs['free'], alpha, damped, weights['quadratic_tensor'], weights['cubic_tensor'], composition, dt, subdivisions,
+                                          inputs['loads'], inputs['free'], alpha, damped, quadratic, cubic, composition, dt, subdivisions,
                                           start_step, end_step, next_frame == 0, signals)
         probes = np.stack([np.stack([np.einsum('n,tnc->tc', w, f[:, ids]) for ids, w in receivers], 1) for f in fields], 2) if receivers else np.zeros((fields.shape[1], 0, 3, 3))
         path = directory / 'fields' / f'{next_frame:06d}.npz'

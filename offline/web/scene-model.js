@@ -130,10 +130,18 @@ export function geometrySummary(g) {
   return `${KIND_LABELS[g.kind]} ${g.length_mm} × ${g.width_mm} × ${g.thickness_mm} mm`;
 }
 
+export const materialKind = m => (m && m.model === 'energy' ? 'energy' : m && m.model === 'murnaghan' ? 'murnaghan' : 'reference');
+export function materialSummary(m) {
+  const kind = materialKind(m);
+  if (kind === 'reference') return '多晶铝 · Murnaghan 三阶（训练材料）';
+  if (kind === 'murnaghan') return `${m.name || 'Murnaghan'} · 各向同性 · ρ ${m.rho_kg_m3}`;
+  return `${m.name || '自定义应变能'} · W(E) · 纤维 ${m.fiber_angle_deg ?? 0}°`;
+}
+
 /** Model tree rows for the left panel: [{id, label, detail, group, removable}]. */
 export function tree(scene) {
   const rows = [{ id: 'geometry', group: 'model', label: '几何', detail: geometrySummary(scene.geometry) },
-    { id: 'material', group: 'model', label: '材料与本构', detail: '多晶铝 · Murnaghan 三阶' }];
+    { id: 'material', group: 'model', label: '材料与本构', detail: materialSummary(scene.material) }];
   rows.push({ id: 'sources', group: 'header', label: '激励源', detail: String(sourcesOf(scene).length), add: 'source' });
   sourcesOf(scene).forEach((s, i) => rows.push({ id: `source:${i}`, group: 'item', label: s.name || (i ? `激励 ${i + 1}` : '主激励'), detail: sourceSummary(s), removable: i > 0 }));
   rows.push({ id: 'boundaries', group: 'header', label: '边界条件', detail: String((scene.boundaries || []).length + (scene.boundary.fixed_face !== 'none' ? 1 : 0)), add: 'boundary' });

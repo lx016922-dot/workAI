@@ -51,7 +51,8 @@ def prepare_excitation(mesh, scene):
     mask, constraint_rows = build_constraints(points, scene['boundary']['fixed_face'], scene_v2.boundaries(scene))
     total = sum(force for force, _ in loads)
     require(not np.any(total[mask] != 0), '激励作用在固定或对称约束的位移分量上；请改变加载方向或边界类型。')
-    speed = math.sqrt((material['lambda_pa'] + 2 * material['mu_pa']) / material['rho_kg_m3'])
+    from physics.materials import is_custom, fastest_speed
+    speed = fastest_speed(material) if is_custom(material) else math.sqrt((material['lambda_pa'] + 2 * material['mu_pa']) / material['rho_kg_m3'])
     alpha, damping_rows = build_damping(points, scene_v2.boundaries(scene), speed)
     return {'loads': loads, 'constrained': mask, 'alpha': alpha, 'area_m2': sum(r['loaded_area_mm2'] for r in rows) * 1e-6,
             'summary': {'excitation_model': 'multi_source_v2', 'sources': rows, 'constraints': constraint_rows, 'damping': damping_rows}}

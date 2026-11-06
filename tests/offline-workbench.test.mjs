@@ -85,3 +85,21 @@ test('signal plots render the preview with f, 2f and band markers', () => {
   const html = signalsMarkup(preview, 1000); assert.match(html, /9\.5 个节点/); assert.equal((html.match(/<svg/g) || []).length, 2);
   assert.match(signalsMarkup({ signals: [], errors: ['bad'] }), /bad/);
 });
+
+test('material section: engineering constants, summaries and the derived panel', async () => {
+  const { tiFromEngineering, materialDerivedMarkup, materialMarkup } = await import('../offline/web/material-form.js');
+  const { materialKind, materialSummary } = await import('../offline/web/scene-model.js');
+  const C = tiFromEngineering({ E1: 135, E2: 9, G12: 5, nu12: .3, nu23: .45 });
+  assert.ok(Math.abs(C.C11 - 138.01115) < 1e-4 && Math.abs(C.C12 - 5.0185874) < 1e-6 && Math.abs(C.C22 - 11.467761) < 1e-5 && Math.abs(C.C23 - 5.260864) < 1e-5 && C.C55 === 5);
+  assert.throws(() => tiFromEngineering({ E1: 1, E2: 1, G12: 1, nu12: 0, nu23: 1 }));
+  assert.equal(materialKind(v1.material), 'reference'); assert.equal(materialKind({ model: 'energy' }), 'energy'); assert.equal(materialKind({ model: 'murnaghan' }), 'murnaghan');
+  assert.match(materialSummary({ model: 'energy', name: 'CFRP', fiber_angle_deg: 30 }), /CFRP.*30°/);
+  const energy = { model: 'energy', name: 'CFRP', rho_kg_m3: 1560, fiber_angle_deg: 0, energy: '0.5*C11*E11**2', parameters: { C11: 138 } };
+  const form = materialMarkup({ material: energy }, { cfrp_ud: { label: 'CFRP', material: energy } });
+  assert.match(form, /data-path="material.energy"/); assert.match(form, /data-path="material.parameters.C11"/); assert.match(form, /material-derived/);
+  assert.match(materialDerivedMarkup({ ok: false, error: '参考构形必须无应力' }), /无应力/);
+  const panel = materialDerivedMarkup({ ok: true, voigt_c2_gpa: Array.from({ length: 6 }, (_, i) => Array.from({ length: 6 }, (_, j) => (i === j ? 10 : 0))), eigenvalues_gpa: [10], c3_nonzero_gpa: [],
+    speeds_m_s: { fiber: [9406, 1790, 1790], in_plane_transverse: [2711, 1790, 1410], thickness: [2711, 1790, 1410] }, fastest_m_s: 9406, slowest_shear_m_s: 1410,
+    truncation: { remainder_relative: 1e-16, relative_to: 'quadratic' }, check_stress_mpa: [[[1, 0, 0], [0, 0, 0], [0, 0, 0]]], engine: '物理 AI' });
+  assert.match(panel, /9406/); assert.match(panel, /全部为 0/); assert.match(panel, /COMSOL/);
+});

@@ -7,6 +7,7 @@ import { tree, upgrade, workbenchTemplates, addSource, removeSource, addBoundary
 import { drawScene, pick } from './model-view.js';
 import { inspectorMarkup, bindInspector, escapeHtml } from './inspector.js';
 import { signalsMarkup } from './signal-view.js';
+import { materialDerivedMarkup } from './material-form.js';
 
 const $ = s => document.querySelector(s);
 const PHASES = { starting: '准备中', meshing: '生成连接图', running: '计算中', exporting: '保存结果', completed: '已完成', failed: '未完成', paused: '已暂停' };
@@ -107,13 +108,15 @@ function renderTree() {
 function renderInspector() {
   const titles = { geometry: '几何', material: '材料与本构', source: '激励源', boundary: '边界条件', receiver: '接收点', study: '记录与网格', fixed: '记录与网格', sources: '激励源', boundaries: '边界条件', receivers: '接收点' };
   $('#inspector-title').textContent = titles[state.selection.split(':')[0]] || '属性';
-  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, state.degree);
+  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, state.degree, { materials: state.materials });
+  renderMaterialDerived();
   let before = snapshot();
   bindInspector($('#inspector'), state.scene, state, kind => {
     if (!kind?.error && !kind?.remove) { state.history.push(before); if (state.history.length > 60) state.history.shift(); $('#undo').disabled = false; before = snapshot(); }
     changed(kind);
   });
 }
+function renderMaterialDerived() { const box = $('#material-derived'); if (box) box.innerHTML = materialDerivedMarkup(state.preview?.material); }
 function drawView() {
   if (state.tab !== 'model' || !state.scene) return;
   try { state.picks = drawScene($('#view'), state.scene, { ...state.view, selected: state.selection, gridMm: state.preview?.mesh?.grid_mm }); }
@@ -159,7 +162,7 @@ function schedulePreview() {
     try {
       const result = await api('/api/preview', { scene: state.scene, degree: state.degree });
       if (stamp !== previewStamp) return;
-      state.preview = result; renderStatus(); drawView(); if (state.tab === 'signal') renderSignals();
+      state.preview = result; renderStatus(); drawView(); renderMaterialDerived(); if (state.tab === 'signal') renderSignals();
     } catch (error) { if (stamp === previewStamp) { state.preview = { ok: false, errors: [error.message], signals: [] }; renderStatus(); } }
   }, 320);
 }
@@ -285,8 +288,13 @@ async function start() {
   });
   bindView();
   try {
-    const [info, templates] = await Promise.all([api('/api/info'), api('/api/templates')]);
-    state.token = info.token; state.templates = workbenchTemplates(templates);
+    const [info, templates, materials] = await Promise.all([api('/api/info'), api('/api/templates'), api('/api/materials')]);
+    state.token = info.token; state.templates = workbenchTemplates(templates); state.materials = materials;
+    if (materials.cfrp_ud && state.templates.gaussian) {
+      const c = structuredClone(state.templates.gaussian.scene); c.name = 'CFRP 单向板 · 顶面高斯激励 · 两端吸收 · 半模型';
+      c.material = structuredClone(materials.cfrp_ud.material); c.source.frequency_mhz = .3;
+      state.templates.cfrp = { label: 'CFRP 单向板 · 顶面高斯激励（自定义应变能）', scene: c };
+    }
     $('#engine-chip').textContent = `● 本机离线 · 物理 AI ${info.model.version || ''}`.trim(); $('#engine-chip').title = info.model.user_notice || '';
     $('#template').innerHTML = '<option value="">从模板新建…</option>' + Object.entries(state.templates).map(([k, t]) => `<option value="${k}">${escapeHtml(t.label)}</option>`).join('');
     $('#template').addEventListener('change', ev => { const t = state.templates[ev.target.value]; ev.target.value = ''; if (t) { loadScene(structuredClone(t.scene), state.degree); setTab('model'); } });
