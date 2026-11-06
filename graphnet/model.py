@@ -54,3 +54,31 @@ def load(degree, model_dir=MODEL, long_record=False):
         temporal = json.loads(tpath.read_text(encoding='utf-8'))
     return {'weights': weights, 'weights_file': path.name, 'weights_sha256': digest(path), 'material': material, 'temporal': temporal,
             'time_weights_sha256': digest(model_dir / extension['time_weights_file']) if long_record else None, 'material_check': material_check(weights, material)}
+
+
+TRAINED_SPEED_BOUND_M_S = 10000.
+
+
+def energy_layer(scene, model):
+    """(quadratic, cubic, info) for the energy layer.
+
+    The trained material (legacy scenes without `material.model`) uses the trained tensors unchanged. A scene
+    material (`physics.materials`) supplies its own second- and third-order constants in the same Mandel layout:
+    quadratic = c2 / 2e11, cubic = c3 / 6e11 (see graphwave.inference.energy_activation). The learned derivative
+    filters and time composition are material independent and stay as trained."""
+    from physics.materials import is_custom, tensors
+    weights = model['weights']; material = scene['material']
+    if not is_custom(material):
+        return weights['quadratic_tensor'], weights['cubic_tensor'], {'energy_layer': 'trained', 'material_model': 'reference_aluminium'}
+    c2, c3, _ = tensors(material)
+    return (np.ascontiguousarray(c2 / 2e11), np.ascontiguousarray(c3 / 6e11),
+            {'energy_layer': 'scene_material_constants', 'material_model': material['model'], 'material_name': material.get('name'),
+             'note': '能量层使用场景材料的二阶、三阶弹性常数；求导滤波器与时间层沿用训练结果。'})
+
+
+def speed_bound(scene):
+    """Wave speed used for the layer spacing: the trained 10000 m/s, or a faster material's fastest phase speed,
+    so the Courant number stays inside the validated range."""
+    from physics.materials import is_custom, speed_bounds
+    if not is_custom(scene['material']): return TRAINED_SPEED_BOUND_M_S
+    return max(TRAINED_SPEED_BOUND_M_S, speed_bounds(scene['material'])[0])

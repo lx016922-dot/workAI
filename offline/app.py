@@ -19,6 +19,7 @@ from pathlib import Path
 from urllib.parse import urlsplit, parse_qs, unquote
 from .domain import ROOT, PARTS, digest, model_info, templates, validate_request
 from .recording import traces, manifest
+from .preview import preview
 
 REPOSITORY = ROOT.parent
 
@@ -178,6 +179,9 @@ def handler(application):
                     return self.reply(200, {'model': application.info, 'token': application.token, 'data_directory': str(application.data)})
                 if url.path == '/api/templates':
                     return self.reply(200, templates())
+                if url.path == '/api/materials':
+                    from physics.materials import presets
+                    return self.reply(200, presets())
                 if url.path == '/api/jobs':
                     rows = [application.status(p.name) for p in application.jobs.iterdir() if re.fullmatch(r'local-[a-f0-9]{32}', p.name)]
                     return self.reply(200, sorted(rows, key=lambda x: x['started_at_utc'], reverse=True))
@@ -242,7 +246,7 @@ def handler(application):
             try:
                 self.local_request()
                 match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume)',self.path)
-                if self.path != '/api/jobs' and not match:
+                if self.path not in ('/api/jobs', '/api/preview') and not match:
                     raise FileNotFoundError()
                 if not secrets.compare_digest(self.headers.get('X-WorkAI-Token', ''), application.token):
                     raise PermissionError('请刷新应用页面后重试。')
@@ -262,6 +266,8 @@ def handler(application):
                         with application.trace_lock:
                             return self.reply(200,traces(application.path(job)/'record',body['part'],body['points']))
                     return self.reply(202,application.control(job,action))
+                if self.path == '/api/preview':
+                    return self.reply(200, preview(body, application.data))
                 self.reply(202, application.submit(body))
             except (ValueError, TypeError, KeyError) as error:
                 self.reply(422, {'error': str(error)})

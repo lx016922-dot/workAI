@@ -36,6 +36,7 @@ def assemble(mesh,material):
 
 
 def prepare(scene,mesh,substeps=4,excitation=None):
+    from physics.materials import require_isotropic;require_isotropic(scene['material'],'隐式 Newmark 谱元')
     if type(substeps) is not int or not 1<=substeps<=32:raise ValueError('Use 1–32 internal steps per output.')
     start=time.monotonic()
     if excitation is None:
@@ -54,6 +55,7 @@ def prepare(scene,mesh,substeps=4,excitation=None):
 
 
 def solve(scene,mesh,substeps=4,keep_fields=False,callback=None,prepared=None,excitation=None):
+    from physics.materials import require_isotropic;require_isotropic(scene['material'],'隐式 Newmark 谱元')
     start=time.monotonic();p=prepared or prepare(scene,mesh,substeps,excitation);loads=p['loads'];constrained=p['constrained'];alpha=p['alpha'];mass=mesh['mass'];dt=p['dt'];free=p['free'];scale=p['scale'];factor=p['factor'];substeps=p['substeps'];force_function=internal_force;geometry=mesh.get('size')
     if 'inverse_jacobian' in mesh:
         from .curved_solver import internal_force as force_function

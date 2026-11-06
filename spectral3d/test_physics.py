@@ -91,3 +91,28 @@ class SpectralPhysicsTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class StrainEnergyMaterialTests(unittest.TestCase):
+    def test_anisotropic_kernel_reproduces_the_murnaghan_kernel_and_its_own_energy_gradient(self):
+        from physics.materials import murnaghan_tensors, tensors, presets
+        from .anisotropic import constitutive_mandel, internal_force as anisotropic_force
+        c2, c3 = murnaghan_tensors(dict(MATERIAL, model='murnaghan')); constants = np.array([MATERIAL[k] for k in ['lambda_pa', 'mu_pa', 'l_pa', 'm_pa', 'n_pa']])
+        rng = np.random.default_rng(3)
+        for _ in range(20):
+            g = rng.normal(size=(3, 3)) * 3e-4
+            for law in (0, 1, 2):
+                a, wa, sa, ja = constitutive(g, constants, law); b, wb, sb, jb = constitutive_mandel(g, c2, c3, law)
+                self.assertLess(np.max(np.abs(a - b)) / np.max(np.abs(a)), 1e-12); self.assertAlmostEqual(wa, wb, delta=1e-12 * abs(wa)); self.assertAlmostEqual(sa, sb, delta=1e-15); self.assertAlmostEqual(ja, jb, delta=1e-15)
+        s = default_scene('plate'); s['geometry'].update(length_mm=4., width_mm=2., thickness_mm=1.5); mesh = make_mesh(s, 3, 1.)
+        u = rng.normal(size=(len(mesh['points']), 3)) * 1e-7
+        f1 = internal_force(u, mesh['elements'], mesh['derivative'], mesh['size'], mesh['volume_weight'], constants, 2)[0]
+        f2 = anisotropic_force(u, mesh['elements'], mesh['derivative'], mesh['size'], mesh['volume_weight'], c2, c3, 2)[0]
+        self.assertLess(np.max(np.abs(f1 - f2)) / np.max(np.abs(f1)), 1e-12)
+        # CFRP: the force is the gradient of the discrete energy (directional derivative check)
+        m = copy.deepcopy(presets()['cfrp_ud']['material']); m['fiber_angle_deg'] = 40.; m['parameters'].update(a4=-200., a6=-900.)
+        k2, k3, _ = tensors(m); direction = rng.normal(size=u.shape); h = 1e-4
+        force, energy, _, _ = anisotropic_force(u, mesh['elements'], mesh['derivative'], mesh['size'], mesh['volume_weight'], k2, k3, 2)
+        up = anisotropic_force(u + h * direction * 1e-7, mesh['elements'], mesh['derivative'], mesh['size'], mesh['volume_weight'], k2, k3, 2)[1]
+        down = anisotropic_force(u - h * direction * 1e-7, mesh['elements'], mesh['derivative'], mesh['size'], mesh['volume_weight'], k2, k3, 2)[1]
+        self.assertAlmostEqual((up - down) / (2 * h * 1e-7), float(np.sum(force * direction)), delta=1e-6 * abs(float(np.sum(force * direction))))

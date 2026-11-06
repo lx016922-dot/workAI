@@ -88,6 +88,40 @@ class InputLayerTests(unittest.TestCase):
             self.assertLess(np.max(np.abs(stored - learned_energy[:, 3])) / np.max(np.abs(learned_energy[:, 3])), 1e-3)
             self.assertGreater(learned_energy[-1, 4], .1 * learned_energy[-1, 3])
 
+    def test_strain_energy_material_runs_in_the_energy_layer_and_matches_the_spectral_solver(self):
+        """CFRP (transversely isotropic W with third-order terms, fibre at 30°): the network with the scene's constants in its
+        energy layer against the independent anisotropic GLL kernel; aluminium written as W reproduces the trained path."""
+        from spectral3d.solver import solve
+        from spectral3d.loads import prepare_excitation
+        from graphnet.model import energy_layer, speed_bound
+        from physics.materials import presets, speed_bounds
+        model = load(3); weights = model['weights']
+        material = copy.deepcopy(presets()['cfrp_ud']['material']); material['fiber_angle_deg'] = 30.
+        material['parameters'].update(a1=-30., a4=-200., a6=-900., a8=15., a9=40.)
+        raw = excited(plate()); raw['material'] = material; raw['numerics']['h_mm'] = 1.2
+        for src in [raw['source'], *raw['sources']]: src['frequency_mhz'] = .15
+        raw['acquisition']['duration_us'] = 18.
+        scene = network_scene(raw, 3, model['material']); mesh = make_mesh(scene, 3, 1.2)
+        quadratic, cubic, info = energy_layer(scene, model); self.assertEqual(info['energy_layer'], 'scene_material_constants')
+        self.assertEqual(speed_bound(scene), 10000.)
+        inputs = build(scene, mesh); dt, sub, frames, steps = layers(scene, mesh, .3); signals = signal_table(inputs, np.arange(steps + 1) * dt * 1e6); inverse = inverse_mapping(mesh)
+        speed = speed_bounds(material)[0]
+        for name, law in (('stvk', 1), ('murnaghan', 2)):
+            s = copy.deepcopy(scene); s['constitutive'] = name
+            reference = solve(s, mesh, cfl=.3 * speed * 1.05 / 10000, keep_fields=True, excitation=prepare_excitation(mesh, s))
+            self.assertEqual(reference['diagnostics']['internal_steps'], steps); peak = np.max(np.abs(reference['fields_m']))
+            net, energy, _, _ = forward(mesh['elements'], weights['derivative_3'], inverse, mesh['volume_weight'], mesh['mass'], inputs['loads'], signals, inputs['free'], inputs['alpha'], True,
+                                        quadratic, cubic, np.array([1., 1.]), law, dt, sub, frames)
+            self.assertLess(np.max(np.abs(net - reference['fields_m'])) / peak, 1e-10, name)
+            stored = energy[:, 1] + energy[:, 2] + energy[:, 4]; self.assertLess(np.max(np.abs(stored - energy[:, 3])) / np.max(np.abs(energy[:, 3])), 1e-3)
+        # aluminium as a strain energy runs through the scene path and matches the trained tensors
+        al = excited(plate()); al['material'] = {'model': 'energy', 'rho_kg_m3': 2700., 'energy': '0.5*(lam+2*mu)*i1**2 - 2*mu*i2 + (l+2*m)/3*i1**3 - 2*m*i1*i2 + n*i3',
+                                                 'parameters': {'lam': 58.1, 'mu': 26.1, 'l': -143., 'm': -297., 'n': -345.}}
+        a = predict(network_scene(al, 3, model['material']), make_mesh(network_scene(al, 3, model['material']), 3, 1.6), model, laws=(2,))
+        b = predict(network_scene(excited(plate()), 3, model['material']), make_mesh(network_scene(excited(plate()), 3, model['material']), 3, 1.6), model, laws=(2,))
+        self.assertEqual(a['diagnostics'][0]['energy_layer'], 'scene_material_constants'); self.assertEqual(b['diagnostics'][0]['energy_layer'], 'trained')
+        self.assertLess(np.max(np.abs(a['fields']['murnaghan'] - b['fields']['murnaghan'])) / np.max(np.abs(b['fields']['murnaghan'])), 1e-11)
+
     def test_long_record_matches_frozen_and_resumes_bit_identically(self):
         from graphnet.rollout import rollout, read_record
         from graphwave.long_rollout import rollout as frozen

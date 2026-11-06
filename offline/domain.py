@@ -96,11 +96,36 @@ def validate_v2_request(body):
     h = raw.get('numerics', {}).get('h_mm')
     if type(h) not in (int, float) or not .8 <= h <= 2.5:
         raise ValueError('网格尺寸需要在 0.8–2.5 mm 之间。')
-    s = network_scene(raw, body['degree'], load(body['degree'], long_record=True)['material'])
+    s = _bounded_network_scene(raw, body['degree'], load(body['degree'], long_record=True)['material'])
     for src in sources(s):
         if sample * 2 * highest_frequency_mhz(src) > 1 / 8 + 1e-12:
             raise ValueError(f'{src.get("name", "主激励")}：二次谐波最高频率至少需要 8 个输出采样点/周期。')
     return {'scene': s, 'degree': body['degree']}
+
+
+def _bounded_network_scene(raw, degree, material):
+    """network_scene for any record length up to 20 ms.
+
+    The core scene rules bound a record to 1000 μs and 2000 intervals. A longer record is checked on the
+    longest admissible proxy record with the same physics (a step at which every carrier keeps 10 samples
+    per period), then the real record is restored; signal coverage of the real record follows because the
+    proxy is never longer than it. Sampling of the real record is checked by the caller."""
+    from graphnet.inputs import network_scene
+    acquisition = raw['acquisition']; duration, sample = acquisition['duration_us'], acquisition['sample_step_us']
+    if duration <= 1000 and round(duration / sample) <= 2000:
+        return network_scene(raw, degree, material)
+    error = None
+    for step in sorted({sample, .01, .02, .05, .1, .2, .25, .5}):
+        proxy_duration = min(1000., 2000 * step, duration); proxy_duration = math.floor(proxy_duration / step + 1e-9) * step
+        if proxy_duration / step < 20: continue
+        probe = copy.deepcopy(raw); probe['acquisition'] = {'duration_us': round(proxy_duration, 9), 'sample_step_us': step}
+        try:
+            scene = network_scene(probe, degree, material)
+        except ValueError as failure:
+            error = error or failure; continue
+        scene['acquisition'] = dict(acquisition)
+        return scene
+    raise error
 
 
 def validate_request(body):

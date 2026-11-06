@@ -18,8 +18,10 @@ def network_scene(raw, degree, material):
     require(not is_plane_strain(scene), '冻结网络是三维图网络；二维平面应变请用 spectral2d。')
     require(scene['geometry']['kind'] in KINDS, '图网络的几何来自参数化 GLL 网格：板、管、通孔、缺口。')
     require(scene['numerics']['cfl'] <= .3, '网络层间距的验证上限为 CFL 0.3。')
-    for key, value in material.items():
-        require(abs(scene['material'][key] - value) <= 1e-9 * abs(value), f'场景材料 {key} 与网络训练材料不一致（网络只含该多晶铝的能量系数）。')
+    from physics.materials import is_custom
+    if not is_custom(scene['material']):
+        for key, value in material.items():
+            require(abs(scene['material'][key] - value) <= 1e-9 * abs(value), f'场景材料 {key} 与网络训练材料不一致；其他材料请用 material.model（murnaghan 或 energy）定义。')
     if is_v2(scene): spectral_admissible(scene)
     else:
         require(scene['source']['face'] in ('xmin', 'xmax') and scene['source']['radius_mm'] == 0 and scene['boundary']['fixed_face'] in ('none', 'xmin', 'xmax'),
@@ -47,7 +49,8 @@ def signal_table(inputs, times_us):
 
 def resolution(scene, mesh):
     """Nodes per second-harmonic shear wavelength at each source's 30 dB band edge (information, not a gate)."""
-    m = scene['material']; shear = np.sqrt(m['mu_pa'] / m['rho_kg_m3']); spacing = float(mesh['h_mm']) / int(mesh['degree'])
+    from physics.materials import slowest_shear_speed
+    shear = slowest_shear_speed(scene['material']); spacing = float(mesh['h_mm']) / int(mesh['degree'])
     from physics.scene import sources
     rows = []
     for src in sources(scene):
