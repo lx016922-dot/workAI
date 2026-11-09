@@ -45,11 +45,13 @@ for module, names in files.items():
     (target / module).mkdir()
     for name in names:
         shutil.copyfile(REPO / module / name, target / module / name)
-from importlib.util import spec_from_file_location, module_from_spec
-_engine = spec_from_file_location('coarse_engine', REPO / 'offline' / 'coarse_engine.py'); _engine_module = module_from_spec(_engine); _engine.loader.exec_module(_engine_module)
-for model_name in _engine_module.MODELS:  # every shipped coarse model, with its held-out evaluations
-    model_dir = _engine_module.model_path(model_name).parent.relative_to(REPO); (target / model_dir).mkdir(parents=True)
-    for name in ('model.json', 'evaluation.json', _engine_module.EXCITATION_EVALUATION):
+# Shipped coarse models: read the literals from offline/coarse_engine.py without importing it (the build Python has no numpy).
+import ast
+_engine = {target.id: ast.literal_eval(node.value) for node in ast.parse((REPO / 'offline' / 'coarse_engine.py').read_text(encoding='utf-8')).body
+           if isinstance(node, ast.Assign) for target in node.targets if isinstance(target, ast.Name) and target.id in ('MODELS', 'EXCITATION_EVALUATION')}
+for model_name in _engine['MODELS']:  # every shipped coarse model, with its held-out evaluations
+    model_dir = Path('coarsegraph', 'models', model_name); (target / model_dir).mkdir(parents=True)
+    for name in ('model.json', 'evaluation.json', _engine['EXCITATION_EVALUATION']):
         if name != 'model.json' and not (REPO / model_dir / name).exists(): continue
         shutil.copyfile(REPO / model_dir / name, target / model_dir / name)
 shutil.copytree(REPO / 'offline', target / 'offline', ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.nbc', '*.nbi'))

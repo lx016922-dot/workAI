@@ -105,7 +105,7 @@ function receiverForm(scene, index) {
 
 const ENGINES = { network: '物理 AI · 冻结网络（细网格，默认）', coarse: '物理 AI · 粗网格算子（快速，研究模型）' };
 /** Shipped coarse models (offline/coarse_engine.py MODELS); the first is the default. */
-export const COARSE_MODELS = { 'p4-h3-harmonic': '快速 · h 3 mm（默认）' };
+export const COARSE_MODELS = { 'p4-h3-harmonic': '快速 · h 3 mm（默认）', 'p4-h2-multisource': '精确 · h 2 mm（节点约 1.5 倍，二次谐波更准）' };
 export const DEFAULT_COARSE_MODEL = Object.keys(COARSE_MODELS)[0];
 
 function studyForm(scene, degree, engine = 'network', coarseModel = DEFAULT_COARSE_MODEL) {
@@ -115,7 +115,7 @@ function studyForm(scene, degree, engine = 'network', coarseModel = DEFAULT_COAR
     section('计算引擎', `<label class="wb-field wide"><span>引擎</span><select data-action="engine">${Object.entries(ENGINES).map(([k, v]) => `<option value="${k}" ${k === engine ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       ${engine === 'coarse' && Object.keys(COARSE_MODELS).length > 1 ? `<label class="wb-field wide"><span>粗网格模型</span><select data-action="coarse-model">${Object.entries(COARSE_MODELS).map(([k, v]) => `<option value="${k}" ${k === coarseModel ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
       <div class="wb-field wide" id="engine-derived"></div>`,
-      engine === 'coarse' ? '粗网格算子是同一个网络换上学到的单元算子（求导滤波、刚度与质量积分），在模型自带的粗网格上计算，比冻结网络快约一个数量级。它是研究模型，只在 48 × 2 mm 半宽铝板、板厚 1.6–2.4 mm、0.2–0.4 MHz、30 μs 记录上训练和测试过；超出范围要逐例核对。下面的 h 与 p 只用于检查场景本身，计算用模型的网格。' : '') +
+      engine === 'coarse' ? '粗网格算子是同一个网络换上学到的单元算子（求导滤波、刚度与质量积分），在模型自带的粗网格上计算，比细网格冻结网络快数倍到一个数量级。快速模型（h 3 mm）最省；精确模型（h 2 mm）节点约 1.5 倍，顶面、端面和双贴片的留出测试全部通过，需要二次谐波时选它。它们是研究模型，只在 48 × 2 mm 半宽铝板、板厚 1.6–2.4 mm、0.2–0.4 MHz、30 μs 记录上训练和测试过；超出范围要逐例核对。下面的 h 与 p 只用于检查场景本身，计算用模型的网格。' : '') +
     section('网格与物理 AI 求解', num('单元尺寸 h', 'numerics.h_mm', n.h_mm, { unit: 'mm', min: .8, max: 2.5 }) +
       `<label class="wb-field"><span>图阶次 p</span><select data-action="degree">${[3, 4, 5].map(d => `<option value="${d}" ${d === degree ? 'selected' : ''}>${d}</option>`).join('')}</select><small>节点间距 = h / p</small></label>` +
       sel('固定面', 'boundary.fixed_face', scene.boundary.fixed_face, faces),

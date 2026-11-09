@@ -88,9 +88,30 @@ class Parameterization:
         D = (particular + basis @ theta[a + b:]).reshape(self.n, self.n)
         return D, q, m
 
+    def theta_from_operators(self, D, q, m):
+        """θ in this machine's basis for given admissible operators (the inverse of unpack).
+
+        The null-space bases come from an SVD, and a null space has no preferred basis: different BLAS/LAPACK
+        kernels return different (equally valid) ones. θ is therefore a local coordinate; the operators stored
+        in a model file are what a model is. Raises ValueError if the operators are not in the admissible set."""
+        D, q, m = (np.asarray(v, dtype=float) for v in (D, q, m)); a, b = self.NW.T @ (q - self.w), self.NW.T @ (m - self.w)
+        qa = self.w + self.NW @ a; A, rhs = self._constraints(qa); pinv = np.linalg.pinv(A, rcond=1e-12); d0 = self.D0.ravel()
+        particular = d0 + pinv @ (rhs - A @ d0); basis = self.ND - pinv @ (A @ self.ND)
+        c = np.linalg.lstsq(basis, D.ravel() - particular, rcond=None)[0]; theta = np.concatenate([a, b, c])
+        D2, q2, m2 = self.unpack(theta)
+        if not (np.allclose(D2, D, rtol=0, atol=1e-10) and np.allclose(q2, q, rtol=0, atol=1e-12) and np.allclose(m2, m, rtol=0, atol=1e-12)):
+            raise ValueError('算子不在约束允许的集合内，无法换成参数。')
+        return theta
+
     def check(self, theta):
         """Constraint residuals for a parameter vector (all ≈ 0 by construction)."""
-        D, q, m = self.unpack(theta); n = self.n; flip = np.arange(n)[::-1]; ends = np.zeros(n); ends[0] = -1; ends[-1] = 1
+        return self.check_operators(*self.unpack(theta))
+
+    def check_operators(self, D, q, m):
+        """Constraint residuals of given operators (as stored in a model file)."""
+        D, q, m = (np.asarray(v, dtype=float) for v in (D, q, m)); n = self.n
+        if D.shape != (n, n) or q.shape != (n,) or m.shape != (n,): raise ValueError(f'算子尺寸与 {self.degree} 阶不符。')
+        flip = np.arange(n)[::-1]; ends = np.zeros(n); ends[0] = -1; ends[-1] = 1
         return {'reflection': float(np.max(np.abs(D + D[np.ix_(flip, flip)]))), 'constants': float(np.max(np.abs(D.sum(1)))),
                 'linear': float(np.max(np.abs(D @ self.x - 1))), 'summation_by_parts': float(np.max(np.abs(q @ D - ends))),
                 'quadrature_sum': float(abs(q.sum() - 2)), 'mass_sum': float(abs(m.sum() - 2)),
@@ -113,8 +134,16 @@ class AxisParameterization:
         return np.stack([p[0] for p in parts]), np.stack([p[1] for p in parts]), np.stack([p[2] for p in parts])
 
     def check(self, theta):
-        rows = [self.base.check(t) for t in self.blocks(theta)]
+        return self.check_operators(*self.unpack(theta))
+
+    def check_operators(self, D, q, m):
+        D, q, m = (np.asarray(v, dtype=float) for v in (D, q, m))
+        if len(D) != 3 or len(q) != 3 or len(m) != 3: raise ValueError('分方向算子需要三组。')
+        rows = [self.base.check_operators(D[a], q[a], m[a]) for a in range(3)]
         return {k: (all(r[k] for r in rows) if k == 'positive' else max(r[k] for r in rows)) for k in rows[0]}
+
+    def theta_from_operators(self, D, q, m):
+        return np.concatenate([self.base.theta_from_operators(D[a], q[a], m[a]) for a in range(3)])
 
     def from_shared(self, theta):
         return np.tile(np.asarray(theta, dtype=float), 3)

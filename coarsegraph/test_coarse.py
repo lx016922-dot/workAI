@@ -1,4 +1,5 @@
 import copy
+import os
 import json
 import unittest
 from pathlib import Path
@@ -7,7 +8,7 @@ from physics.scene import validate_scene
 from spectral3d.mesh import make_mesh
 from graphwave.inference import graph_message, inverse_mapping
 from graphnet.model import load
-from coarsegraph.operator import Parameterization, apply, gll
+from coarsegraph.operator import AxisParameterization, Parameterization, apply, gll
 from coarsegraph.simulate import Coarse
 from coarsegraph.evaluate import compare
 
@@ -119,9 +120,32 @@ class TrainingAndRunTests(unittest.TestCase):
             c = Coarse(validate_scene(dict(raw, numerics=dict(raw['numerics'], h_mm=.4 / 3))), 3, 3.); weights = load(3)['weights']
             Dv, volume, mass = c.operators(D, q, m); projected, _ = c.run(Dv, volume, mass, 'murnaghan', weights)
             self.assertTrue(np.array_equal(np.asarray(record['receivers'][0]['projected_m']), projected[:, 0]))
-            model['theta'][0] = .01; (root / 'model.json').write_text(json.dumps(model))
+            model['operators']['derivative'][1][2] += .01; (root / 'model.json').write_text(json.dumps(model))
             bad = subprocess.run([sys.executable, '-m', 'coarsegraph.run', '--model', str(root / 'model.json'), '--scene', str(root / 'scene.json'), '--output', str(root / 'out2')], cwd=REPO, capture_output=True, text=True)
-            self.assertNotEqual(bad.returncode, 0); self.assertIn('不一致', bad.stderr)
+            self.assertNotEqual(bad.returncode, 0); self.assertIn('约束', bad.stderr)
+
+    def test_parameters_are_local_coordinates_and_the_stored_operators_define_the_model(self):
+        # A null space has no preferred basis; another BLAS kernel returns another one (simulated by a rotation).
+        for P in (Parameterization(4), AxisParameterization(3)):
+            theta = np.random.default_rng(5).normal(size=P.size) * .04; ops = P.unpack(theta)
+            np.testing.assert_allclose(P.theta_from_operators(*ops), theta, atol=1e-10)
+            other = copy.deepcopy(P); base = other.base if hasattr(other, 'base') else other
+            rotation, _ = np.linalg.qr(np.random.default_rng(6).normal(size=(base.ND.shape[1],) * 2)); base.ND = base.ND @ rotation
+            moved = other.theta_from_operators(*ops); self.assertGreater(np.abs(moved - theta).max(), 1e-3)  # different coordinates ...
+            for a, b in zip(other.unpack(moved), ops): np.testing.assert_allclose(a, b, atol=1e-10)  # ... same operators
+            with self.assertRaises(ValueError): P.theta_from_operators(ops[0] + .01, *ops[1:])
+
+    def test_shipped_models_load_whatever_the_blas_kernel(self):
+        import subprocess, sys
+        names = sorted(p.parent.name for p in (REPO / 'coarsegraph' / 'models').glob('*/model.json'))
+        code = ('import sys, numpy as np\nfrom coarsegraph.run import load_model, local_theta\nfrom coarsegraph.operator import parameterization\n'
+                'for name in sys.argv[1:]:\n    model, ops = load_model(f"coarsegraph/models/{name}/model.json")\n'
+                '    P = parameterization(model["degree"], model.get("axes", "shared"))\n'
+                '    assert all(np.allclose(a, b, rtol=0, atol=1e-10) for a, b in zip(P.unpack(local_theta(model)), ops)), name\nprint("ok")')
+        for kernel in ('', 'Prescott', 'Haswell'):  # OpenBLAS kernels that pick different SVD null-space bases (ignored by other BLAS builds)
+            env = dict(os.environ, **({'OPENBLAS_CORETYPE': kernel} if kernel else {}))
+            done = subprocess.run([sys.executable, '-c', code, *names], cwd=REPO, env=env, capture_output=True, text=True)
+            self.assertEqual(done.stdout.strip(), 'ok', (kernel, done.stderr[-1500:]))
 
 
 if __name__ == '__main__': unittest.main()

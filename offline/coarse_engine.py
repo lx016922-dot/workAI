@@ -16,8 +16,9 @@ from solid.schema import require
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 MODELS_DIRECTORY = REPOSITORY / 'coarsegraph' / 'models'
-# Shipped coarse models (name -> label); the first is the default. A finer-grid model is added here once it passes its held-out test.
-MODELS = {'p4-h3-harmonic': '快速 · h 3 mm'}
+# Shipped coarse models (name -> label); the first is the default. The h = 2 mm model has about 1.5 times the nodes and passes
+# every held-out top, end and two-patch case (docs/coarse-graph-operator.md 6.2).
+MODELS = {'p4-h3-harmonic': '快速 · h 3 mm', 'p4-h2-multisource': '精确 · h 2 mm'}
 DEFAULT_MODEL = 'p4-h3-harmonic'
 MODEL = MODELS_DIRECTORY / DEFAULT_MODEL / 'model.json'
 LAWS = ('linear', 'stvk', 'murnaghan')
@@ -77,14 +78,17 @@ def _tested(forms, group):
     return f'留出测试 {row["passed"]}/{row["cases"]} 通过' if row else '未经测试'
 
 
-def out_of_range(scene, name=DEFAULT_MODEL):
+def out_of_range(scene, model_name=DEFAULT_MODEL):
     """Training-range items the scene leaves for the named model (information; the run is still allowed)."""
     out = []
     for path, label, lo, hi, unit in TRAINING_RANGE:
         v = _get(scene, path)
         if isinstance(v, (int, float)) and not lo - 1e-9 <= v <= hi + 1e-9: out.append(f'{label} {v:g} {unit}（训练 {lo:g}{"–" + format(hi, "g") if hi != lo else ""} {unit}）')
-    sources = [x for x in [scene.get('source'), *(scene.get('sources') or [])] if isinstance(x, dict)]; forms = by_excitation(model_path(name))
-    if len(sources) > 1: out.append(f'{len(sources)} 个激励源（同类双贴片{_tested(forms, "labels-c-two-patch")}，主要是非线性增量的 2f 超过 5%；需要二次谐波时建议用冻结网络、h ≤ 2 mm）')
+    sources = [x for x in [scene.get('source'), *(scene.get('sources') or [])] if isinstance(x, dict)]; forms = by_excitation(model_path(model_name))
+    if len(sources) > 1:
+        patch = next((r for r in forms or [] if r['group'] == 'labels-c-two-patch'), None)
+        if patch and patch['passed'] == patch['cases']: out.append(f'{len(sources)} 个激励源（训练只含同类双贴片反相，{_tested(forms, "labels-c-two-patch")}；其他多源组合需逐例核对）')
+        else: out.append(f'{len(sources)} 个激励源（同类双贴片{_tested(forms, "labels-c-two-patch")}，主要是非线性增量的 2f 超过 5%；需要二次谐波时请换精确模型 h 2 mm）')
     for src in sources:
         name = src.get('name') or '主激励'; signal = src.get('signal') if isinstance(src.get('signal'), dict) else {'type': 'tone_burst', 'window': 'hann'}
         profile = src.get('profile') if isinstance(src.get('profile'), dict) else {'type': 'uniform'}

@@ -158,7 +158,8 @@ def reevaluate():
     pairs = load_pairs(args.labels, args.splits, model['degree'], model['h_mm'], model['cfl'])
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         problem = Problem(pairs, model['degree'], model['h_mm'], model['cfl'], 1., pool, axes=model.get('axes', 'shared'))
-        evaluation = evaluate(problem, pairs, {'baseline_gll': np.zeros(problem.parameterization.size), 'learned': np.asarray(model['theta'])}, args.output)
+        from .run import local_theta  # the stored operators in this machine's parameter basis (θ in the file is the training machine's)
+        evaluation = evaluate(problem, pairs, {'baseline_gll': np.zeros(problem.parameterization.size), 'learned': local_theta(model)}, args.output)
     result = {'schema': 'workai.coarsegraph.evaluation.v1', 'model': str(args.model), 'model_sha256': digest(args.model), 'summary': summarize(evaluation), 'evaluation': evaluation,
               'source_sha256': {f'coarsegraph/{p.name}': digest(p) for p in sorted((REPO / 'coarsegraph').glob('*.py'))}, 'created_at_utc': datetime.now(timezone.utc).isoformat()}
     (args.output / 'evaluation.json').write_text(json.dumps(result, ensure_ascii=False, indent=1, allow_nan=False) + '\n', encoding='utf-8')
@@ -233,7 +234,8 @@ def main():
         problem = Problem(pairs, args.degree, args.h_mm, args.cfl, args.increment_weight, pool, axes=args.axes, w_harmonic=args.harmonic_weight); theta0 = None
         if args.init:
             start = json.loads(args.init.read_text(encoding='utf-8')); require(start['degree'] == args.degree, '初始模型的阶次不同。')
-            theta0 = np.asarray(start['theta']); theta0 = problem.parameterization.from_shared(theta0) if args.axes == 'per_axis' and start.get('axes', 'shared') == 'shared' else theta0
+            from .run import local_theta  # the stored operators in this machine's parameter basis
+            theta0 = local_theta(start); theta0 = problem.parameterization.from_shared(theta0) if args.axes == 'per_axis' and start.get('axes', 'shared') == 'shared' else theta0
             require(len(theta0) == problem.parameterization.size, '初始模型参数个数不符。'); log({'initialized_from': str(args.init), 'theta0': theta0.tolist()})
         best, history = train(problem, split['train'], split['validation'], args.iterations, log, theta0=theta0, stall=args.stall)
         P = problem.parameterization; frozen = best['theta']
