@@ -47,10 +47,11 @@ for module, names in files.items():
         shutil.copyfile(REPO / module / name, target / module / name)
 from importlib.util import spec_from_file_location, module_from_spec
 _engine = spec_from_file_location('coarse_engine', REPO / 'offline' / 'coarse_engine.py'); _engine_module = module_from_spec(_engine); _engine.loader.exec_module(_engine_module)
-model_dir = _engine_module.MODEL.parent.relative_to(REPO); (target / model_dir).mkdir(parents=True)
-for name in ('model.json', 'evaluation.json', _engine_module.EXCITATION_EVALUATION):
-    if name != 'model.json' and not (REPO / model_dir / name).exists(): continue
-    shutil.copyfile(REPO / model_dir / name, target / model_dir / name)
+for model_name in _engine_module.MODELS:  # every shipped coarse model, with its held-out evaluations
+    model_dir = _engine_module.model_path(model_name).parent.relative_to(REPO); (target / model_dir).mkdir(parents=True)
+    for name in ('model.json', 'evaluation.json', _engine_module.EXCITATION_EVALUATION):
+        if name != 'model.json' and not (REPO / model_dir / name).exists(): continue
+        shutil.copyfile(REPO / model_dir / name, target / model_dir / name)
 shutil.copytree(REPO / 'offline', target / 'offline', ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.nbc', '*.nbi'))
 for name in ['README-OFFLINE.txt', 'Start-WorkAI.bat', 'start-workai.sh', 'verify-package.py']:
     shutil.copyfile(REPO / 'offline' / name, target / name)

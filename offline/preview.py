@@ -112,9 +112,10 @@ def preview(body, data_directory=None):
     degree = body.get('degree') if body.get('degree') in (3, 4, 5) else 4
     if body.get('engine') == 'coarse':
         # the fast engine runs on the learned model's own coarse grid
-        from .coarse_engine import model_summary, out_of_range
-        summary = model_summary(); degree = summary['degree']
-        out['engine'] = dict(summary, out_of_training_range=out_of_range(scene or body['scene']) if (scene or body['scene']).get('schema') == V2 else [])
+        from .coarse_engine import DEFAULT_MODEL, MODELS, model_path, model_summary, out_of_range
+        name = body.get('coarse_model', DEFAULT_MODEL); name = name if name in MODELS else DEFAULT_MODEL  # an unknown name is already in errors
+        summary = model_summary(model_path(name)); degree = summary['degree']
+        out['engine'] = dict(summary, out_of_training_range=out_of_range(scene or body['scene'], name) if (scene or body['scene']).get('schema') == V2 else [])
         if scene is not None: scene = dict(scene, numerics=dict(scene['numerics'], h_mm=summary['h_mm']))
     if scene is not None:
         try:

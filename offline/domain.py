@@ -132,19 +132,22 @@ ENGINES = ('network', 'coarse')
 
 
 def validate_request(body):
-    if not isinstance(body, dict) or set(body) - {'engine'} != {'scene', 'degree'} or type(body['degree']) is not int or body['degree'] not in (3, 4, 5):
+    if not isinstance(body, dict) or set(body) - {'engine', 'coarse_model'} != {'scene', 'degree'} or type(body['degree']) is not int or body['degree'] not in (3, 4, 5):
         raise ValueError('需要场景与 3/4/5 阶图设置。')
     engine = body.get('engine', 'network')
     if engine not in ENGINES:
         raise ValueError('计算引擎需为 network（冻结网络）或 coarse（粗网格算子）。')
+    if 'coarse_model' in body and engine != 'coarse':
+        raise ValueError('粗网格模型只用于 coarse 引擎。')
     if engine == 'coarse':
         # The scene is validated as written; the learned model then runs it on its own coarse graph.
         if not (isinstance(body['scene'], dict) and body['scene'].get('schema') == V2):
             raise ValueError('快速引擎只接受 v2 场景。')
-        from .coarse_engine import check
-        check(body['scene'])  # the engine's own limits first, so a refusal names them
-        result = validate_v2_request({'scene': body['scene'], 'degree': body['degree']}); check(result['scene'])
-        return dict(result, engine='coarse')
+        from .coarse_engine import DEFAULT_MODEL, check, model_path
+        name = body.get('coarse_model', DEFAULT_MODEL); model_path(name)
+        check(body['scene'], name)  # the engine's own limits first, so a refusal names them
+        result = validate_v2_request({'scene': body['scene'], 'degree': body['degree']}); check(result['scene'], name)
+        return dict(result, engine='coarse', coarse_model=name)
     if isinstance(body['scene'], dict) and body['scene'].get('schema') == V2:
         return validate_v2_request({'scene': body['scene'], 'degree': body['degree']})
     raw = copy.deepcopy(body['scene'])

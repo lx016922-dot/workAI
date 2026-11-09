@@ -7,7 +7,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from offline.coarse_engine import EXCITATIONS, model_summary, out_of_range
+import re
+
+from offline.coarse_engine import DEFAULT_MODEL, EXCITATIONS, MODELS, model_summary, out_of_range
 from offline.domain import validate_request
 from offline.preview import preview
 
@@ -38,6 +40,18 @@ class FastEngine(unittest.TestCase):
         self.assertLess(p['mesh']['nodes'], preview({'scene': s, 'degree': 4}, '.')['mesh']['nodes'] / 4)
         wide = copy.deepcopy(s); wide['geometry']['thickness_mm'] = 3.; wide['source']['frequency_mhz'] = .5
         self.assertEqual(len(out_of_range(wide)), 3)
+
+    def test_model_choice(self):
+        s = two_patch()
+        self.assertEqual(validate_request({'scene': s, 'degree': 4, 'engine': 'coarse'})['coarse_model'], DEFAULT_MODEL)
+        for name in MODELS:
+            self.assertEqual(validate_request({'scene': s, 'degree': 4, 'engine': 'coarse', 'coarse_model': name})['coarse_model'], name)
+            p = preview({'scene': s, 'degree': 4, 'engine': 'coarse', 'coarse_model': name}, '.'); self.assertTrue(p['ok'], p['errors'])
+            self.assertEqual((p['engine']['name'], p['mesh']['h_mm']), (name, model_summary(REPO / 'coarsegraph/models' / name / 'model.json')['h_mm']))
+        for bad in [{'engine': 'coarse', 'coarse_model': 'p9-h1'}, {'coarse_model': DEFAULT_MODEL}]:
+            with self.assertRaises(ValueError): validate_request(dict({'scene': s, 'degree': 4}, **bad))
+        listed = re.search(r'COARSE_MODELS = \{([^}]*)\}', (REPO / 'offline/web/inspector.js').read_text(encoding='utf-8')).group(1)
+        self.assertEqual(re.findall(r"'([\w.-]+)':", listed), list(MODELS))  # the interface offers exactly the shipped models, default first
 
     def test_excitation_forms(self):
         a = json.loads((REPO / 'coarsegraph/specs/labels-a-top-gaussian.json').read_text(encoding='utf-8'))['base_scene']

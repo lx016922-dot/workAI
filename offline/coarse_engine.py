@@ -15,7 +15,11 @@ import numpy as np
 from solid.schema import require
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-MODEL = REPOSITORY / 'coarsegraph' / 'models' / 'p4-h3-harmonic' / 'model.json'
+MODELS_DIRECTORY = REPOSITORY / 'coarsegraph' / 'models'
+# Shipped coarse models (name -> label); the first is the default. A finer-grid model is added here once it passes its held-out test.
+MODELS = {'p4-h3-harmonic': '快速 · h 3 mm'}
+DEFAULT_MODEL = 'p4-h3-harmonic'
+MODEL = MODELS_DIRECTORY / DEFAULT_MODEL / 'model.json'
 LAWS = ('linear', 'stvk', 'murnaghan')
 MAX_FRAMES = 4001
 FIELD_BUDGET_BYTES = 768 * 1024 ** 2
@@ -26,6 +30,11 @@ TRAINING_RANGE = [('geometry.length_mm', '板长', 48, 48, 'mm'), ('geometry.wid
 EXCITATION_EVALUATION = 'evaluation-abcd.json'
 EXCITATIONS = {'labels-a-top-gaussian': '顶面高斯', 'labels-b-end-axial': '端面轴向', 'labels-c-two-patch': '双贴片反相', 'labels-d-comb': '梳状叉指'}
 TRAINED_FACES = ('zmax', 'zmin', 'xmin', 'xmax')  # top/bottom (A, C) and end faces (B); the plate is mirror-symmetric
+
+
+def model_path(name=DEFAULT_MODEL):
+    require(name in MODELS, f'粗网格模型需为 {"、".join(MODELS)} 之一。')
+    return MODELS_DIRECTORY / name / 'model.json'
 
 
 def _get(scene, path):
@@ -57,7 +66,7 @@ def model_summary(path=MODEL):
     if forms:
         evaluation = json.loads((Path(path).parent / EXCITATION_EVALUATION).read_text(encoding='utf-8'))['summary']
         test = evaluation['learned']['test']; base = evaluation['baseline_gll']['test']
-    return {'name': Path(path).parent.name, 'degree': model['degree'], 'h_mm': model['h_mm'], 'parameters': model['parameter_count'],
+    return {'name': Path(path).parent.name, 'label': MODELS.get(Path(path).parent.name, Path(path).parent.name), 'degree': model['degree'], 'h_mm': model['h_mm'], 'parameters': model['parameter_count'],
             'test_cases': test['pairs'], 'test_passed': test['passed'], 'baseline_test_passed': base['passed'],
             'test_worst_waveform_l2': test['worst_waveform_l2'], 'test_worst_increment_a2': test['worst_increment_a2'], 'test_by_excitation': forms or [],
             'coarse_nodes_example': model['cost']['coarse_nodes'], 'model_sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest()}
@@ -68,13 +77,13 @@ def _tested(forms, group):
     return f'留出测试 {row["passed"]}/{row["cases"]} 通过' if row else '未经测试'
 
 
-def out_of_range(scene):
-    """Training-range items the scene leaves (information; the run is still allowed)."""
+def out_of_range(scene, name=DEFAULT_MODEL):
+    """Training-range items the scene leaves for the named model (information; the run is still allowed)."""
     out = []
     for path, label, lo, hi, unit in TRAINING_RANGE:
         v = _get(scene, path)
         if isinstance(v, (int, float)) and not lo - 1e-9 <= v <= hi + 1e-9: out.append(f'{label} {v:g} {unit}（训练 {lo:g}{"–" + format(hi, "g") if hi != lo else ""} {unit}）')
-    sources = [x for x in [scene.get('source'), *(scene.get('sources') or [])] if isinstance(x, dict)]; forms = by_excitation()
+    sources = [x for x in [scene.get('source'), *(scene.get('sources') or [])] if isinstance(x, dict)]; forms = by_excitation(model_path(name))
     if len(sources) > 1: out.append(f'{len(sources)} 个激励源（同类双贴片{_tested(forms, "labels-c-two-patch")}，主要是非线性增量的 2f 超过 5%；需要二次谐波时建议用冻结网络、h ≤ 2 mm）')
     for src in sources:
         name = src.get('name') or '主激励'; signal = src.get('signal') if isinstance(src.get('signal'), dict) else {'type': 'tone_burst', 'window': 'hann'}
@@ -90,24 +99,24 @@ def out_of_range(scene):
     return out
 
 
-def check(scene):
+def check(scene, name=DEFAULT_MODEL):
     """Hard limits of the fast engine; raises ValueError."""
     from physics.materials import is_custom
     require(isinstance(scene, dict) and scene.get('schema') == 'workai.hyperelastic.solid.v2', '快速引擎只接受 v2 场景。')
     require((scene.get('geometry') or {}).get('kind') == 'plate', '快速引擎只在平板上训练过；孔、缺口和管请用冻结网络。')
     require(not is_custom(scene.get('material')), '快速引擎的算子只用训练所用的铝训练过；其他材料请用冻结网络。')
-    model = json.loads(MODEL.read_text(encoding='utf-8'))
+    model = json.loads(model_path(name).read_text(encoding='utf-8'))
     frames = round(scene['acquisition']['duration_us'] / scene['acquisition']['sample_step_us']) + 1
     require(frames <= MAX_FRAMES, f'快速引擎一次最多 {MAX_FRAMES} 个采样点（短记录）；长记录请用冻结网络。')
     return model
 
 
-def run(scene, callback=None):
+def run(scene, callback=None, name=DEFAULT_MODEL):
     """mesh, fields (linear, stvk, full), per-law diagnostics, times and record extras."""
     from coarsegraph.run import load_model
     from coarsegraph.simulate import Coarse
     from graphnet.model import load
-    model = check(scene); model, (D, q, m) = load_model(MODEL); network = load(3)
+    check(scene, name); model, (D, q, m) = load_model(model_path(name)); network = load(3)
     require(network['material_check']['pass'], '冻结能量网络与训练材料不一致。')
     c = Coarse(scene, model['degree'], model['h_mm'], model['cfl']); D, volume, mass = c.operators(D, q, m)
     require(c.frames * len(mass) * 3 * 8 * 3 <= FIELD_BUDGET_BYTES, '粗网格完整位移场超过内存预算，请缩短记录。')
@@ -125,8 +134,8 @@ def run(scene, callback=None):
                      'engine': 'coarse_graph_learned_operator'})
         fields.append(field)
         if callback: callback(rows[-1])
-    summary = model_summary()
+    summary = model_summary(model_path(name))
     extra = {'engine': 'workai_coarse_graph_offline', 'engine_scope': 'learned_coarse_graph_operator_short_record',
-             'coarse_model': dict(summary, out_of_training_range=out_of_range(scene),
+             'coarse_model': dict(summary, out_of_training_range=out_of_range(scene, name),
                                   accuracy_note='学习的粗网格算子：精度是模型记录的留出测试结果，不是其他场景的误差界；超出训练范围的场景需逐例核对。')}
     return c.mesh, fields, rows, c.times_us, extra

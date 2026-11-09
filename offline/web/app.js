@@ -5,7 +5,7 @@ import { solidResultMarkup, mountSolidResult, chart, responseLabels } from './so
 import { solidPathMarkup, mountSolidPath } from './solid-path-viewer.js';
 import { tree, upgrade, workbenchTemplates, addSource, removeSource, addBoundary, removeBoundary, addReceiver, removeReceiver, V2, BOUNDARY_LABELS } from './scene-model.js';
 import { drawScene, pick } from './model-view.js';
-import { inspectorMarkup, bindInspector, escapeHtml } from './inspector.js';
+import { inspectorMarkup, bindInspector, escapeHtml, COARSE_MODELS, DEFAULT_COARSE_MODEL } from './inspector.js';
 import { signalsMarkup } from './signal-view.js';
 import { materialDerivedMarkup } from './material-form.js';
 
@@ -13,7 +13,7 @@ const $ = s => document.querySelector(s);
 const PHASES = { starting: '准备中', meshing: '生成连接图', running: '计算中', exporting: '保存结果', completed: '已完成', failed: '未完成', paused: '已暂停' };
 const VIEWS = { iso: [-.62, .52], front: [0, 0], top: [0, 1.5699], side: [-Math.PI / 2, 0] };
 const DRAFT = 'workai.workbench.draft.v1';
-const state = { scene: null, degree: 4, engine: 'network', selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
+const state = { scene: null, degree: 4, engine: 'network', coarseModel: DEFAULT_COARSE_MODEL, selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
   view: { yaw: VIEWS.iso[0], pitch: VIEWS.iso[1], zoom: 1, exaggerate: true, grid: true }, history: [], templates: {}, token: '', picks: [], submitting: false };
 let previewTimer = 0, previewStamp = 0, poll = 0, generation = 0, viewer = null, pathViewer = null;
 
@@ -26,7 +26,9 @@ function toast(message, kind = 'error') {
   clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, kind === 'error' ? 7000 : 3500);
 }
 const fail = error => toast(error?.message || String(error));
-function requestBody() { return { scene: state.scene, degree: state.degree, ...(state.engine === 'coarse' ? { engine: 'coarse' } : {}) }; }
+function requestBody() { return { scene: state.scene, degree: state.degree, ...(state.engine === 'coarse' ? { engine: 'coarse', coarse_model: state.coarseModel } : {}) }; }
+/** Engine and coarse model from a stored request, draft or imported file (unknown values fall back to the defaults). */
+function takeEngine(d) { state.engine = d?.engine === 'coarse' ? 'coarse' : 'network'; state.coarseModel = COARSE_MODELS[d?.coarse_model] ? d.coarse_model : DEFAULT_COARSE_MODEL; }
 function storeDraft() { try { localStorage.setItem(DRAFT, JSON.stringify(requestBody())); } catch { /* storage unavailable */ } }
 function readDraft() { try { const d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); return d?.scene?.schema === V2 ? d : null; } catch { return null; } }
 
@@ -35,7 +37,7 @@ function snapshot() { return JSON.stringify(requestBody()); }
 function remember() { state.history.push(snapshot()); if (state.history.length > 60) state.history.shift(); $('#undo').disabled = false; }
 function undo() {
   const last = state.history.pop(); if (!last) return;
-  const d = JSON.parse(last); state.scene = d.scene; state.degree = d.degree; state.engine = d.engine || 'network'; $('#undo').disabled = !state.history.length;
+  const d = JSON.parse(last); state.scene = d.scene; state.degree = d.degree; takeEngine(d); $('#undo').disabled = !state.history.length;
   if (!validSelection(state.selection)) state.selection = 'geometry';
   renderAll(); schedulePreview(); storeDraft();
 }
@@ -109,7 +111,7 @@ function renderTree() {
 function renderInspector() {
   const titles = { geometry: '几何', material: '材料与本构', source: '激励源', boundary: '边界条件', receiver: '接收点', study: '记录与网格', fixed: '记录与网格', sources: '激励源', boundaries: '边界条件', receivers: '接收点' };
   $('#inspector-title').textContent = titles[state.selection.split(':')[0]] || '属性';
-  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, state.degree, { materials: state.materials, engine: state.engine });
+  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, state.degree, { materials: state.materials, engine: state.engine, coarseModel: state.coarseModel });
   renderMaterialDerived(); renderEngineDerived();
   let before = snapshot();
   bindInspector($('#inspector'), state.scene, state, kind => {
@@ -138,7 +140,7 @@ function renderStatus() {
   const p = state.preview, bar = $('#status-bar'), issues = $('#issues');
   if (!p) { bar.innerHTML = '<span class="wb-check pending">正在检查场景…</span>'; return; }
   const parts = [p.ok ? '<span class="wb-check ok">✓ 场景有效，可以运行</span>' : `<button type="button" class="wb-check bad" id="show-issues">✗ ${p.errors.length} 个问题</button>`];
-  if (p.engine) parts.push(`<span class="wb-res ${p.engine.out_of_training_range.length ? 'warn' : 'ok'}" title="${escapeHtml(p.engine.out_of_training_range.join('；') || '在训练范围内')}">快速引擎 ${escapeHtml(p.engine.name)} · 测试 ${p.engine.test_passed}/${p.engine.test_cases}${p.engine.out_of_training_range.length ? ` · 超出训练范围 ${p.engine.out_of_training_range.length} 项` : ''}</span>`);
+  if (p.engine) parts.push(`<span class="wb-res ${p.engine.out_of_training_range.length ? 'warn' : 'ok'}" title="${escapeHtml(p.engine.out_of_training_range.join('；') || '在训练范围内')}">快速引擎 ${escapeHtml(p.engine.label || p.engine.name)} · 测试 ${p.engine.test_passed}/${p.engine.test_cases}${p.engine.out_of_training_range.length ? ` · 超出训练范围 ${p.engine.out_of_training_range.length} 项` : ''}</span>`);
   if (p.mesh) parts.push(`<span>${p.engine ? '粗网格' : '网格'} ${p.mesh.elements.toLocaleString()} 单元 · ${p.mesh.nodes.toLocaleString()} 节点 · p=${p.mesh.degree}</span>`);
   if (p.record) parts.push(`<span title="三组控制的完整未压缩记录">记录 ${p.record.samples.toLocaleString()} 点 · ${bytes(p.record.uncompressed_bytes)}${p.record.free_bytes ? ` / 可用 ${bytes(p.record.free_bytes)}` : ''}</span>`);
   for (const r of p.resolution || []) {
@@ -203,7 +205,7 @@ async function openJob(id, restore = false) {
   try {
     const s = await api('/api/jobs/' + id); if (stamp !== generation) return;
     const done = ['completed', 'failed', 'paused'].includes(s.phase), progress = s.duration_us ? 100 * (s.completed_time_us || 0) / s.duration_us : 100 * (s.controls_completed || 0) / 3;
-    $('#result-head').innerHTML = `<div class="wb-result-title"><h2>${escapeHtml(s.name || id)}</h2><span class="wb-phase ${s.phase}">${PHASES[s.phase] || escapeHtml(s.phase)}</span>${s.engine === 'coarse' ? '<span class="wb-tag">粗网格算子</span>' : ''}
+    $('#result-head').innerHTML = `<div class="wb-result-title"><h2>${escapeHtml(s.name || id)}</h2><span class="wb-phase ${s.phase}">${PHASES[s.phase] || escapeHtml(s.phase)}</span>${s.engine === 'coarse' ? `<span class="wb-tag">粗网格算子${s.coarse_model ? ' · ' + escapeHtml(s.coarse_model) : ''}</span>` : ''}
       <span class="muted">${Math.round(s.elapsed_s || 0)} 秒${s.message ? ' · ' + escapeHtml(s.message) : ''}</span></div>
       ${done ? '' : `<progress max="100" value="${progress.toFixed(1)}"></progress>`}
       <div class="wb-result-tools">${s.phase === 'completed' ? `<label class="wb-field inline"><span>响应</span><select id="part">${Object.entries(responseLabels).map(([k, v]) => `<option value="${k}" ${k === state.part ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
@@ -211,7 +213,7 @@ async function openJob(id, restore = false) {
         <button type="button" class="wb-button" id="reuse">载入该任务的场景</button>
         ${s.duration_us >= 5000 && !done ? '<button type="button" class="wb-button" id="pause-job">保存后暂停</button>' : ''}${s.phase === 'paused' ? '<button type="button" class="wb-button primary" id="resume-job">继续计算</button>' : ''}</div>`;
     $('#part')?.addEventListener('change', ev => { state.part = ev.target.value; openJob(id, true); });
-    $('#reuse').onclick = async () => { try { const d = await api('/api/jobs/' + id + '/request'); state.engine = d.engine === 'coarse' ? 'coarse' : 'network'; loadScene(d.scene, d.degree ?? 4); setTab('model'); toast('已载入该任务的场景。', 'info'); } catch (e) { fail(e); } };
+    $('#reuse').onclick = async () => { try { const d = await api('/api/jobs/' + id + '/request'); takeEngine(d); loadScene(d.scene, d.degree ?? 4); setTab('model'); toast('已载入该任务的场景。', 'info'); } catch (e) { fail(e); } };
     $('#pause-job')?.addEventListener('click', async () => { try { await api('/api/jobs/' + id + '/pause', {}); toast('当前分块保存后暂停。', 'info'); } catch (e) { fail(e); } });
     $('#resume-job')?.addEventListener('click', async () => { try { await api('/api/jobs/' + id + '/resume', {}); await refreshJobs(); await openJob(id); } catch (e) { fail(e); } });
     if (s.phase === 'completed') {
@@ -294,7 +296,7 @@ async function start() {
     try {
       const file = ev.target.files[0]; if (!file) return; if (file.size > 65536) throw Error('配置不能超过 64 KiB。');
       const d = JSON.parse(await file.text()), scene = d.scene || d; if (!scene?.geometry || !scene.source) throw Error('配置格式不正确：需要 {scene, degree} 或场景对象。');
-      state.engine = d.engine === 'coarse' ? 'coarse' : 'network'; loadScene(scene, [3, 4, 5].includes(d.degree) ? d.degree : state.degree); toast('已导入场景。', 'info');
+      takeEngine(d); loadScene(scene, [3, 4, 5].includes(d.degree) ? d.degree : state.degree); toast('已导入场景。', 'info');
     } catch (error) { fail(error); } finally { ev.target.value = ''; }
   });
   bindView();
@@ -310,7 +312,7 @@ async function start() {
     $('#template').innerHTML = '<option value="">从模板新建…</option>' + Object.entries(state.templates).map(([k, t]) => `<option value="${k}">${escapeHtml(t.label)}</option>`).join('');
     $('#template').addEventListener('change', ev => { const t = state.templates[ev.target.value]; ev.target.value = ''; if (t) { loadScene(structuredClone(t.scene), state.degree); setTab('model'); } });
     const draft = readDraft();
-    if (draft) { state.scene = draft.scene; state.degree = draft.degree || 4; state.engine = draft.engine === 'coarse' ? 'coarse' : 'network'; } else { state.scene = structuredClone(state.templates.gaussian?.scene || Object.values(state.templates)[0].scene); }
+    if (draft) { state.scene = draft.scene; state.degree = draft.degree || 4; takeEngine(draft); } else { state.scene = structuredClone(state.templates.gaussian?.scene || Object.values(state.templates)[0].scene); }
     renderAll(); schedulePreview();
     await refreshJobs(); await openJob(state.jobs[0]?.job_id || '');
   } catch (error) { fail(error); }

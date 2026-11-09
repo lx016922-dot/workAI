@@ -104,12 +104,16 @@ function receiverForm(scene, index) {
 }
 
 const ENGINES = { network: '物理 AI · 冻结网络（细网格，默认）', coarse: '物理 AI · 粗网格算子（快速，研究模型）' };
+/** Shipped coarse models (offline/coarse_engine.py MODELS); the first is the default. */
+export const COARSE_MODELS = { 'p4-h3-harmonic': '快速 · h 3 mm（默认）' };
+export const DEFAULT_COARSE_MODEL = Object.keys(COARSE_MODELS)[0];
 
-function studyForm(scene, degree, engine = 'network') {
+function studyForm(scene, degree, engine = 'network', coarseModel = DEFAULT_COARSE_MODEL) {
   const a = scene.acquisition, n = scene.numerics, faces = { none: '无（全部自由）', ...Object.fromEntries(FACES.map(f => [f, FACE_LABELS[f]])) };
   return section('记录', num('记录时长', 'acquisition.duration_us', a.duration_us, { unit: 'μs', min: .1, max: 20000, hint: '最长 20 ms；5 ms 及以上的记录可在计算中暂停、之后续算。' }) +
       num('输出采样间隔', 'acquisition.sample_step_us', a.sample_step_us, { unit: 'μs', min: .01, max: .2, hint: '二次谐波每周期至少 8 个采样点。' })) +
     section('计算引擎', `<label class="wb-field wide"><span>引擎</span><select data-action="engine">${Object.entries(ENGINES).map(([k, v]) => `<option value="${k}" ${k === engine ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      ${engine === 'coarse' && Object.keys(COARSE_MODELS).length > 1 ? `<label class="wb-field wide"><span>粗网格模型</span><select data-action="coarse-model">${Object.entries(COARSE_MODELS).map(([k, v]) => `<option value="${k}" ${k === coarseModel ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
       <div class="wb-field wide" id="engine-derived"></div>`,
       engine === 'coarse' ? '粗网格算子是同一个网络换上学到的单元算子（求导滤波、刚度与质量积分），在模型自带的粗网格上计算，比冻结网络快约一个数量级。它是研究模型，只在 48 × 2 mm 半宽铝板、板厚 1.6–2.4 mm、0.2–0.4 MHz、30 μs 记录上训练和测试过；超出范围要逐例核对。下面的 h 与 p 只用于检查场景本身，计算用模型的网格。' : '') +
     section('网格与物理 AI 求解', num('单元尺寸 h', 'numerics.h_mm', n.h_mm, { unit: 'mm', min: .8, max: 2.5 }) +
@@ -126,7 +130,7 @@ export function inspectorMarkup(scene, selection, degree, context = {}) {
   if (kind === 'source') return sourceForm(scene, index);
   if (kind === 'boundary') return boundaryForm(scene, index);
   if (kind === 'receiver') return receiverForm(scene, index);
-  if (kind === 'fixed' || kind === 'study') return studyForm(scene, degree, context.engine);
+  if (kind === 'fixed' || kind === 'study') return studyForm(scene, degree, context.engine, context.coarseModel);
   if (kind === 'sources') return section('激励源', '<p class="wb-note">点击左侧的“+”添加激励源，或选中一个激励编辑。每个激励有独立的加载面、方向、时间信号和空间分布。</p>');
   if (kind === 'boundaries') return section('边界条件', '<p class="wb-note">点击“+”添加对称面、反对称面或吸收层。固定面在“记录与网格”中设置。</p>');
   if (kind === 'receivers') return section('接收点', '<p class="wb-note">点击“+”添加接收点。完整位移场全部保存，结果页可以任取点、直线提取波形。</p>');
@@ -161,6 +165,7 @@ export function bindInspector(root, scene, state, onChange) {
   });
   if (state.selection === 'material') bindMaterial(root, scene, state.materials || {}, onChange);
   root.querySelectorAll('select[data-action="engine"]').forEach(el => el.addEventListener('change', () => { state.engine = el.value; onChange('structure'); }));
+  root.querySelectorAll('select[data-action="coarse-model"]').forEach(el => el.addEventListener('change', () => { state.coarseModel = el.value; onChange('structure'); }));
   root.querySelectorAll('select[data-action="degree"]').forEach(el => el.addEventListener('change', () => { state.degree = Number(el.value); onChange('value'); }));
   root.querySelectorAll('button[data-action]').forEach(el => el.addEventListener('click', () => {
     const action = el.dataset.action;
