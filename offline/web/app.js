@@ -13,7 +13,7 @@ const $ = s => document.querySelector(s);
 const PHASES = { starting: '准备中', meshing: '生成连接图', running: '计算中', exporting: '保存结果', completed: '已完成', failed: '未完成', paused: '已暂停' };
 const VIEWS = { iso: [-.62, .52], front: [0, 0], top: [0, 1.5699], side: [-Math.PI / 2, 0] };
 const DRAFT = 'workai.workbench.draft.v1';
-const state = { scene: null, degree: 4, selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
+const state = { scene: null, degree: 4, engine: 'network', selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
   view: { yaw: VIEWS.iso[0], pitch: VIEWS.iso[1], zoom: 1, exaggerate: true, grid: true }, history: [], templates: {}, token: '', picks: [], submitting: false };
 let previewTimer = 0, previewStamp = 0, poll = 0, generation = 0, viewer = null, pathViewer = null;
 
@@ -26,15 +26,16 @@ function toast(message, kind = 'error') {
   clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, kind === 'error' ? 7000 : 3500);
 }
 const fail = error => toast(error?.message || String(error));
-function storeDraft() { try { localStorage.setItem(DRAFT, JSON.stringify({ scene: state.scene, degree: state.degree })); } catch { /* storage unavailable */ } }
+function requestBody() { return { scene: state.scene, degree: state.degree, ...(state.engine === 'coarse' ? { engine: 'coarse' } : {}) }; }
+function storeDraft() { try { localStorage.setItem(DRAFT, JSON.stringify(requestBody())); } catch { /* storage unavailable */ } }
 function readDraft() { try { const d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); return d?.scene?.schema === V2 ? d : null; } catch { return null; } }
 
 // ---------- editing ----------
-function snapshot() { return JSON.stringify({ scene: state.scene, degree: state.degree }); }
+function snapshot() { return JSON.stringify(requestBody()); }
 function remember() { state.history.push(snapshot()); if (state.history.length > 60) state.history.shift(); $('#undo').disabled = false; }
 function undo() {
   const last = state.history.pop(); if (!last) return;
-  const d = JSON.parse(last); state.scene = d.scene; state.degree = d.degree; $('#undo').disabled = !state.history.length;
+  const d = JSON.parse(last); state.scene = d.scene; state.degree = d.degree; state.engine = d.engine || 'network'; $('#undo').disabled = !state.history.length;
   if (!validSelection(state.selection)) state.selection = 'geometry';
   renderAll(); schedulePreview(); storeDraft();
 }
@@ -108,13 +109,21 @@ function renderTree() {
 function renderInspector() {
   const titles = { geometry: '几何', material: '材料与本构', source: '激励源', boundary: '边界条件', receiver: '接收点', study: '记录与网格', fixed: '记录与网格', sources: '激励源', boundaries: '边界条件', receivers: '接收点' };
   $('#inspector-title').textContent = titles[state.selection.split(':')[0]] || '属性';
-  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, state.degree, { materials: state.materials });
-  renderMaterialDerived();
+  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, state.degree, { materials: state.materials, engine: state.engine });
+  renderMaterialDerived(); renderEngineDerived();
   let before = snapshot();
   bindInspector($('#inspector'), state.scene, state, kind => {
     if (!kind?.error && !kind?.remove) { state.history.push(before); if (state.history.length > 60) state.history.shift(); $('#undo').disabled = false; before = snapshot(); }
     changed(kind);
   });
+}
+function renderEngineDerived() {
+  const box = $('#engine-derived'), e = state.preview?.engine; if (!box) return;
+  if (state.engine !== 'coarse') { box.innerHTML = '<small>冻结网络：求导滤波器与时间层等价于 GLL 谱元，精度由节点间距决定；支持全部几何、材料和长记录。</small>'; return; }
+  if (!e) { box.innerHTML = '<small>正在读取模型信息…</small>'; return; }
+  box.innerHTML = `<table class="wb-table"><tr><th>模型</th><td>${escapeHtml(e.name)}（${e.degree} 阶，h ${e.h_mm} mm，${e.parameters} 个参数）</td></tr>
+    <tr><th>留出测试</th><td>全部门槛通过 ${e.test_passed}/${e.test_cases}（同网格 GLL 基线 ${e.baseline_test_passed}/${e.test_cases}）；最差波形差 ${(100 * e.test_worst_waveform_l2).toFixed(2)}%，最差增量 2f ${(100 * e.test_worst_increment_a2).toFixed(1)}%</td></tr>
+    <tr><th>训练范围</th><td>${e.out_of_training_range.length ? `<span class="wb-res warn">超出 ${e.out_of_training_range.length} 项：${escapeHtml(e.out_of_training_range.join('；'))}</span>` : '<span class="wb-res ok">在训练范围内</span>'}</td></tr></table>`;
 }
 function renderMaterialDerived() { const box = $('#material-derived'); if (box) box.innerHTML = materialDerivedMarkup(state.preview?.material); }
 function drawView() {
@@ -128,7 +137,8 @@ function renderStatus() {
   const p = state.preview, bar = $('#status-bar'), issues = $('#issues');
   if (!p) { bar.innerHTML = '<span class="wb-check pending">正在检查场景…</span>'; return; }
   const parts = [p.ok ? '<span class="wb-check ok">✓ 场景有效，可以运行</span>' : `<button type="button" class="wb-check bad" id="show-issues">✗ ${p.errors.length} 个问题</button>`];
-  if (p.mesh) parts.push(`<span>网格 ${p.mesh.elements.toLocaleString()} 单元 · ${p.mesh.nodes.toLocaleString()} 节点 · p=${p.mesh.degree}</span>`);
+  if (p.engine) parts.push(`<span class="wb-res ${p.engine.out_of_training_range.length ? 'warn' : 'ok'}" title="${escapeHtml(p.engine.out_of_training_range.join('；') || '在训练范围内')}">快速引擎 ${escapeHtml(p.engine.name)} · 测试 ${p.engine.test_passed}/${p.engine.test_cases}${p.engine.out_of_training_range.length ? ` · 超出训练范围 ${p.engine.out_of_training_range.length} 项` : ''}</span>`);
+  if (p.mesh) parts.push(`<span>${p.engine ? '粗网格' : '网格'} ${p.mesh.elements.toLocaleString()} 单元 · ${p.mesh.nodes.toLocaleString()} 节点 · p=${p.mesh.degree}</span>`);
   if (p.record) parts.push(`<span title="三组控制的完整未压缩记录">记录 ${p.record.samples.toLocaleString()} 点 · ${bytes(p.record.uncompressed_bytes)}${p.record.free_bytes ? ` / 可用 ${bytes(p.record.free_bytes)}` : ''}</span>`);
   for (const r of p.resolution || []) {
     const n = r.nodes_per_2f_shear_wavelength, level = n >= 8 ? 'ok' : n >= 4 ? 'warn' : 'bad';
@@ -160,9 +170,9 @@ function schedulePreview() {
   previewTimer = setTimeout(async () => {
     const stamp = ++previewStamp;
     try {
-      const result = await api('/api/preview', { scene: state.scene, degree: state.degree });
+      const result = await api('/api/preview', requestBody());
       if (stamp !== previewStamp) return;
-      state.preview = result; renderStatus(); drawView(); renderMaterialDerived(); if (state.tab === 'signal') renderSignals();
+      state.preview = result; renderStatus(); drawView(); renderMaterialDerived(); renderEngineDerived(); if (state.tab === 'signal') renderSignals();
     } catch (error) { if (stamp === previewStamp) { state.preview = { ok: false, errors: [error.message], signals: [] }; renderStatus(); } }
   }, 320);
 }
@@ -192,7 +202,7 @@ async function openJob(id, restore = false) {
   try {
     const s = await api('/api/jobs/' + id); if (stamp !== generation) return;
     const done = ['completed', 'failed', 'paused'].includes(s.phase), progress = s.duration_us ? 100 * (s.completed_time_us || 0) / s.duration_us : 100 * (s.controls_completed || 0) / 3;
-    $('#result-head').innerHTML = `<div class="wb-result-title"><h2>${escapeHtml(s.name || id)}</h2><span class="wb-phase ${s.phase}">${PHASES[s.phase] || escapeHtml(s.phase)}</span>
+    $('#result-head').innerHTML = `<div class="wb-result-title"><h2>${escapeHtml(s.name || id)}</h2><span class="wb-phase ${s.phase}">${PHASES[s.phase] || escapeHtml(s.phase)}</span>${s.engine === 'coarse' ? '<span class="wb-tag">粗网格算子</span>' : ''}
       <span class="muted">${Math.round(s.elapsed_s || 0)} 秒${s.message ? ' · ' + escapeHtml(s.message) : ''}</span></div>
       ${done ? '' : `<progress max="100" value="${progress.toFixed(1)}"></progress>`}
       <div class="wb-result-tools">${s.phase === 'completed' ? `<label class="wb-field inline"><span>响应</span><select id="part">${Object.entries(responseLabels).map(([k, v]) => `<option value="${k}" ${k === state.part ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
@@ -200,7 +210,7 @@ async function openJob(id, restore = false) {
         <button type="button" class="wb-button" id="reuse">载入该任务的场景</button>
         ${s.duration_us >= 5000 && !done ? '<button type="button" class="wb-button" id="pause-job">保存后暂停</button>' : ''}${s.phase === 'paused' ? '<button type="button" class="wb-button primary" id="resume-job">继续计算</button>' : ''}</div>`;
     $('#part')?.addEventListener('change', ev => { state.part = ev.target.value; openJob(id, true); });
-    $('#reuse').onclick = async () => { try { const d = await api('/api/jobs/' + id + '/request'); loadScene(d.scene, d.degree ?? 4); setTab('model'); toast('已载入该任务的场景。', 'info'); } catch (e) { fail(e); } };
+    $('#reuse').onclick = async () => { try { const d = await api('/api/jobs/' + id + '/request'); state.engine = d.engine === 'coarse' ? 'coarse' : 'network'; loadScene(d.scene, d.degree ?? 4); setTab('model'); toast('已载入该任务的场景。', 'info'); } catch (e) { fail(e); } };
     $('#pause-job')?.addEventListener('click', async () => { try { await api('/api/jobs/' + id + '/pause', {}); toast('当前分块保存后暂停。', 'info'); } catch (e) { fail(e); } });
     $('#resume-job')?.addEventListener('click', async () => { try { await api('/api/jobs/' + id + '/resume', {}); await refreshJobs(); await openJob(id); } catch (e) { fail(e); } });
     if (s.phase === 'completed') {
@@ -235,7 +245,7 @@ function recordExtractor(base, result) {
 async function run() {
   state.submitting = true; updateRun();
   try {
-    const d = await api('/api/jobs', { scene: state.scene, degree: state.degree });
+    const d = await api('/api/jobs', requestBody());
     state.job = d.job_id; await refreshJobs(); setTab('result'); await openJob(d.job_id); toast('已开始计算。首次运行需要编译，请稍候。', 'info');
   } catch (error) { fail(error); } finally { state.submitting = false; await refreshJobs().catch(fail); }
 }
@@ -278,12 +288,12 @@ async function start() {
   $('#undo').addEventListener('click', undo);
   $('#run').addEventListener('click', run);
   $('#refresh').addEventListener('click', () => refreshJobs().then(() => state.job && openJob(state.job)).catch(fail));
-  $('#export-scene').addEventListener('click', () => download('workai-scene.json', { scene: state.scene, degree: state.degree }));
+  $('#export-scene').addEventListener('click', () => download('workai-scene.json', requestBody()));
   $('#import-scene').addEventListener('change', async ev => {
     try {
       const file = ev.target.files[0]; if (!file) return; if (file.size > 65536) throw Error('配置不能超过 64 KiB。');
       const d = JSON.parse(await file.text()), scene = d.scene || d; if (!scene?.geometry || !scene.source) throw Error('配置格式不正确：需要 {scene, degree} 或场景对象。');
-      loadScene(scene, [3, 4, 5].includes(d.degree) ? d.degree : state.degree); toast('已导入场景。', 'info');
+      state.engine = d.engine === 'coarse' ? 'coarse' : 'network'; loadScene(scene, [3, 4, 5].includes(d.degree) ? d.degree : state.degree); toast('已导入场景。', 'info');
     } catch (error) { fail(error); } finally { ev.target.value = ''; }
   });
   bindView();
@@ -299,7 +309,7 @@ async function start() {
     $('#template').innerHTML = '<option value="">从模板新建…</option>' + Object.entries(state.templates).map(([k, t]) => `<option value="${k}">${escapeHtml(t.label)}</option>`).join('');
     $('#template').addEventListener('change', ev => { const t = state.templates[ev.target.value]; ev.target.value = ''; if (t) { loadScene(structuredClone(t.scene), state.degree); setTab('model'); } });
     const draft = readDraft();
-    if (draft) { state.scene = draft.scene; state.degree = draft.degree || 4; } else { state.scene = structuredClone(state.templates.gaussian?.scene || Object.values(state.templates)[0].scene); }
+    if (draft) { state.scene = draft.scene; state.degree = draft.degree || 4; state.engine = draft.engine === 'coarse' ? 'coarse' : 'network'; } else { state.scene = structuredClone(state.templates.gaussian?.scene || Object.values(state.templates)[0].scene); }
     renderAll(); schedulePreview();
     await refreshJobs(); await openJob(state.jobs[0]?.job_id || '');
   } catch (error) { fail(error); }

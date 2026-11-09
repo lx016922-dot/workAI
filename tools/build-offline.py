@@ -38,11 +38,18 @@ files = {'graphwave': ['__init__.py', 'inference.py', 'predict.py', 'buffered_in
          'solid': ['__init__.py', 'schema.py'],
          # Version-2 input layer of the frozen network and the excitation/boundary definitions it reads.
          'graphnet': ['__init__.py', 'model.py', 'inputs.py', 'recurrence.py', 'predict.py', 'rollout.py'],
-         'physics': ['__init__.py', 'scene.py', 'signals.py', 'loads.py', 'boundaries.py', 'materials.py']}
+         'physics': ['__init__.py', 'scene.py', 'signals.py', 'loads.py', 'boundaries.py', 'materials.py', 'receivers.py', 'runs.py'],
+         # Fast engine: the learned coarse-graph operator (inference only) and its shipped model.
+         'coarsegraph': ['__init__.py', 'operator.py', 'simulate.py', 'kernel.py', 'run.py']}
 for module, names in files.items():
     (target / module).mkdir()
     for name in names:
         shutil.copyfile(REPO / module / name, target / module / name)
+from importlib.util import spec_from_file_location, module_from_spec
+_engine = spec_from_file_location('coarse_engine', REPO / 'offline' / 'coarse_engine.py'); _engine_module = module_from_spec(_engine); _engine.loader.exec_module(_engine_module)
+model_dir = _engine_module.MODEL.parent.relative_to(REPO); (target / model_dir).mkdir(parents=True)
+for name in ('model.json', 'evaluation.json'):
+    shutil.copyfile(REPO / model_dir / name, target / model_dir / name)
 shutil.copytree(REPO / 'offline', target / 'offline', ignore=shutil.ignore_patterns('__pycache__', '*.pyc', '*.nbc', '*.nbi'))
 for name in ['README-OFFLINE.txt', 'Start-WorkAI.bat', 'start-workai.sh', 'verify-package.py']:
     shutil.copyfile(REPO / 'offline' / name, target / name)

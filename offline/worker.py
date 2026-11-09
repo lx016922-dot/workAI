@@ -46,6 +46,28 @@ def export_results(directory, scene, mesh, fields, diagnostics, info, times=None
     write_json(directory / 'exports.json', exports)
 
 
+def run_coarse(directory, scene, info, publish):
+    """Fast engine: the learned coarse-graph operator on its own coarse grid (short records)."""
+    from .coarse_engine import run as coarse_run
+    publish(phase='running', engine='coarse', controls_completed=0, message='粗网格算子：首次运行需要编译，随后计算三组控制')
+    def progress(d):
+        if not d['energy_balance_within_1_percent']:
+            raise ValueError('粗网格输出能量收支未通过 1% 检查。')
+        publish(controls_completed=['linear', 'stvk', 'murnaghan'].index(d['law']) + 1, nodes=d['nodes'], message=d['law'] + ' 控制完成')
+    mesh, fields, diagnostics, times, extra = coarse_run(scene, callback=progress)
+    if len(surface_triangles(mesh['elements'])) > 50000:
+        raise ValueError('网格超过离线显示预算。')
+    from spectral3d.loads import loaded_surface_faces, prepare_excitation
+    from physics.scene import summary
+    extra.update(loaded_faces=loaded_surface_faces(surface_triangles(mesh['elements']), prepare_excitation(mesh, scene)['loads']), excitation=summary(scene), input_layer='v2_multi_source')
+    forbidden = ['spectral3d.solver', 'spectral3d.curved_solver', 'spectral3d.implicit', 'solid.fem']
+    if any(name in sys.modules for name in forbidden):
+        raise RuntimeError('预测进程意外加载了数值求解模块。')
+    publish(phase='exporting', message='正在保存动画及五种响应')
+    export_results(directory, scene, mesh, fields, diagnostics, dict(info, weights_sha256=digest(MODEL / 'weights.npz')), times, None, extra)
+    publish(phase='completed', message='粗网格算子计算完成', controls_completed=3, numerical_correction=False)
+
+
 def run(directory):
     directory = Path(directory)
     start = time.monotonic()
@@ -57,6 +79,8 @@ def run(directory):
         request = validate_request(json.loads((directory / 'request.json').read_text(encoding='utf-8')))
         info = model_info()
         scene = request['scene']
+        if request.get('engine') == 'coarse':
+            return run_coarse(directory, scene, info, publish)
         network_v2 = scene.get('schema') == V2
         is_long = network_v2 or scene['acquisition']['duration_us'] >= 5000
         if is_long and 'long_model' not in info:
