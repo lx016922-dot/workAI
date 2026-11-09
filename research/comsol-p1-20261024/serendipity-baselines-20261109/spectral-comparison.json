@@ -1,0 +1,126 @@
+{
+ "schema": "workai.comsol.p1.baseline_comparison.v1",
+ "created_at_utc": "2026-11-09T08:22:39.103779+00:00",
+ "reference": "COMSOL (delivery in the data directory); spectral GLL labels degree 4, h 1.5 mm",
+ "metric": "coarsegraph.evaluate.case_metrics, 10 % relative reporting floor, 0–30 μs; increment = murnaghan − linear of the same source",
+ "tool_sha256": "6dc42185f39debf108a23fabca1d874275e0aa05dec358362442bacda3feaecd",
+ "rows": [
+  {
+   "case_id": "A-f0.40-T1.6",
+   "spectral_vs_comsol": {
+    "record_l2": 0.00014150607269767157,
+    "increment_l2": 0.0659434846293957,
+    "worst_waveform_l2": 0.0003450388085665957,
+    "worst_a1": 0.0007477874823906501,
+    "worst_a2": 0.002709849961060439,
+    "worst_increment_a2": 0.009651314931120437,
+    "increment_a2_reference_max_m": 1.788242189601778e-14,
+    "waveform_gate": true,
+    "increment_gate": true,
+    "passed": true,
+    "a2_vector_relative": 0.0011895878810759865,
+    "increment_a2_vector_relative": 0.006362199009385669
+   },
+   "spectral_label_result_sha256": {
+    "linear": "4ecffe1335365279b022a96c0fb6eb07f165c4b85c0a776c1b151a293e97e821",
+    "murnaghan": "95852c67b1272b3a941e072eddc4f82b04325c960872bcd6fe9c1ad389a6d5ba"
+   },
+   "old_vs_new_linear": {
+    "linear_difference_max_over_linear_peak_projected": 5.905263801474273e-06,
+    "linear_difference_max_over_linear_peak_xyz": 5.5425998131915744e-06,
+    "increment_max_over_linear_peak": 0.0001123715447975613,
+    "linear_difference_rms_over_increment_rms": 0.03267613241490381,
+    "linear_difference_f_over_linear_f_max": 3.1257375130338375e-07,
+    "linear_difference_2f_over_increment_2f_worst": 0.006167227240882599,
+    "linear_difference_2f_over_increment_2f_median": 0.00276646870756232,
+    "increment_2f_max_m": 1.788242189601778e-14,
+    "linear_record_2f_max_m": 1.1498432566784353e-12,
+    "increment_2f_over_linear_record_2f": 0.015552051805456447,
+    "old_csv_sha256": "48d0ea5f98def11435ae2d83bb7083767874e3c8142c338e1abde83404c5e755",
+    "new_csv_sha256": "256a74c10359a58d9a40fb78dcf5730d7a567b8a62c0ba2e4a398cbcab58d2b2"
+   },
+   "comsol_csv_sha256": {
+    "linear": "256a74c10359a58d9a40fb78dcf5730d7a567b8a62c0ba2e4a398cbcab58d2b2",
+    "murnaghan": "5cb2932a280d7c539e53bb181278c075884677fd84452c3395a844dcf1f026d1"
+   }
+  },
+  {
+   "case_id": "B-f0.40-T1.6",
+   "spectral_vs_comsol": {
+    "record_l2": 0.00019229455492193064,
+    "increment_l2": 0.002413523540085698,
+    "worst_waveform_l2": 0.0002501986466518522,
+    "worst_a1": 3.615287685287513e-05,
+    "worst_a2": 0.0039055804383563504,
+    "worst_increment_a2": 0.0005891153272060101,
+    "increment_a2_reference_max_m": 1.773465137695727e-12,
+    "waveform_gate": true,
+    "increment_gate": true,
+    "passed": true,
+    "a2_vector_relative": 0.001254912408936429,
+    "increment_a2_vector_relative": 0.0008399527734836457
+   },
+   "spectral_label_result_sha256": {
+    "linear": "cfdeef6de335be0b83b73c0a12c7fccbc3bb167e64ffdb0750122f0191ba9df3",
+    "murnaghan": "086c3db86bae0b2854fe7b5831aa9610b1e7e5302cfca2232f215f4ab93e73a3"
+   },
+   "old_vs_new_linear": {
+    "linear_difference_max_over_linear_peak_projected": 1.2459714179954424e-06,
+    "linear_difference_max_over_linear_peak_xyz": 1.2770771453402968e-06,
+    "increment_max_over_linear_peak": 0.0003668233808017457,
+    "linear_difference_rms_over_increment_rms": 0.0016990776757501494,
+    "linear_difference_f_over_linear_f_max": 8.85659676251407e-07,
+    "linear_difference_2f_over_increment_2f_worst": 0.0007102644407093667,
+    "linear_difference_2f_over_increment_2f_median": 0.000624843966941048,
+    "increment_2f_max_m": 1.773465137695727e-12,
+    "linear_record_2f_max_m": 5.246950329193146e-12,
+    "increment_2f_over_linear_record_2f": 0.33799922363062335,
+    "old_csv_sha256": "5de50724e8b83904a61473b2abf56c7472f835cfa80ac6ccfe9c34e6ae395e8d",
+    "new_csv_sha256": "3f328fe24b0bf34c30e9e2e79e5f3562054100f1f81548476666aea49e21b00a"
+   },
+   "comsol_csv_sha256": {
+    "linear": "3f328fe24b0bf34c30e9e2e79e5f3562054100f1f81548476666aea49e21b00a",
+    "murnaghan": "b94938108f2972b3f9f84abcc176aa4cda38d18247d81e26ecbd72d3cdd2203e"
+   }
+  },
+  {
+   "case_id": "C-f0.25-T2.0",
+   "spectral_vs_comsol": {
+    "record_l2": 0.00011930456426007829,
+    "increment_l2": 0.021756936461099902,
+    "worst_waveform_l2": 0.000131016064149587,
+    "worst_a1": 0.00010846689148136804,
+    "worst_a2": 0.001524466479852346,
+    "worst_increment_a2": 0.027256658052214788,
+    "increment_a2_reference_max_m": 3.437519482719241e-13,
+    "waveform_gate": true,
+    "increment_gate": true,
+    "passed": true,
+    "a2_vector_relative": 0.0012873902233654247,
+    "increment_a2_vector_relative": 0.0030727003356262952
+   },
+   "spectral_label_result_sha256": {
+    "linear": "094095888b849bb3928cb2f50b20ef6ae92c97f23821d92f65317f13c57e40c9",
+    "murnaghan": "2c26d34e94ad40924630ecce5f8e4df4d3d653307737f74d7f88edcd241302a8"
+   },
+   "old_vs_new_linear": {
+    "linear_difference_max_over_linear_peak_projected": 1.2640219078484467e-06,
+    "linear_difference_max_over_linear_peak_xyz": 1.1911278497821373e-06,
+    "increment_max_over_linear_peak": 6.0859507328841366e-05,
+    "linear_difference_rms_over_increment_rms": 0.015291239888375113,
+    "linear_difference_f_over_linear_f_max": 4.589899577143267e-07,
+    "linear_difference_2f_over_increment_2f_worst": 0.015575144393033624,
+    "linear_difference_2f_over_increment_2f_median": 0.0007745914605832622,
+    "increment_2f_max_m": 3.437519482719241e-13,
+    "linear_record_2f_max_m": 2.730571129203924e-12,
+    "increment_2f_over_linear_record_2f": 0.12589012774486566,
+    "old_csv_sha256": "bd091dc278decabbb1e154408eafd2ae4698f02b5aeb426423f4c1bb455ac478",
+    "new_csv_sha256": "b2bacbe529019ab74af6792e41f274634b2d51c7e18b31f7d82367dd9464d46f"
+   },
+   "comsol_csv_sha256": {
+    "linear": "b2bacbe529019ab74af6792e41f274634b2d51c7e18b31f7d82367dd9464d46f",
+    "murnaghan": "4bb9447ca0e84a396db2943a0ef0e74ff46b615412e743f754b6e0fa1e5ea1ee"
+   }
+  }
+ ]
+}
