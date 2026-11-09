@@ -1,0 +1,283 @@
+{
+  "case_id": "B-f0.40-T1.6",
+  "comsol_version": "COMSOL Multiphysics 6.4 (开发版本: 293)",
+  "source_provenance": {
+    "mode": "local_comsol_batch",
+    "source_sha256": "54e90010ad0c63181afd7d0ff32348afa7a6b02f49f96cf77fcef48996548344"
+  },
+  "element": {
+    "shape": "hexahedral, swept",
+    "order": "quartic",
+    "degree": 4,
+    "discretization": "linear Hooke or total Lagrangian P=F*S",
+    "shape_function": "shnserp",
+    "family": "nodal serendipity"
+  },
+  "integration_order": 20,
+  "time_stepping": {
+    "method": "generalized-alpha",
+    "rho_infinity": 1,
+    "output_step_us": 0.05,
+    "steps": "strict"
+  },
+  "tolerances": {
+    "time_relative": 0.000001,
+    "absolute_m": 1e-18,
+    "newton": "tolerance factor 0.001"
+  },
+  "load": {
+    "type": "nominal traction per reference area (dead load, fixed direction)",
+    "sources": [
+      {
+        "face": "xmin",
+        "spatial": "uniform",
+        "direction": [
+          1,
+          0,
+          0
+        ],
+        "delay_us": 0
+      }
+    ]
+  },
+  "absorbing": {
+    "method": "body load -rho0*alpha(x)*du/dt, all three components",
+    "alpha_max_per_s": 22075615.536638446,
+    "ramp_power": 3,
+    "faces": "xmax"
+  },
+  "geometry": {
+    "length_mm": 48,
+    "width_mm": 2,
+    "thickness_mm": 1.6
+  },
+  "material": {
+    "rho_kg_m3": 2700,
+    "lambda_pa": 58100000000,
+    "mu_pa": 26100000000,
+    "l_pa": -143000000000,
+    "m_pa": -297000000000,
+    "n_pa": -345000000000
+  },
+  "receivers": [
+    {
+      "name": "P_far",
+      "point_mm": [
+        36,
+        1,
+        1.6
+      ]
+    },
+    {
+      "name": "top_0",
+      "point_mm": [
+        22,
+        1,
+        1.6
+      ]
+    },
+    {
+      "name": "top_1",
+      "point_mm": [
+        25,
+        1,
+        1.6
+      ]
+    },
+    {
+      "name": "top_2",
+      "point_mm": [
+        28,
+        1,
+        1.6
+      ]
+    },
+    {
+      "name": "top_3",
+      "point_mm": [
+        31,
+        1,
+        1.6
+      ]
+    },
+    {
+      "name": "top_4",
+      "point_mm": [
+        34,
+        1,
+        1.6
+      ]
+    },
+    {
+      "name": "top_5",
+      "point_mm": [
+        37,
+        1,
+        1.6
+      ]
+    },
+    {
+      "name": "mid_0",
+      "point_mm": [
+        22,
+        1,
+        0.8
+      ]
+    },
+    {
+      "name": "mid_1",
+      "point_mm": [
+        25,
+        1,
+        0.8
+      ]
+    },
+    {
+      "name": "mid_2",
+      "point_mm": [
+        28,
+        1,
+        0.8
+      ]
+    },
+    {
+      "name": "mid_3",
+      "point_mm": [
+        31,
+        1,
+        0.8
+      ]
+    },
+    {
+      "name": "mid_4",
+      "point_mm": [
+        34,
+        1,
+        0.8
+      ]
+    },
+    {
+      "name": "mid_5",
+      "point_mm": [
+        37,
+        1,
+        0.8
+      ]
+    }
+  ],
+  "material_check": {
+    "uniaxial_E11_1e-3_S_MPa": [
+      [
+        109.56300000000464,
+        6.293539222377079e-15,
+        8.630716353409682e-16
+      ],
+      [
+        6.293539222377079e-15,
+        57.95700000000245,
+        3.796773602805606e-33
+      ],
+      [
+        8.630716353409682e-16,
+        3.796773602805606e-33,
+        57.95700000000245
+      ]
+    ],
+    "shear_E12_1e-3_S_MPa": [
+      [
+        -0.5940000000004902,
+        52.200000000000024,
+        6.344994419166565e-15
+      ],
+      [
+        52.200000000000024,
+        -0.5940000000009971,
+        -3.3275924557229195e-17
+      ],
+      [
+        6.344994419166565e-15,
+        -3.3275924557229195e-17,
+        -0.24900000000051323
+      ]
+    ],
+    "general_S_MPa": [
+      [
+        120.89172000000609,
+        20.712179999999982,
+        -10.304339999999987
+      ],
+      [
+        20.712179999999982,
+        43.28142000000701,
+        15.577259999999994
+      ],
+      [
+        -10.304339999999987,
+        15.577259999999994,
+        105.52146000000208
+      ]
+    ],
+    "max_absolute_error_MPa": 7.013056801952189e-12,
+    "job_id": "comsol-167c3ab2543d450bac3bfa27f800b06e",
+    "source_sha256": "54e90010ad0c63181afd7d0ff32348afa7a6b02f49f96cf77fcef48996548344",
+    "comsol_version": "COMSOL Multiphysics 6.4 (开发版本: 293)",
+    "passed": true
+  },
+  "runs": {
+    "murnaghan": {
+      "job_id": "comsol-9aff5dc0c1f44277892c4a5229fe3320",
+      "max_step_us": 0.01,
+      "mesh_requested_h_mm": 0.8,
+      "max_element_size_mm": {
+        "x": 0.8,
+        "y": 0.6666666666666666,
+        "z": 0.8
+      },
+      "elements": 360,
+      "dofs": 22167,
+      "solve_time_s": 89347.4403733,
+      "max_green_strain": 0.000024749978124103827,
+      "min_J": 0.9999953668052101,
+      "csv_sha256": "b94938108f2972b3f9f84abcc176aa4cda38d18247d81e26ecbd72d3cdd2203e",
+      "time_steps": 21253,
+      "maximum_logged_step_us": 0.01,
+      "step_count_source": "COMSOL batch log",
+      "completed_at_utc": "2026-11-06T11:14:23.126146Z",
+      "guard_output_times": 601,
+      "field_csv": "field/B-f0.40-T1.6_murnaghan.field.csv",
+      "field_csv_sha256": "c598e7d02a3f0a62f5dd2f63d0a8140aeb5af0180e71ecc3411656cec8f715c8",
+      "receipt_sha256": "a05e248f7c0799d817dadee5ad1d2d491456c8fb15f8b8de1a24e76473105a72"
+    },
+    "linear": {
+      "job_id": "comsol-005bb78f16c34fa19079d8bcdbad1644",
+      "max_step_us": 0.01,
+      "mesh_requested_h_mm": 0.8,
+      "max_element_size_mm": {
+        "x": 0.8,
+        "y": 0.6666666666666666,
+        "z": 0.8
+      },
+      "elements": 360,
+      "dofs": 22167,
+      "solve_time_s": 24645.8006853,
+      "max_green_strain": 0.000024749054921514022,
+      "min_J": 0.9999953662213573,
+      "csv_sha256": "3f328fe24b0bf34c30e9e2e79e5f3562054100f1f81548476666aea49e21b00a",
+      "time_steps": 19828,
+      "maximum_logged_step_us": 0.01,
+      "step_count_source": "COMSOL batch log",
+      "completed_at_utc": "2026-11-07T22:15:22.173103900Z",
+      "guard_output_times": 601,
+      "field_csv": "field/B-f0.40-T1.6_linear.field.csv",
+      "field_csv_sha256": "2adb061103d61919c1faf0dfad61c66ea03bd646575dc58eb17951e21d15bbe0",
+      "receipt_sha256": "4678b72a7d47d68f8c46ab33b468fcc62c64c5b1a6df173edc31f856925e9f36"
+    }
+  },
+  "elements": 360,
+  "dofs": 22167,
+  "max_element_size_mm": {
+    "x": 0.8,
+    "y": 0.6666666666666666,
+    "z": 0.8
+  }
+}
