@@ -54,6 +54,16 @@ class OperatorTests(unittest.TestCase):
         stored = energy[:, 1] + energy[:, 2] + energy[:, 4]; self.assertLess(np.max(np.abs(stored - energy[:, 3])) / np.max(np.abs(energy[:, 3])), 1e-2)
         self.assertTrue(np.all(np.isfinite(projected)))
 
+    def test_zero_parameters_reproduce_the_frozen_network_on_the_same_grid(self):
+        # the GLL baseline of any coarse grid is the frozen network's own computation at that h
+        from graphnet.predict import predict
+        network = load(3); s = scene(); P = Parameterization(3); c = Coarse(s, 3, 3.); D, volume, mass = c.operators(*P.unpack(np.zeros(P.size)))
+        fields = predict(copy.deepcopy(c.scene), c.mesh, network, laws=(0, 2))['fields']
+        for law in ('linear', 'murnaghan'):
+            probes = np.stack([np.einsum('n,tnc->tc', w, fields[law][:, ids]) for ids, w in c.taps], 1); frozen = np.einsum('trc,rc->tr', probes, c.directions)
+            coarse, _ = c.run(D, volume, mass, law, network['weights'])
+            self.assertLess(np.max(np.abs(frozen - coarse)), 1e-6 * np.max(np.abs(coarse)), law)
+
     def test_per_axis_kernel_matches_the_frozen_kernel_and_keeps_constraints(self):
         from coarsegraph.kernel import graph_message as axis_message, forward as axis_forward
         from coarsegraph.operator import AxisParameterization

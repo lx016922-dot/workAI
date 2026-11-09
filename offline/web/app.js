@@ -123,6 +123,7 @@ function renderEngineDerived() {
   if (!e) { box.innerHTML = '<small>正在读取模型信息…</small>'; return; }
   box.innerHTML = `<table class="wb-table"><tr><th>模型</th><td>${escapeHtml(e.name)}（${e.degree} 阶，h ${e.h_mm} mm，${e.parameters} 个参数）</td></tr>
     <tr><th>留出测试</th><td>全部门槛通过 ${e.test_passed}/${e.test_cases}（同网格 GLL 基线 ${e.baseline_test_passed}/${e.test_cases}）；最差波形差 ${(100 * e.test_worst_waveform_l2).toFixed(2)}%，最差增量 2f ${(100 * e.test_worst_increment_a2).toFixed(1)}%</td></tr>
+    ${(e.test_by_excitation || []).length ? `<tr><th>按激励形式</th><td>${e.test_by_excitation.map(r => `<span class="wb-res ${r.passed === r.cases ? 'ok' : r.passed ? 'warn' : 'bad'}" title="最差波形差 ${(100 * r.worst_waveform_l2).toFixed(2)}%，最差 2f ${(100 * r.worst_a2).toFixed(1)}%，最差增量 2f ${(100 * r.worst_increment_a2).toFixed(1)}%；GLL 基线 ${r.baseline_passed}/${r.cases}">${escapeHtml(r.label)} ${r.passed}/${r.cases}</span>`).join(' ')}</td></tr>` : ''}
     <tr><th>训练范围</th><td>${e.out_of_training_range.length ? `<span class="wb-res warn">超出 ${e.out_of_training_range.length} 项：${escapeHtml(e.out_of_training_range.join('；'))}</span>` : '<span class="wb-res ok">在训练范围内</span>'}</td></tr></table>`;
 }
 function renderMaterialDerived() { const box = $('#material-derived'); if (box) box.innerHTML = materialDerivedMarkup(state.preview?.material); }

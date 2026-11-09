@@ -22,6 +22,10 @@ FIELD_BUDGET_BYTES = 768 * 1024 ** 2
 # Training range of the shipped model (coarsegraph/specs): 48 × 2 mm half-width aluminium plates, symmetry at y = 2 mm.
 TRAINING_RANGE = [('geometry.length_mm', '板长', 48, 48, 'mm'), ('geometry.width_mm', '半宽', 2, 2, 'mm'), ('geometry.thickness_mm', '板厚', 1.6, 2.4, 'mm'),
                   ('acquisition.duration_us', '记录', 0, 30, 'μs')]
+# Held-out test of the shipped model on all four label groups (python -m coarsegraph.train reevaluate, splits.json).
+EXCITATION_EVALUATION = 'evaluation-abcd.json'
+EXCITATIONS = {'labels-a-top-gaussian': '顶面高斯', 'labels-b-end-axial': '端面轴向', 'labels-c-two-patch': '双贴片反相', 'labels-d-comb': '梳状叉指'}
+TRAINED_FACES = ('zmax', 'zmin', 'xmin', 'xmax')  # top/bottom (A, C) and end faces (B); the plate is mirror-symmetric
 
 
 def _get(scene, path):
@@ -30,13 +34,38 @@ def _get(scene, path):
     return value
 
 
+def by_excitation(path=MODEL):
+    """Held-out test results per excitation form, from the model's four-group evaluation (None if it is not there)."""
+    file = Path(path).parent / EXCITATION_EVALUATION
+    if not file.exists(): return None
+    evaluation = json.loads(file.read_text(encoding='utf-8'))
+    require(evaluation['model_sha256'] == hashlib.sha256(Path(path).read_bytes()).hexdigest(), f'{EXCITATION_EVALUATION} 不是这个模型的评估。')
+    gll = {r['key']: r for r in evaluation['evaluation']['baseline_gll']['rows']}; rows = []
+    for group, label in EXCITATIONS.items():
+        test = [r for r in evaluation['evaluation']['learned']['rows'] if r['split'] == 'test' and r['key'].split(':')[0] == group]
+        if not test: continue
+        rows.append({'group': group, 'label': label, 'cases': len(test), 'passed': sum(r['passed'] for r in test), 'baseline_passed': sum(gll[r['key']]['passed'] for r in test),
+                     'worst_waveform_l2': max(r['worst_waveform_l2'] for r in test), 'worst_a2': max(r['worst_a2'] for r in test),
+                     'worst_increment_a2': max(r['worst_increment_a2'] for r in test)})
+    return rows
+
+
 def model_summary(path=MODEL):
-    """What the interface shows about the shipped model."""
+    """What the interface shows about the shipped model; the four-group evaluation, when present, supersedes the training-time test."""
     model = json.loads(Path(path).read_text(encoding='utf-8')); test = model['summary']['learned']['test']; base = model['summary']['baseline_gll']['test']
+    forms = by_excitation(path)
+    if forms:
+        evaluation = json.loads((Path(path).parent / EXCITATION_EVALUATION).read_text(encoding='utf-8'))['summary']
+        test = evaluation['learned']['test']; base = evaluation['baseline_gll']['test']
     return {'name': Path(path).parent.name, 'degree': model['degree'], 'h_mm': model['h_mm'], 'parameters': model['parameter_count'],
             'test_cases': test['pairs'], 'test_passed': test['passed'], 'baseline_test_passed': base['passed'],
-            'test_worst_waveform_l2': test['worst_waveform_l2'], 'test_worst_increment_a2': test['worst_increment_a2'],
+            'test_worst_waveform_l2': test['worst_waveform_l2'], 'test_worst_increment_a2': test['worst_increment_a2'], 'test_by_excitation': forms or [],
             'coarse_nodes_example': model['cost']['coarse_nodes'], 'model_sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest()}
+
+
+def _tested(forms, group):
+    row = next((r for r in forms or [] if r['group'] == group), None)
+    return f'留出测试 {row["passed"]}/{row["cases"]} 通过' if row else '未经测试'
 
 
 def out_of_range(scene):
@@ -45,8 +74,18 @@ def out_of_range(scene):
     for path, label, lo, hi, unit in TRAINING_RANGE:
         v = _get(scene, path)
         if isinstance(v, (int, float)) and not lo - 1e-9 <= v <= hi + 1e-9: out.append(f'{label} {v:g} {unit}（训练 {lo:g}{"–" + format(hi, "g") if hi != lo else ""} {unit}）')
-    for src in [scene['source'], *(scene.get('sources') or [])]:
-        if not .2 - 1e-9 <= src['frequency_mhz'] <= .4 + 1e-9: out.append(f'{src.get("name") or "主激励"} 频率 {src["frequency_mhz"]:g} MHz（训练 0.2–0.4）')
+    sources = [x for x in [scene.get('source'), *(scene.get('sources') or [])] if isinstance(x, dict)]; forms = by_excitation()
+    if len(sources) > 1: out.append(f'{len(sources)} 个激励源（同类双贴片{_tested(forms, "labels-c-two-patch")}，主要是非线性增量的 2f 超过 5%；需要二次谐波时建议用冻结网络、h ≤ 2 mm）')
+    for src in sources:
+        name = src.get('name') or '主激励'; signal = src.get('signal') if isinstance(src.get('signal'), dict) else {'type': 'tone_burst', 'window': 'hann'}
+        profile = src.get('profile') if isinstance(src.get('profile'), dict) else {'type': 'uniform'}
+        if isinstance(src.get('frequency_mhz'), (int, float)) and not .2 - 1e-9 <= src['frequency_mhz'] <= .4 + 1e-9: out.append(f'{name} 频率 {src["frequency_mhz"]:g} MHz（训练 0.2–0.4）')
+        if signal.get('type') != 'tone_burst' or signal.get('window', 'hann') != 'hann': out.append(f'{name} 信号 {signal.get("type")}（训练只有 Hann 窗单频脉冲）')
+        elif isinstance(src.get('cycles'), (int, float)) and src['cycles'] < 5 - 1e-9: out.append(f'{name} {src["cycles"]:g} 个周期（训练 5 个，周期越少频带越宽）')
+        if src.get('face') not in TRAINED_FACES: out.append(f'{name} 加载面 {src.get("face")}（训练为顶面和端面）')
+        if isinstance(src.get('radius_mm'), (int, float)) and src['radius_mm'] > 0: out.append(f'{name} 圆形加载区 半径 {src["radius_mm"]:g} mm（训练只有整面加载）')
+        if profile.get('type') == 'comb': out.append(f'{name} 梳状分布（{_tested(forms, "labels-d-comb")}，齿宽 {profile.get("tooth_width_mm")} mm 在粗网格上表示不准；请用冻结网络、h ≤ 1.5 mm）')
+        elif profile.get('type') == 'gaussian' and isinstance(profile.get('sigma_mm'), (int, float)) and profile['sigma_mm'] < 1.5 - 1e-9: out.append(f'{name} 高斯宽度 {profile["sigma_mm"]:g} mm（训练 1.5–2 mm）')
     if not any(b.get('type') == 'symmetry' and b.get('face') == 'ymax' for b in scene.get('boundaries') or []): out.append('没有 y 最大面对称（训练为半宽模型）')
     return out
 

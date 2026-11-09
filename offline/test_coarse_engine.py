@@ -7,7 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from offline.coarse_engine import model_summary, out_of_range
+from offline.coarse_engine import EXCITATIONS, model_summary, out_of_range
 from offline.domain import validate_request
 from offline.preview import preview
 
@@ -33,10 +33,23 @@ class FastEngine(unittest.TestCase):
             self.assertIn(word, str(caught.exception))
         p = preview({'scene': s, 'degree': 4, 'engine': 'coarse'}, '.')
         summary = model_summary(); self.assertTrue(p['ok'], p['errors'])
-        self.assertEqual(p['mesh']['degree'], summary['degree']); self.assertEqual(p['mesh']['h_mm'], summary['h_mm']); self.assertEqual(p['engine']['out_of_training_range'], [])
+        self.assertEqual(p['mesh']['degree'], summary['degree']); self.assertEqual(p['mesh']['h_mm'], summary['h_mm'])
+        self.assertEqual(len(p['engine']['out_of_training_range']), 1); self.assertIn('2 个激励源', p['engine']['out_of_training_range'][0])
         self.assertLess(p['mesh']['nodes'], preview({'scene': s, 'degree': 4}, '.')['mesh']['nodes'] / 4)
         wide = copy.deepcopy(s); wide['geometry']['thickness_mm'] = 3.; wide['source']['frequency_mhz'] = .5
-        self.assertEqual(len(out_of_range(wide)), 2)
+        self.assertEqual(len(out_of_range(wide)), 3)
+
+    def test_excitation_forms(self):
+        a = json.loads((REPO / 'coarsegraph/specs/labels-a-top-gaussian.json').read_text(encoding='utf-8'))['base_scene']
+        self.assertEqual(out_of_range(a), [])
+        for change, word in [({'profile': {'type': 'comb', 'pitch_mm': 4., 'teeth': 3, 'tooth_width_mm': 2., 'along': 'x', 'alternating_sign': True}}, '梳状'),
+                             ({'profile': {'type': 'gaussian', 'sigma_mm': .5}}, '高斯宽度'), ({'radius_mm': 3.}, '圆形'), ({'cycles': 2.}, '周期'),
+                             ({'signal': {'type': 'ricker'}}, 'ricker'), ({'face': 'ymin', 'direction': [0., 1., 0.]}, '加载面')]:
+            scene = copy.deepcopy(a); scene['source'].update(change); items = out_of_range(scene)
+            self.assertEqual(len(items), 1, items); self.assertIn(word, items[0])
+        forms = model_summary()['test_by_excitation']
+        self.assertEqual([r['group'] for r in forms], list(EXCITATIONS))
+        self.assertEqual(sum(r['cases'] for r in forms), model_summary()['test_cases']); self.assertEqual(sum(r['passed'] for r in forms), model_summary()['test_passed'])
 
     def test_a_job_runs_and_exports_the_five_responses(self):
         request = validate_request({'scene': two_patch(20.), 'degree': 4, 'engine': 'coarse'})

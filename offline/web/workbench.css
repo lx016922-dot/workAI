@@ -127,6 +127,9 @@ body.wb { margin: 0; display: grid; grid-template-rows: 52px minmax(0, 1fr) auto
 .wb-table th, .wb-table td { padding: 5px 6px; border-bottom: 1px solid #edf1f4; text-align: left; }
 .wb-table th { color: var(--wb-muted); font-weight: 600; }
 .wb-table.compact td { padding: 3px 3px; }
+#engine-derived .wb-table th { white-space: nowrap; vertical-align: top; width: 5em; }
+#engine-derived .wb-table td { white-space: normal; line-height: 1.6; }
+#engine-derived .wb-res { display: inline-block; margin: 0 4px 4px 0; }
 .wb-button.file { position: relative; overflow: hidden; align-self: flex-start; }
 
 /* results */
