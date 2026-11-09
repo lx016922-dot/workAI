@@ -26,7 +26,7 @@
 
 详见 [P1 剩余运行](p1-remaining-runs.md) 的进度与更正，以及 [serendipity-baselines-20261109](../../research/comsol-p1-20261024/serendipity-baselines-20261109/README.md)。
 
-**剩余：** StVK、时间步减半（dt2）和网格加密（mesh2）共 15 次，须继续使用修正版源码。
+**剩余：** StVK、时间步减半（dt2）和网格加密（mesh2）共 15 次，须继续使用修正版源码。修正版源码和运行包已归档在 [serendipity-54e90010](../../research/comsol-p1-20261024/serendipity-54e90010/)；`local_kit.py build --tiers 2 3 4` 生成的作业与归档运行包逐字节一致。
 
 ## 2026-11-02 的进度（历史）
 

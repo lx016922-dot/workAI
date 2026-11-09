@@ -14,30 +14,34 @@ spec = importlib.util.spec_from_file_location('local_kit', P1 / 'local_kit.py');
 
 
 class LocalKit(unittest.TestCase):
-    def test_build_matches_archived_request_and_collect_round_trips(self):
+    def test_build_reproduces_the_archived_serendipity_kit_and_collect_round_trips(self):
+        import zipfile
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / 'kit'
             kit.build(type('A', (), {'output': str(out), 'tiers': []})())
             jobs = json.loads((out / 'jobs.json').read_text(encoding='utf-8'))
             self.assertEqual(len(jobs), 22)
             self.assertEqual([j['tier'] for j in jobs], sorted(j['tier'] for j in jobs))
+            # every job file is byte-identical to the corrected kit the completed runs used
+            with zipfile.ZipFile(P1 / 'serendipity-54e90010/P1_SERP_20261102.zip') as z:
+                archived = {n[len('p1-kit/'):]: z.read(n) for n in z.namelist() if n.startswith('p1-kit/runs/') and not n.endswith('/')}
+                self.assertEqual(z.read('p1-kit/jobs.json'), (out / 'jobs.json').read_bytes())
+            self.assertEqual(len(archived), 132)
+            for name, data in archived.items(): self.assertEqual((out / name).read_bytes(), data, name)
+            # finished jobs: the delivered self-check and A linear run, written as the model writes them
+            delivered = P1 / 'serendipity-baselines-20261109'
             check = out / 'runs' / '00-material-check'
-            ours, archived = json.loads((check / 'request.json').read_text()), json.loads((P1 / 'evidence/material-check/request.json').read_text(encoding='utf-8-sig'))
-            for key in ('job_id', 'source_sha256', 'scene_sha256', 'parameters_sha256', 'scene_json', 'parameters_json'): self.assertEqual(ours[key], archived[key])
-            props = lambda p: {k: float(v) if k not in ('job_id', 'schema', 'scenario', 'boundary') and not k.endswith('sha256') else v for k, v in kit.properties(p).items()}
-            self.assertEqual(props(check / 'case.properties'), props(P1 / 'evidence/material-check/case.properties'))
-            # finished jobs: archived self-check and the archived A linear record written in the model's long format
-            for name in ('coarse.csv', 'completed.properties'): (check / name).write_bytes((P1 / 'evidence/material-check' / name).read_bytes())
-            run = out / 'runs' / '04-A-f0.40-T1.6-linear'; identity = json.loads((run / 'identity.json').read_text())
-            U = np.loadtxt(P1 / 'recovery-rebuild-20261029/data/A-f0.40-T1.6_linear.csv', delimiter=',', skiprows=1)
+            (check / 'coarse.csv').write_bytes((delivered / 'evidence/material-check.csv').read_bytes())
+            (check / 'completed.properties').write_bytes((delivered / 'evidence/receipts/00-material-check.properties').read_bytes())
+            run = out / 'runs' / '04-A-f0.40-T1.6-linear'
+            U = np.loadtxt(delivered / 'data/A-f0.40-T1.6_linear.csv', delimiter=',', skiprows=1)
             rows = [f'0,{r},{i * 0.05e-6:.17g},{U[i, 1 + 3 * r]:.17g},{U[i, 2 + 3 * r]:.17g},{U[i, 3 + 3 * r]:.17g}' for i in range(601) for r in range(13)]
             (run / 'coarse.csv').write_text('law,rx,time_s,u_m,v_m,w_m\n' + '\n'.join(rows) + '\n')
-            (run / 'coarse.field.csv').write_text('law,time_s,max_green_strain,min_J\n' + '\n'.join(f'0,{i * 0.05e-6:.17g},1e-5,0.99999' for i in range(601)) + '\n')
-            (run / 'completed.properties').write_text(''.join(f'{k}={identity[k]}\n' for k in ('job_id', 'source_sha256', 'scene_sha256', 'parameters_sha256')) + 'analysis=transient\ndofs=22167\nvolume_hexahedra=360\n')
+            (run / 'coarse.field.csv').write_bytes((delivered / 'data/field/A-f0.40-T1.6_linear.field.csv').read_bytes())
+            (run / 'completed.properties').write_bytes((delivered / 'evidence/receipts/04-A-f0.40-T1.6-linear.properties').read_bytes())
             delivery = Path(tmp) / 'delivery'
             kit.collect(type('A', (), {'runs': str(out / 'runs'), 'output': str(delivery)})())
-            self.assertEqual((delivery / 'A-f0.40-T1.6_linear.csv').read_text().splitlines()[1:],
-                             (P1 / 'recovery-rebuild-20261029/data/A-f0.40-T1.6_linear.csv').read_text().splitlines()[1:])
+            self.assertTrue(np.array_equal(np.loadtxt(delivery / 'A-f0.40-T1.6_linear.csv', delimiter=',', skiprows=1), U))
             meta = json.loads((delivery / 'A-f0.40-T1.6.json').read_text())
             self.assertEqual(meta['dofs'], 22167); self.assertTrue(meta['material_check']['passed'])
             # a changed model source is refused

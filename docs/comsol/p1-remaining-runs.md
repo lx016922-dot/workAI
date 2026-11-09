@@ -25,7 +25,10 @@ P1 的运行计划共 24 次：
   - 本构自检 150 个自由度；
   - A、B 为 22,167 个、C 为 30,711 个自由度，与旧线性运行完全相同。
 - **剩余运行必须继续使用 `54e90010…`。**
-- 这份源码和修正后的运行包（`e4607e65…`）还没有归档到仓库；归档后 `local_kit.py` 和 `plan.json` 会随之更新。在那之前，请勿用仓库里的 `local_kit.py` 生成剩余作业。
+- 修正版源码和运行包已于 2026-11-09 归档到 [serendipity-54e90010](../../research/comsol-p1-20261024/serendipity-54e90010/)：
+  - 源码 `UltraResearch.java`（`54e90010…`）与原版只有两处不同：单元由 `shlag` 改为 `shnserp`，并新增只检查网格与自由度的 `checkMesh`；物理设置不变。
+  - 运行包 `P1_SERP_20261102.zip`（`e4607e65…`）中 22 个作业的输入哈希不变，作业编号全部重新生成，对照记在包内的 `revision-manifest.json`。
+- 现在 `local_kit.py build` 以这份修正版为准，生成的 22 个作业文件夹与归档运行包逐字节一致（测试 `tests/test_comsol_local_kit.py` 检查全部 132 个文件）。
 
 **层级 0–1 的核对结果**（[spectral-comparison.json](../../research/comsol-p1-20261024/serendipity-baselines-20261109/spectral-comparison.json)，由 `compare_baselines.py` 生成）：
 
@@ -50,16 +53,19 @@ P1 的运行计划共 24 次：
 
 ## 2. 推荐做法：用运行包直接跑
 
-运行包里的模型完全由源码和输入决定，不需要在图形界面里建模。**注意：** 仓库中的源码 `c7140d6c…` 使用 Lagrange 单元，与已完成运行不一致；剩余运行请用修正版源码 `54e90010…` 及其运行包，见上面的更正。
+运行包里的模型完全由源码和输入决定，不需要在图形界面里建模。剩余运行有两种做法，作业完全相同：
+
+- 继续用归档的修正版运行包 `serendipity-54e90010/P1_SERP_20261102.zip`。包内的 `run-gated.ps1` 会在瞬态计算前先检查本构和网格。
+- 或由仓库重新生成，只生成剩余的层级 2–4：
 
 ```sh
-python research/comsol-p1-20261024/local_kit.py build --output p1-kit
+python research/comsol-p1-20261024/local_kit.py build --output p1-kit --tiers 2 3 4
 ```
 
-生成的 `p1-kit/` 含 22 个作业文件夹（本构自检 + 21 次运行）、作业清单 `jobs.json` 和运行脚本。Windows 上：
+生成的 `p1-kit/` 含所选层级的作业文件夹、作业清单 `jobs.json` 和运行脚本。Windows 上：
 
 ```powershell
-.\run-all.ps1 -ComsolBin "C:\Program Files\COMSOL\COMSOL64\Multiphysics\bin\win64" -Tier 0,1
+.\run-all.ps1 -ComsolBin "C:\Program Files\COMSOL\COMSOL64\Multiphysics\bin\win64" -Tier 2,3
 ```
 
 脚本在每个文件夹里执行 `comsolcompile UltraResearch.java` 和 `comsolbatch -inputfile UltraResearch.class -batchlog solver.log`。已完成的作业会自动跳过，中断后重新执行同一条命令即可续跑。不要改动作业文件夹里的源码和输入，改动后哈希对不上，结果无法收集。
@@ -74,12 +80,15 @@ python research/comsol-p1-20261024/local_kit.py build --output p1-kit
 | 3 | A 的 linear_dt2、murnaghan_dt2、linear_mesh2、murnaghan_mesh2 | 4 | COMSOL 自身的时间与网格收敛 |
 | 4 | B、C 的同样四种变体 | 8 | 层级 3 收敛良好时可以不跑 |
 
-**耗时。** 已完成的线性运行在原服务器上每次 24.2–30.3 小时。其余运行按经验估计，以实测为准：
-- 非线性：约为线性的 1.5–3 倍。
-- dt2：约 2 倍。
-- mesh2：约 4–6 倍。
+**耗时。** 层级 1 的实测（修正版源码，回执中的求解时间）：
 
-层级 0–1 顺序运行约需 10 天。几次运行的自由度只有 2–3 万，内存占用小，多核机器上可以几个作业并行，每个作业用 `-Cores` 限定核数。
+| 工况 | 线性 | Murnaghan |
+|---|---|---|
+| A | 7.3 h | 28.8 h |
+| B | 6.8 h | 24.8 h |
+| C | 8.8 h | 20.8 h |
+
+StVK 预计与 Murnaghan 相近。dt2 约为对应基准的 2 倍，mesh2 约 4–6 倍，以实测为准。几次运行的自由度只有 2–3 万，内存占用小，多核机器上可以几个作业并行，每个作业用 `-Cores` 限定核数。
 
 ## 4. 模型设置（与已完成运行一致）
 
