@@ -50,6 +50,13 @@ class Coarse:
             k *= self.inputs['free']; norm = np.linalg.norm(k); lam = norm / max(np.linalg.norm(v), 1e-300); v = k / norm * 1e-12
         return float(self.dt * np.sqrt(lam))
 
+    def fields(self, D, volume, mass, law, weights):
+        """Full displacement fields (frames × nodes × 3), energy log, max strain and min J for one law (shared operators)."""
+        law = LAWS[law] if isinstance(law, str) else law
+        require(np.ndim(D) == 2, '完整位移场只支持共享算子模型。')
+        return forward(self.mesh['elements'], D, self.inverse, volume, mass, self.inputs['loads'], self.signals, self.inputs['free'], self.alpha, self.damped,
+                       weights['quadratic_tensor'], weights['cubic_tensor'], weights['state_weights'], law, self.dt, self.subdivisions, self.frames)
+
     def run(self, D, volume, mass, law, weights, probes_out=False):
         """Projected waveforms (frames × receivers) and the energy log (plus 3-component probes on request)."""
         law = LAWS[law] if isinstance(law, str) else law

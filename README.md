@@ -18,8 +18,8 @@
 | 模态降阶 v11–v12 | 研究候选，未采纳 | v12 原生 COMSOL 20 μs 核对 1.96% / 1.62%；5 ms 线性对照波形向量 19/20，全部分量与频带 11/20，最差 35%–40%；尚无收敛的 5 ms 非线性参考 | [第 11 轮](research/comsol-validation/CONTINUATION-V11.md)、[第 12 轮](research/comsol-validation/CONTINUATION-V12.md) |
 | 数值求解器 | 可用，含收敛复核 | 谱元线性解与 COMSOL 三个 P1 线性结果相差 0.01%–0.3% | [激励 v2](docs/solver-excitation-v2.md)、[扫描与收敛复核](docs/sweep-and-datasets.md) |
 | 图网络 v2 输入层 | 可用，离线软件可导入 v2 场景 | 任意信号、多源、对称面、吸收层；与冻结网络逐位一致，与谱元求解相差 4e-14 | [输入层](docs/graph-network-input-design.md) |
-| 粗网格算子（方向 B） | 研究模型，逐例核验后使用 | 4 阶 h 3 mm 比冻结网络细网格推理快 16 倍；6 个留出工况中波形、f、原始 2f 全部在 5% 以内，含非线性增量 2f 的全部门槛通过 4 个 | [粗网格算子](docs/coarse-graph-operator.md) |
-| COMSOL P1 参考 | 21 次中完成 3 次（线性），队列已停 | 本构自检通过，但所用源码与已完成运行不同；非线性运行待算 | [数据要求与进度](docs/comsol/comsol-data-request.md)、[P1 目录](research/comsol-p1-20261024/README.md) |
+| 粗网格算子（方向 B） | 研究模型，逐例核验后使用；离线软件的快速引擎，可选两种模型 | 快速模型（4 阶 h 3 mm）比冻结网络细网格推理快约 16 倍，单源激励 4 个留出工况全部门槛通过，双贴片 1/8。精确模型（4 阶 h 2 mm 重训）12 个单源和双贴片留出工况全部通过，计算量与冻结网络 h 2 mm 相同（后者 10/12）。梳状激励两者都是 0/4，因为齿宽在粗网格上表示不准 | [粗网格算子](docs/coarse-graph-operator.md) |
+| COMSOL P1 参考 | 24 次中完成 9 次：线性与 Murnaghan 基准齐全，StVK 和收敛变体待算 | 谱元标签与 COMSOL 的非线性增量 2f 一致到 0.06%–2.7%（三个工况），完整波形一致到 0.035% 以内 | [数据要求与进度](docs/comsol/comsol-data-request.md)、[P1 目录](research/comsol-p1-20261024/README.md) |
 | 早期代理模型 | 已停止 | 坐标神经场、谱算子、物理约束场网络、模态能量模型都没有通过全部 5% 门槛 | [项目历史](docs/history.md) |
 
 ## 跨路线的结论：精度受离散分辨率限制

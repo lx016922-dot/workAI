@@ -1,14 +1,16 @@
-"""Run the remaining P1 COMSOL jobs on your own COMSOL installation, then convert the results.
+"""Run the P1 COMSOL jobs on your own COMSOL installation, then convert the results.
 
     python research/comsol-p1-20261024/local_kit.py build   --output p1-kit
     python research/comsol-p1-20261024/local_kit.py collect p1-kit/runs --output p1-delivery
 
-`build` makes one folder per job with the archived model source (UltraResearch.java), the prepared,
-hash-pinned inputs and the request/case files the model reads, plus run scripts for Windows and Linux.
-The jobs are the 21 prepared P1 runs and the single-element constitutive self-check, ordered by tier.
-The three linear base runs are repeated because the source that produced the archived linear results
-(d36366...) was not archived: every nonlinear increment must come from one model source, and the
-archived linear CSVs then serve as a reproducibility check.
+`build` makes one folder per job with the corrected model source (serendipity-54e90010/UltraResearch.java:
+quartic serendipity hexahedra `shnserp`, as in every completed run; the first archived source c7140d6c built
+Lagrange elements), the prepared, hash-pinned inputs, the request/case files the model reads, and run scripts
+for Windows and Linux. Job IDs and source hash come from the archived corrected kit P1_SERP_20261102.zip
+(revision-manifest.json), so the folders are byte-identical to the ones the completed runs used. The jobs are
+the 21 prepared P1 runs and the single-element constitutive self-check, ordered by tier; tiers 0-1 were
+completed on 2026-11-09, so `--tiers 2 3 4` builds the remaining 15. Every nonlinear increment must come from
+one model source; the linear runs made with the unarchived source d36366 serve as a reproducibility check.
 
 `collect` converts finished job folders into the delivery contract of docs/comsol/comsol-data-request.md
 (40-column CSV, 601 rows, 17 significant digits, one metadata JSON per case). It checks that each job
@@ -20,10 +22,14 @@ import hashlib
 import json
 import re
 import shutil
+import zipfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
+REVISION = HERE / 'serendipity-54e90010'
+KIT_ARCHIVE_SHA256 = 'e4607e65201cccc64d4c2e57e96eadd7197b0a0c7f7af583729eaa9c38a89ee7'
+SOURCE_SHA256 = '54e90010ad0c63181afd7d0ff32348afa7a6b02f49f96cf77fcef48996548344'
 LAWS = ['linear', 'stvk', 'murnaghan']
 CASES = ['A-f0.40-T1.6', 'B-f0.40-T1.6', 'C-f0.25-T2.0']
 # (tier, purpose) per prepared input; jobs run in this order.
@@ -47,9 +53,19 @@ def prop_value(v):
     return str(int(v)) if isinstance(v, bool) else str(v)
 
 
+def revision():
+    """Corrected source and per-folder job identities of the archived serendipity kit."""
+    archive = REVISION / 'P1_SERP_20261102.zip'; source = REVISION / 'UltraResearch.java'
+    if digest(archive) != KIT_ARCHIVE_SHA256: raise SystemExit('P1_SERP_20261102.zip does not match its recorded SHA-256')
+    if digest(source) != SOURCE_SHA256: raise SystemExit('serendipity-54e90010/UltraResearch.java does not match its recorded SHA-256')
+    with zipfile.ZipFile(archive) as z: manifest = json.loads(z.read('revision-manifest.json'))
+    plan = json.loads((HERE / 'plan.json').read_text())
+    if manifest['source_sha256'] != SOURCE_SHA256 or manifest['original_source_sha256'] != plan['source_sha256']: raise SystemExit('revision manifest does not match the sources')
+    return source, {row['folder']: row for row in manifest['job_identity_mappings']}
+
+
 def build(args):
-    source = HERE / 'UltraResearch.java'; plan = json.loads((HERE / 'plan.json').read_text())
-    if digest(source) != plan['source_sha256']: raise SystemExit('UltraResearch.java does not match plan.json')
+    source, mapping = revision(); plan = json.loads((HERE / 'plan.json').read_text())
     names = [name for _, name, _ in TIERS]
     if sorted(names) != sorted([plan['material_check'], *plan['runs']]): raise SystemExit('Tier list does not cover plan.json exactly')
     out = Path(args.output); runs = out / 'runs'
@@ -62,12 +78,16 @@ def build(args):
         scene_text = (src / 'scene.json').read_bytes().decode('utf-8'); params_text = (src / 'parameters.json').read_bytes().decode('utf-8')
         if hashlib.sha256(scene_text.encode()).hexdigest() != identity['scene_sha256'] or hashlib.sha256(params_text.encode()).hexdigest() != identity['parameters_sha256']:
             raise SystemExit(f'{name}: prepared input changed')
-        folder = runs / f'{order:02d}-{name[3:]}'; folder.mkdir()
-        for f in ('identity.json', 'scene.json', 'parameters.json'): shutil.copyfile(src / f, folder / f)
+        folder = runs / f'{order:02d}-{name[3:]}'; folder.mkdir(); row = mapping[folder.name]
+        if (row['old_job_id'], row['scene_sha256'], row['parameters_sha256']) != (identity['job_id'], identity['scene_sha256'], identity['parameters_sha256']):
+            raise SystemExit(f'{name}: revision manifest does not match the prepared input')
+        identity.update(job_id=row['new_job_id'], source_sha256=row['new_source_sha256'])
+        for f in ('scene.json', 'parameters.json'): shutil.copyfile(src / f, folder / f)
+        (folder / 'identity.json').write_text(json.dumps(identity, ensure_ascii=True, indent=2) + '\n', encoding='ascii')  # prepare.py format
         shutil.copyfile(source, folder / 'UltraResearch.java')
         request = {'job_id': identity['job_id'], 'kind': 'research_reference', 'source_sha256': identity['source_sha256'], 'scene_sha256': identity['scene_sha256'],
                    'parameters_sha256': identity['parameters_sha256'], 'scene_json': scene_text, 'parameters_json': params_text}
-        (folder / 'request.json').write_text(json.dumps(request, ensure_ascii=True, indent=1) + '\n', encoding='utf-8')
+        (folder / 'request.json').write_text(json.dumps(request, ensure_ascii=True, indent=2) + '\n', encoding='utf-8')
         if len((folder / 'request.json').read_text()) > 65536: raise SystemExit(f'{name}: request too large for the model reader')
         params = json.loads(params_text)
         lines = [f'{k}={identity[k]}' for k in ('job_id', 'scene_sha256', 'source_sha256', 'parameters_sha256')] + [f'{k}={prop_value(v)}' for k, v in params.items()]
@@ -234,7 +254,7 @@ done
 
 README = '''# P1 剩余 COMSOL 运行包
 
-每个 `runs/` 子文件夹是一个独立作业，包含已归档的模型源码 `UltraResearch.java`（SHA-256 `c7140d6c…`，本构自检就是用它通过的），以及按哈希锁定的输入。模型完全由源码和输入决定，不需要在图形界面里建模。
+每个 `runs/` 子文件夹是一个独立作业，包含修正版模型源码 `UltraResearch.java`（SHA-256 `54e90010…`，四阶 serendipity 单元，与已完成的全部运行相同），以及按哈希锁定的输入。层级 0–1 已于 2026-11-09 完成。模型完全由源码和输入决定，不需要在图形界面里建模。
 
 ## 运行
 

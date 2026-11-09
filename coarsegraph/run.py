@@ -29,12 +29,26 @@ LAWS = ('linear', 'stvk', 'murnaghan')
 
 
 def load_model(path):
+    """The model and its stored operators (D, q, m), checked against the structural constraints.
+
+    Inference uses the stored operators, not θ: θ is a coordinate in an SVD null-space basis that differs
+    between BLAS/LAPACK kernels, so the same θ gives different operators on different machines."""
     model = json.loads(Path(path).read_text(encoding='utf-8')); require(model.get('schema') == 'workai.coarsegraph.model.v1', '不是粗网格算子模型文件。')
-    P = parameterization(model['degree'], model.get('axes', 'shared')); D, q, m = P.unpack(np.asarray(model['theta']))
-    require(np.allclose(D, model['operators']['derivative'], atol=1e-12) and np.allclose(q, model['operators']['quadrature_weights'], atol=1e-14) and np.allclose(m, model['operators']['mass_weights'], atol=1e-14),
-            '模型文件中的算子与参数不一致。')
-    check = P.check(model['theta']); require(check['positive'] and all(v < 1e-10 for k, v in check.items() if k != 'positive'), '模型参数违反结构约束。')
+    P = parameterization(model['degree'], model.get('axes', 'shared')); ops = model['operators']
+    D, q, m = (np.asarray(ops[k], dtype=float) for k in ('derivative', 'quadrature_weights', 'mass_weights'))
+    require(all(np.all(np.isfinite(v)) for v in (D, q, m)), '模型算子含非有限值。')
+    try:
+        check = P.check_operators(D, q, m)
+    except ValueError as error:
+        raise ValueError(f'模型算子不符合结构：{error}') from None
+    require(check['positive'] and all(v < 1e-10 for k, v in check.items() if k != 'positive'), '模型算子违反结构约束。')
     return model, (D, q, m)
+
+
+def local_theta(model):
+    """θ for this machine's parameter basis that reproduces the model's stored operators (for re-evaluation and warm starts)."""
+    P = parameterization(model['degree'], model.get('axes', 'shared')); ops = model['operators']
+    return P.theta_from_operators(ops['derivative'], ops['quadrature_weights'], ops['mass_weights'])
 
 
 def simulate(model_path, raw, laws='all', callback=None):

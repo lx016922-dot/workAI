@@ -1,4 +1,5 @@
 import copy
+import os
 import json
 import unittest
 from pathlib import Path
@@ -7,7 +8,7 @@ from physics.scene import validate_scene
 from spectral3d.mesh import make_mesh
 from graphwave.inference import graph_message, inverse_mapping
 from graphnet.model import load
-from coarsegraph.operator import Parameterization, apply, gll
+from coarsegraph.operator import AxisParameterization, Parameterization, apply, gll
 from coarsegraph.simulate import Coarse
 from coarsegraph.evaluate import compare
 
@@ -53,6 +54,16 @@ class OperatorTests(unittest.TestCase):
         projected, energy = c.run(D, volume, mass, 'murnaghan', weights)
         stored = energy[:, 1] + energy[:, 2] + energy[:, 4]; self.assertLess(np.max(np.abs(stored - energy[:, 3])) / np.max(np.abs(energy[:, 3])), 1e-2)
         self.assertTrue(np.all(np.isfinite(projected)))
+
+    def test_zero_parameters_reproduce_the_frozen_network_on_the_same_grid(self):
+        # the GLL baseline of any coarse grid is the frozen network's own computation at that h
+        from graphnet.predict import predict
+        network = load(3); s = scene(); P = Parameterization(3); c = Coarse(s, 3, 3.); D, volume, mass = c.operators(*P.unpack(np.zeros(P.size)))
+        fields = predict(copy.deepcopy(c.scene), c.mesh, network, laws=(0, 2))['fields']
+        for law in ('linear', 'murnaghan'):
+            probes = np.stack([np.einsum('n,tnc->tc', w, fields[law][:, ids]) for ids, w in c.taps], 1); frozen = np.einsum('trc,rc->tr', probes, c.directions)
+            coarse, _ = c.run(D, volume, mass, law, network['weights'])
+            self.assertLess(np.max(np.abs(frozen - coarse)), 1e-6 * np.max(np.abs(coarse)), law)
 
     def test_per_axis_kernel_matches_the_frozen_kernel_and_keeps_constraints(self):
         from coarsegraph.kernel import graph_message as axis_message, forward as axis_forward
@@ -109,9 +120,32 @@ class TrainingAndRunTests(unittest.TestCase):
             c = Coarse(validate_scene(dict(raw, numerics=dict(raw['numerics'], h_mm=.4 / 3))), 3, 3.); weights = load(3)['weights']
             Dv, volume, mass = c.operators(D, q, m); projected, _ = c.run(Dv, volume, mass, 'murnaghan', weights)
             self.assertTrue(np.array_equal(np.asarray(record['receivers'][0]['projected_m']), projected[:, 0]))
-            model['theta'][0] = .01; (root / 'model.json').write_text(json.dumps(model))
+            model['operators']['derivative'][1][2] += .01; (root / 'model.json').write_text(json.dumps(model))
             bad = subprocess.run([sys.executable, '-m', 'coarsegraph.run', '--model', str(root / 'model.json'), '--scene', str(root / 'scene.json'), '--output', str(root / 'out2')], cwd=REPO, capture_output=True, text=True)
-            self.assertNotEqual(bad.returncode, 0); self.assertIn('不一致', bad.stderr)
+            self.assertNotEqual(bad.returncode, 0); self.assertIn('约束', bad.stderr)
+
+    def test_parameters_are_local_coordinates_and_the_stored_operators_define_the_model(self):
+        # A null space has no preferred basis; another BLAS kernel returns another one (simulated by a rotation).
+        for P in (Parameterization(4), AxisParameterization(3)):
+            theta = np.random.default_rng(5).normal(size=P.size) * .04; ops = P.unpack(theta)
+            np.testing.assert_allclose(P.theta_from_operators(*ops), theta, atol=1e-10)
+            other = copy.deepcopy(P); base = other.base if hasattr(other, 'base') else other
+            rotation, _ = np.linalg.qr(np.random.default_rng(6).normal(size=(base.ND.shape[1],) * 2)); base.ND = base.ND @ rotation
+            moved = other.theta_from_operators(*ops); self.assertGreater(np.abs(moved - theta).max(), 1e-3)  # different coordinates ...
+            for a, b in zip(other.unpack(moved), ops): np.testing.assert_allclose(a, b, atol=1e-10)  # ... same operators
+            with self.assertRaises(ValueError): P.theta_from_operators(ops[0] + .01, *ops[1:])
+
+    def test_shipped_models_load_whatever_the_blas_kernel(self):
+        import subprocess, sys
+        names = sorted(p.parent.name for p in (REPO / 'coarsegraph' / 'models').glob('*/model.json'))
+        code = ('import sys, numpy as np\nfrom coarsegraph.run import load_model, local_theta\nfrom coarsegraph.operator import parameterization\n'
+                'for name in sys.argv[1:]:\n    model, ops = load_model(f"coarsegraph/models/{name}/model.json")\n'
+                '    P = parameterization(model["degree"], model.get("axes", "shared"))\n'
+                '    assert all(np.allclose(a, b, rtol=0, atol=1e-10) for a, b in zip(P.unpack(local_theta(model)), ops)), name\nprint("ok")')
+        for kernel in ('', 'Prescott', 'Haswell'):  # OpenBLAS kernels that pick different SVD null-space bases (ignored by other BLAS builds)
+            env = dict(os.environ, **({'OPENBLAS_CORETYPE': kernel} if kernel else {}))
+            done = subprocess.run([sys.executable, '-c', code, *names], cwd=REPO, env=env, capture_output=True, text=True)
+            self.assertEqual(done.stdout.strip(), 'ok', (kernel, done.stderr[-1500:]))
 
 
 if __name__ == '__main__': unittest.main()

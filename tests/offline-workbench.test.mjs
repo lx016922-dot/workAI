@@ -103,3 +103,11 @@ test('material section: engineering constants, summaries and the derived panel',
     truncation: { remainder_relative: 1e-16, relative_to: 'quadratic' }, check_stress_mpa: [[[1, 0, 0], [0, 0, 0], [0, 0, 0]]], engine: '物理 AI' });
   assert.match(panel, /9406/); assert.match(panel, /全部为 0/); assert.match(panel, /COMSOL/);
 });
+
+test('result validation accepts the fast engine and nothing else new', async () => {
+  const { validateSpectralResult } = await import('../offline/web/spectral-data.js');
+  const base = { schema: 'workai.offline.graphwave.result.v1', neural_model: { numerical_correction: false, weights_sha256: 'a'.repeat(64) } };
+  for (const engine of ['workai_graphwave_offline', 'workai_coarse_graph_offline'])
+    assert.throws(() => validateSpectralResult({ ...base, engine }), err => !/离线网络结果格式不正确/.test(err.message));  // passes the engine gate, fails later on the empty layout
+  assert.throws(() => validateSpectralResult({ ...base, engine: 'other' }), /离线网络结果格式不正确/);
+});

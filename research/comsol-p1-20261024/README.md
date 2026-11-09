@@ -1,6 +1,11 @@
 # COMSOL P1 数据任务（2026-10-24）
 
-> **最新状态（2026-11-02 整合时补充）：** 21 次运行完成 3 次（三个线性基准），队列已于 2026-10-30 停止。权威状态与结果见 [recovery-rebuild-20261029](recovery-rebuild-20261029/README.md)；本目录上层的 `campaign-status.json` 和 `data/validation.json` 是 2026-10-24 的历史快照。三个线性结果与谱元标签的对比见 [spectral-linear-comparison.json](spectral-linear-comparison.json)，相对差在 0.01%–0.3% 之间。已完成运行所用的模型源码（`d36366…`）与通过本构自检的源码（`c7140d6c…`）不同，继续计算非线性运行前需用实际源码重做本构自检。在自己的 COMSOL 上继续运行时，用 [local_kit.py](local_kit.py) 生成运行包，做法见 [P1 剩余运行](../../docs/comsol/p1-remaining-runs.md)。
+> **2026-11-09：** 层级 0–1 共 7 个作业已完成，见 [serendipity-baselines-20261109](serendipity-baselines-20261109/README.md)。
+> - 包括本构自检，以及 A、B、C 三个工况的 Murnaghan 与线性重算。
+> - 使用修正版源码 `54e90010…`，即四阶 serendipity 单元。源码与运行包已归档在 [serendipity-54e90010](serendipity-54e90010/)，剩余运行用 `local_kit.py build --tiers 2 3 4` 生成，与归档运行包逐字节一致。本目录顶层的 `UltraResearch.java`（`c7140d6c…`）用的是 Lagrange 单元，只作历史记录，不要用于剩余运行。
+> - 谱元标签与 COMSOL 的非线性增量 2f 一致到 0.06%–2.7%，见 [spectral-comparison.json](serendipity-baselines-20261109/spectral-comparison.json)。
+>
+> **2026-11-02 整合时补充：** 21 次运行完成 3 次（三个线性基准），队列已于 2026-10-30 停止。权威状态与结果见 [recovery-rebuild-20261029](recovery-rebuild-20261029/README.md)；本目录上层的 `campaign-status.json` 和 `data/validation.json` 是 2026-10-24 的历史快照。三个线性结果与谱元标签的对比见 [spectral-linear-comparison.json](spectral-linear-comparison.json)，相对差在 0.01%–0.3% 之间。已完成运行所用的模型源码（`d36366…`）与通过本构自检的源码（`c7140d6c…`）不同，继续计算非线性运行前需用实际源码重做本构自检。在自己的 COMSOL 上继续运行时，用 [local_kit.py](local_kit.py) 生成运行包，做法见 [P1 剩余运行](../../docs/comsol/p1-remaining-runs.md)。
 
 按用户上传的 [仿真要求](../../docs/comsol/comsol-data-request.md)、[工况表](../../docs/comsol/cases.csv)、[CSV 表头](../../docs/comsol/header-template.csv) 和 [元数据模板](../../docs/comsol/metadata-template.json) 执行。
 
