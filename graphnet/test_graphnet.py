@@ -142,6 +142,17 @@ class InputLayerTests(unittest.TestCase):
             e = b['energies'][2]; stored = e[:, 1] + e[:, 2] + e[:, 4]; self.assertLess(np.max(np.abs(stored - e[:, 3])) / np.max(np.abs(e[:, 3])), 1e-3)
             with self.assertRaises(ValueError): rollout(dict(scene, name='changed'), mesh3, model, root / 'whole', identity)
 
+    def test_the_strain_guard_reports_a_readable_error(self):
+        # A soft material at 10 MPa strains past 1e-3; the guard trips inside the parallel kernel and must come back readable.
+        from graphnet.rollout import rollout, GUARD_MESSAGE
+        model = load(3, long_record=True); s = plate(duration=21., v2=True)
+        s['material'] = {'model': 'murnaghan', 'rho_kg_m3': 2700., 'lambda_pa': 2e9, 'mu_pa': 2e9, 'l_pa': 0., 'm_pa': 0., 'n_pa': 0.}
+        s['source'].update(amplitude_mpa=10., frequency_mhz=.1); s['numerics']['h_mm'] = .8
+        scene = network_scene(s, 3, model['material']); mesh = make_mesh(scene, 3, .8)
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError) as caught: rollout(scene, mesh, model, Path(tmp) / 'record', {'test': 'guard'})
+        self.assertIn(GUARD_MESSAGE, str(caught.exception)); self.assertIn('μs', str(caught.exception))
+
 
 class RunTests(unittest.TestCase):
     def test_command_line_run_writes_the_sweep_layout_without_solver_modules(self):

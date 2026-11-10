@@ -146,7 +146,11 @@ def run(directory):
     except InterruptedError as error:
         publish(phase='paused',message=str(error))
     except Exception as error:
-        publish(phase='failed', message=str(error))
+        message = str(error)
+        if 'strain/J/finite-energy guard' in message:  # the frozen kernels' guard text (short records, coarse engine)
+            from graphnet.rollout import GUARD_MESSAGE
+            message = GUARD_MESSAGE + '。'
+        publish(phase='failed', message=message)
         raise
 
 

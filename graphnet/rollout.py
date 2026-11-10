@@ -20,6 +20,10 @@ from spectral3d.mesh import interpolation
 from graphwave.inference import inverse_mapping
 from .inputs import build, signal_table
 from .recurrence import three_segments
+
+# Readable form of the recurrence guard (strain ≤ 1e-3, J > 0, finite energy); the worker shows it as is.
+GUARD_MESSAGE = ('计算超出网络的有效范围：应变超过 1e-3（材料三阶展开的适用上限）、体积比 J ≤ 0 或能量非有限。'
+                 '请降低激励幅值。自由端和角点附近入射波与反射波叠加，应变可达入射波的两倍')
 from .model import energy_layer, speed_bound
 
 STATE = ('positions', 'velocities', 'accelerations', 'externals', 'works', 'dissipations', 'potentials', 'strains', 'jacobians')
@@ -94,9 +98,13 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         start_step = max(0, next_frame - 1) * subdivisions; end_step = last_frame * subdivisions
         stage_times = (np.arange(start_step, end_step)[:, None] + np.cumsum(composition)[None]) * dt * 1e6
         signals = signal_table(inputs, stage_times)
-        fields, energies = three_segments(*(state[name] for name in STATE), mesh['elements'], weights['derivative_' + str(int(mesh['degree']))], inverse, mesh['volume_weight'], mesh['mass'],
-                                          inputs['loads'], inputs['free'], alpha, damped, quadratic, cubic, composition, dt, subdivisions,
-                                          start_step, end_step, next_frame == 0, signals)
+        fields, energies, failed = three_segments(*(state[name] for name in STATE), mesh['elements'], weights['derivative_' + str(int(mesh['degree']))], inverse, mesh['volume_weight'], mesh['mass'],
+                                                  inputs['loads'], inputs['free'], alpha, damped, quadratic, cubic, composition, dt, subdivisions,
+                                                  start_step, end_step, next_frame == 0, signals)
+        if (failed >= 0).any():
+            laws = '、'.join(name for name, step in zip(('线性', 'StVK', '完整'), failed) if step >= 0)
+            raise ValueError(f'{GUARD_MESSAGE}（{laws}控制，约 {int(failed.max()) * dt * 1e6:.2f} μs，最大应变 {float(np.max(state["strains"])):.2e}；'
+                             f'已保存到 {next_frame * sample:g} μs 的完整记录）')
         probes = np.stack([np.stack([np.einsum('n,tnc->tc', w, f[:, ids]) for ids, w in receivers], 1) for f in fields], 2) if receivers else np.zeros((fields.shape[1], 0, 3, 3))
         path = directory / 'fields' / f'{next_frame:06d}.npz'
         save_arrays(path, linear=fields[0], stvk=fields[1], murnaghan=fields[2], probes=probes, energies=energies)

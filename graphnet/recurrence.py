@@ -81,7 +81,9 @@ def _segment(position, velocity, acceleration, previous_external, work, dissipat
             next_position *= free
             message, potential, strain, jac = buffered_message(next_position, cells, derivative, inverse, volume, quadratic, cubic, law)
             if not np.isfinite(potential) or strain > .001 or jac <= 0:
-                raise ValueError('Long recurrence violates strain/J/finite-energy guard.')
+                # No raise here: an exception inside the parallel caller reaches Python as an opaque SystemError.
+                # Report the step instead; the caller raises a readable error and keeps the last complete chunk.
+                return fields, energies, position, velocity, acceleration, previous_external, work, dissipated, potential, max(max_strain, strain), min(min_j, jac), step
             max_strain, min_j = max(max_strain, strain), min(min_j, jac)
             external = np.zeros((nodes, 3))
             for k in range(sources): external += loads[k] * signals[k, step - start_step - 1, stage]
@@ -104,7 +106,7 @@ def _segment(position, velocity, acceleration, previous_external, work, dissipat
             energies[at, 0] = step * dt * 1e6; energies[at, 1] = np.sum(.5 * mass[:, None] * velocity * velocity)
             energies[at, 2] = potential; energies[at, 3] = work; energies[at, 4] = dissipated
             at += 1
-    return fields, energies, position, velocity, acceleration, previous_external, work, dissipated, potential, max_strain, min_j
+    return fields, energies, position, velocity, acceleration, previous_external, work, dissipated, potential, max_strain, min_j, -1
 
 
 @njit(cache=True, parallel=True)
@@ -112,7 +114,7 @@ def three_segments(positions, velocities, accelerations, externals, works, dissi
                    cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
                    dt, subdivisions, start_step, end_step, include_initial, signals):
     count = (end_step - start_step) // subdivisions + (1 if include_initial else 0)
-    fields = np.empty((3, count, len(mass), 3)); energies = np.empty((3, count, 5))
+    fields = np.empty((3, count, len(mass), 3)); energies = np.empty((3, count, 5)); failed = np.full(3, -1, dtype=np.int64)
     for law in prange(3):
         row = _segment(positions[law], velocities[law], accelerations[law], externals[law], works[law], dissipations[law],
                        cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
@@ -120,4 +122,5 @@ def three_segments(positions, velocities, accelerations, externals, works, dissi
         fields[law], energies[law] = row[0], row[1]
         positions[law], velocities[law], accelerations[law], externals[law] = row[2], row[3], row[4], row[5]
         works[law], dissipations[law], potentials[law], strains[law], jacobians[law] = row[6], row[7], row[8], row[9], row[10]
-    return fields, energies
+        failed[law] = row[11]
+    return fields, energies, failed

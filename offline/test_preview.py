@@ -23,6 +23,20 @@ class Preview(unittest.TestCase):
             self.assertAlmostEqual(row['nodes_per_2f_shear_wavelength'], shear / (2 * sig['band_30db_mhz'] * 1e6) / (scene['numerics']['h_mm'] / 4 * 1e-3))
         self.assertIn('2 个激励源', result['scope']); self.assertIn('非 X 端面加载', result['scope'])
 
+    def test_short_absorbing_layers_are_flagged(self):
+        from physics.materials import fastest_speed
+        scene = v2_plate(); scene['boundaries'] = [b for b in scene.get('boundaries', []) if b['type'] != 'absorbing']
+        wavelength = fastest_speed(scene['material']) / (min(s['frequency_mhz'] for s in [scene['source'], *scene.get('sources', [])]) * 1e6) * 1e3
+        from offline.domain import validate_request
+        from offline.preview import absorber_warnings
+        for length, flagged in ((8., True), (round(2.05 * wavelength, 1), False)):
+            s = copy.deepcopy(scene); s['geometry']['length_mm'] = max(s['geometry']['length_mm'], 2.2 * length)
+            s['boundaries'].append({'type': 'absorbing', 'face': 'xmax', 'length_mm': length, 'ramp': 'cubic', 'attenuation_db': 60.})
+            warnings = absorber_warnings(validate_request({'scene': s, 'degree': 4})['scene'])
+            self.assertEqual(any('吸收层 xmax' in w for w in warnings), flagged, (length, warnings))
+            if flagged:  # and the editor preview shows it
+                result = preview({'scene': s, 'degree': 4}, '.'); self.assertTrue(result['ok'], result['errors']); self.assertTrue(any('吸收层 xmax' in w for w in result['warnings']))
+
     def test_invalid_scenes_report_errors_without_raising(self):
         bad = v2_plate(); bad['numerics']['h_mm'] = 3.
         result = preview({'scene': bad, 'degree': 4}, '.')
