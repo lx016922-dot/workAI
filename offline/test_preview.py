@@ -37,6 +37,16 @@ class Preview(unittest.TestCase):
             if flagged:  # and the editor preview shows it
                 result = preview({'scene': s, 'degree': 4}, '.'); self.assertTrue(result['ok'], result['errors']); self.assertTrue(any('吸收层 xmax' in w for w in result['warnings']))
 
+    def test_long_records_with_coarse_meshes_are_flagged(self):
+        from offline.preview import long_record_warnings
+        signals = [{'name': '主激励', 'frequency_mhz': .2}]
+        self.assertEqual(long_record_warnings(1000., signals, [{'name': '主激励', 'nodes_per_2f_shear_wavelength': 15.4}]), [])
+        self.assertEqual(len(long_record_warnings(1000., signals, [{'name': '主激励', 'nodes_per_2f_shear_wavelength': 11.5}])), 1)
+        self.assertEqual(long_record_warnings(30., signals, [{'name': '主激励', 'nodes_per_2f_shear_wavelength': 11.5}]), [])  # 6 periods: short record
+        scene = v2_plate(); scene['acquisition'] = {'duration_us': 1000., 'sample_step_us': .05}
+        result = preview({'scene': scene, 'degree': 4}, '.'); n = result['resolution'][0]['nodes_per_2f_shear_wavelength']
+        self.assertEqual(any('载波周期' in w for w in result['warnings']), n < 15, (n, result['warnings']))
+
     def test_invalid_scenes_report_errors_without_raising(self):
         bad = v2_plate(); bad['numerics']['h_mm'] = 3.
         result = preview({'scene': bad, 'degree': 4}, '.')

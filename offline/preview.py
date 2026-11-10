@@ -128,12 +128,28 @@ def preview(body, data_directory=None):
             nodes = shear / (2 * row['band_30db_mhz'] * 1e6) / (spacing * 1e-3)
             out['resolution'].append({'name': row['name'], 'band_30db_mhz': row['band_30db_mhz'], 'nodes_per_2f_shear_wavelength': nodes})
         acq = scene['acquisition']; samples = int(round(acq['duration_us'] / acq['sample_step_us'])) + 1
+        out['warnings'] += long_record_warnings(acq['duration_us'], out['signals'], out['resolution'])
         if out['mesh']:
             size = samples * out['mesh']['nodes'] * 3 * 8 * CONTROLS
             free = shutil.disk_usage(data_directory).free if data_directory else None
             out['record'] = {'samples': samples, 'uncompressed_bytes': size, 'free_bytes': free}
             if free is not None and size > free: out['warnings'].append('完整记录超过数据目录的可用磁盘空间。')
         out['warnings'] += absorber_warnings(scene)
+    return out
+
+
+def long_record_warnings(duration_us, signals, resolution):
+    """Long records whose 2f resolution is below 15 nodes per 2f shear wavelength.
+
+    Measured over 1 ms (200 carrier periods) on a 48 × 2 mm plate with S0, A0 and many edge reflections, against a
+    converged 2D reference (research/long-record-accuracy): 2f resolution 11.5 → about 1 % at the end of the record,
+    15.4 → about 0.1 %, 23 → about 0.03 %; the error grows roughly linearly with the record length."""
+    out = []
+    for sig, res in zip(signals, resolution):
+        periods = duration_us * sig['frequency_mhz']; n = res['nodes_per_2f_shear_wavelength']
+        if periods >= 100 and n < 15 - 1e-9:
+            out.append(f"{res['name']}：记录约 {periods:.0f} 个载波周期，2f 分辨率 {n:.1f} 低于 15。按 1 ms 平板实测（200 个周期），"
+                       '分辨率 11.5 时记录末段误差约 1%，15 时约 0.1%，误差随记录长度大致线性增长；需要长记录精度时请减小单元尺寸。')
     return out
 
 
