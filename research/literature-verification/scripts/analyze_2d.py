@@ -37,7 +37,9 @@ def echoes():
         if not (JOBS / name / 'key').exists(): continue
         t, u = series(JOBS / name, 'linear', [[40., .4, .4]]); u = u[:, 0, 0]; late = t > 20.  # the direct burst has passed x = 40 by 16.3 μs
         R = float(np.max(np.abs(u - ref)[late]) / np.max(np.abs(ref)))
-        out[name] = {'layer_mm': float(name.split('abs')[1]) if 'abs' in name else 0., 'reflection_ratio': R, 'reflection_db': 20 * math.log10(R),
+        request = json.loads((JOBS / name / 'request.json').read_text())  # the layer length actually run
+        layer = sum(b['length_mm'] for b in request['scene'].get('boundaries', []) if b['type'] == 'absorbing')
+        out[name] = {'layer_mm': layer, 'reflection_ratio': R, 'reflection_db': 20 * math.log10(R),
                      'wavelength_mm': CL / .5e6 * 1e3, 'trace': u.tolist()}
     out['t_us'] = ref_t.tolist(); out['reference'] = ref.tolist(); return out
 
