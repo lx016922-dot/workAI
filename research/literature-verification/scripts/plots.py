@@ -53,8 +53,10 @@ def fig_shg(s):
 
 def fig_echo(e):
     t = np.array(e['t_us']); fig, ax = plt.subplots(figsize=(5, 3)); ax.plot(t, np.array(e['reference']) * 1e9, color=INK, lw=1, label='长杆（无回波）')
-    for name, col in (('B1-free', 'gray'), ('B1-abs13', ORANGE), ('B1-abs26', BLUE), ('B1-abs39', GREEN)):
-        if name in e: ax.plot(t, np.array(e[name]['trace']) * 1e9, color=col, lw=.8, label=f"{name}（{e[name]['reflection_db']:.1f} dB）")
+    for name, col in (('B1-free', 'gray'), ('B1-abs6', '#b83280'), ('B1-abs13', ORANGE), ('B1-abs26', BLUE), ('B1-abs39', GREEN)):
+        if name not in e: continue
+        v = e[name]; label = '自由端（全反射）' if not v['layer_mm'] else f"吸收层 {v['layer_mm']:g} mm = {v['layer_mm'] / v['wavelength_mm']:.1f}λ（{v['reflection_db']:.1f} dB）"
+        ax.plot(t, np.array(v['trace']) * 1e9, color=col, lw=.8, label=label)
     ax.set(xlabel='t (μs)', ylabel='u (nm)，x = 40 mm', title='吸收层回波'); ax.legend(fontsize=6)
     fig.tight_layout(); fig.savefig(OUT / 'fig4-absorbing-echo.png'); plt.close(fig)
 
