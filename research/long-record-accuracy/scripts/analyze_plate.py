@@ -34,6 +34,7 @@ def compare(a, b, t):
 if __name__ == '__main__':
     ref, ref_coarse = reference(.5), reference(.75); t = np.arange(len(ref['linear'])) * STEP
     out = {'reference_self_check': {k: compare(ref_coarse[k], ref[k], t) for k in ref}, 'windows_us': (np.arange(1, len(t) * STEP / WINDOW + 1e-9) * WINDOW).tolist()}
+    late = t >= 900.; out['excerpt'] = {'t_us': t[late].tolist(), 'reference_full_top24': ref['full'][late, 0].tolist(), 'reference_material_top24': ref['material'][late, 0].tolist()}
     print('reference h0.75 vs h0.5', {k: {T: f'{v:.1e}' for T, v in c['cumulative_rel_l2'].items()} for k, c in out['reference_self_check'].items()})
     for h in sys.argv[1:] or ('2', '1.5', '1'):
         job = JOBS / f'P-h{h}'
@@ -43,6 +44,7 @@ if __name__ == '__main__':
         for part, law in (('linear', 'linear'), ('stvk', 'stvk'), ('full', 'murnaghan')):
             u = series(job, part, pts)[1][::EVERY]; sim[law] = np.concatenate([u[:, :len(TOP), 2], u[:, len(TOP):, 0]], 1)
         sim = responses(sim); out[f'h{h}'] = {k: compare(sim[k], ref[k], t) for k in sim}
+        out['excerpt'][f'h{h}_full_top24'] = sim['full'][late, 0].tolist(); out['excerpt'][f'h{h}_material_top24'] = sim['material'][late, 0].tolist()
         print(f'network h {h} mm', {k: {T: f'{v:.1e}' for T, v in c['cumulative_rel_l2'].items()} for k, c in out[f'h{h}'].items()})
     path = HERE / 'results' / 'plate-1ms.json'; old = json.loads(path.read_text()) if path.exists() else {}
     old.update(out); path.write_text(json.dumps(old, indent=1))
