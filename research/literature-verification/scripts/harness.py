@@ -33,10 +33,14 @@ def run(name, s, degree=4):
     status = job / 'status.json'
     if status.exists() and json.loads(status.read_text()).get('phase') == 'completed' and (job / 'key').exists() and (job / 'key').read_text() == key:
         return job
-    job.mkdir(parents=True, exist_ok=True)
-    for p in job.iterdir():
-        if p.is_file(): p.unlink()
-    import shutil; shutil.rmtree(job / 'record', ignore_errors=True)
+    pending = job / 'key.pending'
+    if not (pending.exists() and pending.read_text() == key and (job / 'record').exists()):
+        # a new or changed request starts clean; the same unfinished request resumes from its checkpoint (as the workbench does)
+        job.mkdir(parents=True, exist_ok=True)
+        for p in job.iterdir():
+            if p.is_file(): p.unlink()
+        import shutil; shutil.rmtree(job / 'record', ignore_errors=True)
+        pending.write_text(key)
     (job / 'request.json').write_text(json.dumps(request)); status.write_text(json.dumps({'job_id': name, 'phase': 'starting'}))
     started = time.monotonic()
     done = subprocess.run([sys.executable, '-X', 'utf8', '-m', 'offline.worker', '--job-dir', str(job)], cwd=REPO, capture_output=True, text=True)
