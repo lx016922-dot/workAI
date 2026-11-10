@@ -133,4 +133,24 @@ def preview(body, data_directory=None):
             free = shutil.disk_usage(data_directory).free if data_directory else None
             out['record'] = {'samples': samples, 'uncompressed_bytes': size, 'free_bytes': free}
             if free is not None and size > free: out['warnings'].append('完整记录超过数据目录的可用磁盘空间。')
+        out['warnings'] += absorber_warnings(scene)
+    return out
+
+
+def absorber_warnings(scene):
+    """Absorbing layers shorter than two of the longest wavelengths (fastest bulk speed at the lowest carrier).
+
+    The layer's attenuation_db is a design figure: the echo is set by the damping gradient, i.e. by the layer length in
+    wavelengths. Measured with this software on a plane longitudinal wave (research/literature-verification): about −25 dB
+    at one wavelength and −35 dB at two; Wu et al. (2013) recommend at least two wavelengths for guided waves."""
+    from physics.materials import fastest_speed
+    from physics.scene import boundaries, sources
+    if scene.get('schema') != V2: return []
+    carriers = [s['frequency_mhz'] for s in sources(scene) if isinstance(s.get('frequency_mhz'), (int, float)) and s['frequency_mhz'] > 0]
+    if not carriers: return []
+    wavelength = fastest_speed(scene['material']) / (min(carriers) * 1e6) * 1e3; out = []
+    for b in boundaries(scene):
+        if b['type'] == 'absorbing' and b['length_mm'] < 2 * wavelength - 1e-9:
+            out.append(f"吸收层 {b['face']} 长 {b['length_mm']:g} mm，是最长波长（{wavelength:.1f} mm）的 {b['length_mm'] / wavelength:.1f} 倍；"
+                       '回波可能明显（本软件实测 1 倍波长约 −25 dB，2 倍约 −35 dB），建议不少于 2 倍波长。')
     return out
