@@ -24,10 +24,7 @@ def analyse(name, xs, material, sigma_mpa, f_mhz, cycles=5., window_us=None):
     t, lin = series(job, 'linear', pts); _, stv = series(job, 'stvk', pts); _, ful = series(job, 'full', pts)
     lin, stv, ful = lin[..., 0], stv[..., 0], ful[..., 0]; dt = (t[1] - t[0]) * 1e-6
     if window_us: keep = t <= window_us; t, lin, stv, ful = t[keep], lin[keep], stv[keep], ful[keep]
-    rho = material['rho_kg_m3']; c2, c3, _ = tensors(material)
-    if material.get('model') == 'energy' and material.get('fiber_angle_deg'):
-        Q = __import__('physics.materials', fromlist=['mandel_rotation']).mandel_rotation(rotation_z(material['fiber_angle_deg']))
-        c2 = Q @ c2 @ Q.T; c3 = np.einsum('ia,jb,kc,abc->ijk', Q, Q, Q, c3)
+    rho = material['rho_kg_m3']; c2, c3, _ = tensors(material)  # global frame (the fibre angle is already applied)
     C11, C111 = c2[0, 0], c3[0, 0, 0]; c = math.sqrt(C11 / rho)
     beta = {'geometric': -3., 'material': -C111 / C11, 'total': -(3 + C111 / C11)}
     # wave speed: arrival delay of the linear burst between the first and last receiver (cross-correlation, spline-refined)
@@ -45,7 +42,7 @@ def analyse(name, xs, material, sigma_mpa, f_mhz, cycles=5., window_us=None):
         row = {'x_mm': xs[j], 'dx_mm': xs[j] - xs[0]}
         for part, inc in incs.items():
             back = CubicSpline(t, inc[:, 0], extrapolate=False)(t - shift * 1e6); back = np.nan_to_num(back)
-            D = inc[:, j] - back; fit = float(D @ q / (q @ q)); res = float(np.linalg.norm(D - fit * q) / np.linalg.norm(fit * q))
+            D = inc[:, j] - back; fit = float(D @ q / (q @ q)); res = float(np.linalg.norm(D - fit * q) / max(np.linalg.norm(fit * q), 1e-300))  # 0 when the increment is identically zero
             row[part] = {'beta_fit': fit, 'beta_theory': beta[part], 'waveform_residual': res,
                          'rel_diff': fit / beta[part] - 1 if abs(beta[part]) > 1e-6 else None, 'abs_diff': fit - beta[part]}
         rows.append(row)
