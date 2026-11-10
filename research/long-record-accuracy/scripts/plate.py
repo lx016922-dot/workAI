@@ -1,4 +1,7 @@
-"""1 ms plane-strain plate (48 × 2 mm, free ends, top Gaussian patch, 0.2 MHz): workbench network vs a converged 2D spectral reference.
+"""1 ms plane-strain plate (48 × 2 mm, free ends, 0.2 MHz): workbench network vs a converged 2D spectral reference.
+
+The load is a uniform end-face traction along (1, 0, 1): its x part excites S0, its z part A0, and it is uniform across the
+width, so the 3D run is exactly plane strain (a round Gaussian patch would vary across the 3D width).
 
 The network runs the 3D plate with symmetry on both y faces (plane strain; the project's tests show this equals the 2D
 solver to 1e-10). The reference is `spectral2d` (separate code path: velocity Verlet, no network) at h 0.75 and 0.5 mm, degree 4,
@@ -21,12 +24,15 @@ def points(width):
 
 def plate(h, dimension='3d'):
     s = copy.deepcopy(BASE); s['name'] = '1 ms plate'; s['receiver_lines'] = []
+    s['source'] = {'face': 'xmin', 'center_mm': [0., 1., 1.], 'radius_mm': 0., 'direction': [1., 0., 1.], 'amplitude_mpa': 1., 'frequency_mhz': .2,
+                   'cycles': 5., 'delay_us': 0., 'phase_deg': 0., 'signal': {'type': 'tone_burst', 'window': 'hann'}}
     s['acquisition'] = {'duration_us': 1000., 'sample_step_us': .1}; s['numerics'] = {'h_mm': float(h), 'cfl': .3, 'max_elements': 40000}
     if dimension == '3d':
-        s['geometry']['width_mm'] = float(h); s['source']['center_mm'][1] = h / 2
+        s['geometry']['width_mm'] = float(h); s['source']['center_mm'] = [0., h / 2, 1.]
         s['boundaries'] = [{'type': 'symmetry', 'face': 'ymin'}, {'type': 'symmetry', 'face': 'ymax'}]
     else:
-        s['dimension'] = '2d_plane_strain'; s['boundaries'] = []; s['numerics']['cfl'] = .35
+        # the 2D solver's scene core allows ≤ 2000 sample intervals: sample every 0.5 μs (10 per carrier period; the internal step is unchanged)
+        s['dimension'] = '2d_plane_strain'; s['boundaries'] = []; s['numerics']['cfl'] = .35; s['acquisition']['sample_step_us'] = .5
     width = s['geometry']['width_mm']
     s['receivers'] = [{'name': f'top{int(x)}', 'point_mm': p, 'direction': [0., 0., 1.]} for x, p in zip(TOP, points(width)[:3])] + \
                      [{'name': f'mid{int(x)}', 'point_mm': p, 'direction': [1., 0., 0.]} for x, p in zip(MID, points(width)[3:])]
