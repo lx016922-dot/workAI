@@ -117,7 +117,7 @@ if __name__ == '__main__':
                             rid.append(item)
                     row['fk_ridges_at_carrier'] = rid
                     fr, kk, S = spec['network']; keep_f = fr <= 1.2e6; keep_k = abs(kk) <= 3000
-                    row['fk_network'] = {'f_mhz': (fr[keep_f][::4] / 1e6).tolist(), 'k_rad_m': kk[keep_k][::2].tolist(), 'S': (S[keep_f][::4][:, keep_k][:, ::2] / S.max()).tolist()}
+                    row['fk_network'] = {'f_mhz': (fr[keep_f][::2] / 1e6).round(5).tolist(), 'k_rad_m': kk[keep_k][::2].round(2).tolist(), 'S': np.round(S[keep_f][::2][:, keep_k][:, ::2] / S.max(), 5).tolist()}
                     row['safe_curves'] = {'k_rad_m': ks.tolist(), 'f_mhz': [[c[b][0] / 1e6 for c in curves] for b in range(6)],
                                           'theta_share': [[float(c[b][1][1]) for c in curves] for b in range(6)]}
                     for it in rid:

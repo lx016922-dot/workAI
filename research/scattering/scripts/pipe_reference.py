@@ -7,7 +7,8 @@ pipe whose loads share that angular dependence to the (x, r) half-section. The w
 x–r grid, lumped mass, assembled sparse stiffness, classical fourth-order Runge–Kutta in time.
 A uniform traction on the xmin end face: axial (n = 0, T_x = 1) or along y (n = 1, T_r = 1, T_θ = −1, since
 e_y = cos θ e_r − sin θ e_θ with θ measured from +y). All other faces are free.
-Usage: pipe_reference.py CASE P HX [DT_FACTOR]   (writes reference/pipe-CASE-pP-hHX-dtD.npy)
+Usage: pipe_reference.py CASE P HX [DT_FACTOR] [NR]   (writes reference/pipe-CASE-pP-hHX-nrNR-dtD.npy)
+       pipe_reference.py check   (section eigenfrequencies with sliding ends vs the SAFE curves)
 """
 import math, sys, time
 from pathlib import Path
@@ -102,7 +103,28 @@ def cartesian(U, n, theta_deg):
     return np.stack([ux, ur * math.cos(th) - ut * math.sin(th), ur * math.sin(th) + ut * math.cos(th)], -1)
 
 
+def sliding_end_check(length=20e-3, fmax=1e6):
+    """With u_x = 0 on both end faces the standing waves of the section are exactly the guided modes at k = mπ/L, so its
+    eigenfrequencies must equal the SAFE dispersion curves (pipe_safe.py). Returns the worst relative mismatch per order."""
+    from scipy.sparse.linalg import eigsh
+    from pipe_safe import Pipe
+    out = {}
+    for n in (0, 1):
+        sec = Section(n, 6, 1e-3, 1, length=length); N = sec.N; xi = np.arange(N) // sec.Nr; ends = np.flatnonzero((xi == 0) | (xi == sec.Nx - 1))
+        fixed = set((2 * N + ends).tolist()) | (set((N + np.arange(N)).tolist()) if n == 0 else set())   # n = 0: drop the unloaded torsional field
+        keep = np.array([d for d in range(3 * N) if d not in fixed]); Mi = sp.diags(np.sqrt(sec.inv_mass[keep])); A = (Mi @ sec.K[keep][:, keep] @ Mi).tocsc()
+        safe = Pipe(LAM, MU, RHO, sec.rg[0], sec.rg[-1], n, 16); targets = []
+        for m in range(1, 40):
+            fr, vec = safe.frequencies(m * math.pi / length, 6)
+            targets += [fr[b] for b in range(6) if fr[b] / 2 / math.pi < fmax and not (n == 0 and safe.polarization(vec[:, b])[1] > .5)]
+        w = np.sqrt(np.sort(np.abs(eigsh(A, k=len(targets) + 4, sigma=0., which='LM', return_eigenvectors=False))))
+        out[n] = {'frequencies': len(targets), 'worst_relative_mismatch': float(max(abs(w[np.argmin(abs(w - t))] - t) / t for t in targets))}
+    return out
+
+
 if __name__ == '__main__':
+    if sys.argv[1] == 'check':
+        print('sliding-end eigenfrequencies vs SAFE (k = mπ/L, below 1 MHz):', sliding_end_check()); sys.exit()
     case, p, hx = sys.argv[1], int(sys.argv[2]), float(sys.argv[3]); dtf = float(sys.argv[4]) if len(sys.argv) > 4 else 1.; nr = int(sys.argv[5]) if len(sys.argv) > 5 else 2
     REF.mkdir(exist_ok=True); path = REF / f'pipe-{case}-p{p}-h{hx:g}-nr{nr}-dt{dtf:g}.npy'
     if not path.exists(): np.save(path, simulate(case, p, hx, nr, dtf))

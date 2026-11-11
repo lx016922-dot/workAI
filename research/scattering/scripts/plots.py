@@ -75,4 +75,32 @@ for rr, col, mk in ((4.02, NET, 'o'), (8., NET2, 's')):
     a.plot([x['theta_deg'] for x in xs], [100 * x['scattered_rel_l2'] for x in xs], color=col, marker=mk, ms=5, lw=1, label=f'r = {rr:g} mm')
 a.set(xlabel='θ (°)', ylabel='散射场相对 L2 误差 (%)', title='各接收点误差', xticks=th); a.set_ylim(bottom=0); a.legend(fontsize=7)
 fig.tight_layout(); fig.savefig(OUT / 'fig3-hole.png'); plt.close(fig)
+# fig5, fig6: pipe — waveforms against the 2.5D reference, and the network's frequency–wavenumber map with the SAFE curves
+pipe_path = HERE / 'results/pipe.json'
+if pipe_path.exists():
+    pipe = json.loads(pipe_path.read_text()); cases = [c for c in ('axial', 'transverse') if f'network_h1.25' in pipe.get(c, {})]
+    names = {'axial': '轴向加载（n = 0）', 'transverse': '横向加载（n = 1）'}
+    if cases:
+        fig, ax = plt.subplots(len(cases), 3, figsize=(11, 2.6 * len(cases)), squeeze=False, sharex=True)
+        for i, case in enumerate(cases):
+            tr = pipe[case]['network_h1.25']['traces']; t = np.array(tr['t_us']); comp = tr['component']
+            for j, x in enumerate(('x15', 'x30', 'x45')):
+                a = ax[i, j]; a.plot(t, np.array(tr[x]['reference']) * 1e9, color=REF, lw=1.6, label='2.5D 谱元参考')
+                a.plot(t, np.array(tr[x]['network']) * 1e9, color=NET, lw=1, ls='--', label='软件网络（h 1.25 mm）')
+                a.set_title(f"{names[case]}，{x[1:]} mm 处外表面 u_{comp}", fontsize=8.5)
+            ax[i, 0].set_ylabel('位移 (nm)')
+        for a in ax[-1]: a.set_xlabel('时间 (μs)')
+        ax[0, 0].legend(fontsize=7, loc='upper right')
+        fig.tight_layout(); fig.savefig(OUT / 'fig5-pipe-waveforms.png'); plt.close(fig)
+        fig, ax = plt.subplots(1, len(cases), figsize=(5.4 * len(cases), 3.8), squeeze=False)
+        for a, case in zip(ax[0], cases):
+            m = pipe[case]['fk_network']; f = np.array(m['f_mhz']); k = np.array(m['k_rad_m']); S = np.array(m['S'])
+            order = np.argsort(k); a.pcolormesh(k[order], f, np.log10(np.maximum(S[:, order], 1e-4)), cmap='Greys', vmin=-3, vmax=0, shading='auto')
+            sc = pipe[case]['safe_curves']; ks = np.array(sc['k_rad_m'])
+            for b, (fb, th) in enumerate(zip(sc['f_mhz'], sc['theta_share'])):
+                fb = np.array(fb); th = np.array(th); mask = np.ones_like(fb, bool) if case == 'transverse' else th < .5
+                for sgn in (1, -1): a.plot(np.where(mask, sgn * ks, np.nan), fb, color=NET, lw=.8, alpha=.8, label='SAFE 频散曲线' if (b == 0 and sgn == 1) else None)
+            a.set(xlim=(-3000, 3000), ylim=(0, 1.2), xlabel='波数 k (rad/m)，正值沿 +x 传播', ylabel='频率 (MHz)', title=f"{names[case]}：外表面 u_{pipe[case]['network_h1.25']['traces']['component']} 的 f–k 谱（软件）")
+            a.title.set_fontsize(8.5); a.legend(fontsize=7, loc='upper left')
+        fig.tight_layout(); fig.savefig(OUT / 'fig6-pipe-fk.png'); plt.close(fig)
 print('figures in', OUT)
