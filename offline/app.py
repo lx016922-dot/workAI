@@ -22,6 +22,8 @@ from .recording import traces, manifest
 from .preview import preview
 
 REPOSITORY = ROOT.parent
+# Desktop application version (the frozen network keeps its own model version in offline/model).
+APP = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
 
 
 def save(path, value):
@@ -176,7 +178,7 @@ def handler(application):
                 self.local_request()
                 url = urlsplit(self.path)
                 if url.path == '/api/info':
-                    return self.reply(200, {'model': application.info, 'token': application.token, 'data_directory': str(application.data)})
+                    return self.reply(200, {'model': application.info, 'app': APP, 'token': application.token, 'data_directory': str(application.data)})
                 if url.path == '/api/templates':
                     return self.reply(200, templates())
                 if url.path == '/api/materials':
@@ -246,7 +248,7 @@ def handler(application):
             try:
                 self.local_request()
                 match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume)',self.path)
-                if self.path not in ('/api/jobs', '/api/preview') and not match:
+                if self.path not in ('/api/jobs', '/api/preview', '/api/shutdown') and not match:
                     raise FileNotFoundError()
                 if not secrets.compare_digest(self.headers.get('X-WorkAI-Token', ''), application.token):
                     raise PermissionError('请刷新应用页面后重试。')
@@ -268,6 +270,11 @@ def handler(application):
                     return self.reply(202,application.control(job,action))
                 if self.path == '/api/preview':
                     return self.reply(200, preview(body, application.data))
+                if self.path == '/api/shutdown':
+                    # The desktop window asks the local server to stop: running work is paused at its checkpoint by close().
+                    self.reply(202, {'message': '正在退出。'})
+                    threading.Thread(target=self.server.shutdown, daemon=True).start()
+                    return
                 self.reply(202, application.submit(body))
             except (ValueError, TypeError, KeyError) as error:
                 self.reply(422, {'error': str(error)})

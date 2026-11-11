@@ -1,0 +1,119 @@
+name: Desktop app (Windows)
+# Builds WorkAI.exe, assembles WorkAI-<version>-windows-x64.zip, opens the real window in a smoke test,
+# runs a computation in the packaged runtime, and (on request) publishes the GitHub release v<version>.
+on:
+  push:
+    branches: ['claude/**', main]
+    paths: ['desktop/**', 'offline/**', 'tools/build-desktop.py', 'tools/build-offline.py', 'tools/download-offline.py', '.github/workflows/desktop.yml']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the GitHub release v<offline/version.json version>
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 120
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build WorkAI.exe (WinForms + WebView2)
+        run: dotnet build desktop/WorkAI.csproj -c Release -o desktop-out --nologo
+      - name: Fetch the pinned runtime and dependencies
+        run: python tools/download-offline.py --cache build-cache --platform windows
+      - name: Assemble the release folder and archive
+        env:
+          WORKAI_BUILD_COMMIT: ${{ github.sha }}
+        run: python tools/build-desktop.py --cache build-cache --launcher desktop-out --output dist --archive
+      - name: Locate the package
+        id: pkg
+        shell: pwsh
+        run: |
+          $dir = Get-ChildItem dist -Directory -Filter 'WorkAI-*-windows-x64' | Select-Object -First 1
+          $zip = Get-ChildItem dist -File -Filter 'WorkAI-*-windows-x64.zip' | Select-Object -First 1
+          $version = (Get-Content offline/version.json -Raw -Encoding utf8 | ConvertFrom-Json).version
+          "dir=$($dir.FullName)" >> $env:GITHUB_OUTPUT
+          "zip=$($zip.FullName)" >> $env:GITHUB_OUTPUT
+          "name=$($zip.Name)" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "{0}: {1:N1} MiB" -f $zip.Name, ($zip.Length / 1MB)
+          Get-ChildItem $dir.FullName | Select-Object Name, Length
+      - name: Verify every shipped file against the manifest
+        shell: pwsh
+        run: '& "${{ steps.pkg.outputs.dir }}\runtime\python.exe" "${{ steps.pkg.outputs.dir }}\verify-package.py"'
+      - name: Ensure the WebView2 runtime is present
+        shell: pwsh
+        run: |
+          $keys = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}', 'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $found = $keys | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ($found) { "WebView2 runtime $((Get-ItemProperty $found).pv)" }
+          else {
+            Invoke-WebRequest 'https://go.microsoft.com/fwlink/p/?LinkId=2124703' -OutFile MicrosoftEdgeWebview2Setup.exe
+            Start-Process .\MicrosoftEdgeWebview2Setup.exe -ArgumentList '/silent', '/install' -Wait
+          }
+      - name: Smoke test - open WorkAI.exe, load the workbench and capture the window
+        shell: pwsh
+        timeout-minutes: 10
+        run: |
+          New-Item -ItemType Directory smoke | Out-Null
+          $p = Start-Process -FilePath "${{ steps.pkg.outputs.dir }}\WorkAI.exe" -ArgumentList '--smoke', "$pwd\smoke\workbench.png", '--data', "$pwd\smoke\data" -PassThru
+          if (-not $p.WaitForExit(420000)) { $p.Kill(); throw 'WorkAI.exe did not finish within 7 minutes' }
+          Get-ChildItem smoke
+          if (Test-Path smoke\workbench.error.txt) { Get-Content smoke\workbench.error.txt -Encoding utf8 }
+          if (Test-Path smoke\data\logs\server.log) { Get-Content smoke\data\logs\server.log -Encoding utf8 -Tail 20 }
+          if ($p.ExitCode -ne 0) { throw "WorkAI.exe exited with code $($p.ExitCode)" }
+          $checks = Get-Content smoke\workbench.json -Raw -Encoding utf8
+          $checks
+          $c = $checks | ConvertFrom-Json
+          if ($c.treeRows -lt 10 -or $c.ribbonButtons -lt 10 -or -not ($c.app -match '1\.0')) { throw 'The workbench did not render completely' }
+      - name: Computation smoke test in the packaged runtime (API, 5 ms prediction, export)
+        shell: pwsh
+        timeout-minutes: 60
+        working-directory: ${{ steps.pkg.outputs.dir }}
+        run: '& .\runtime\python.exe -X utf8 -m offline.smoke'
+      - name: Write the checksum
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash "${{ steps.pkg.outputs.zip }}" -Algorithm SHA256).Hash.ToLower()
+          "$hash  ${{ steps.pkg.outputs.name }}" | Out-File -Encoding ascii dist\SHA256SUMS.txt
+          Get-Content dist\SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WorkAI-desktop-windows-x64
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS.txt
+          compression-level: 0
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-test
+          path: smoke/workbench.*
+          if-no-files-found: ignore
+      - name: Publish the GitHub release
+        if: ${{ inputs.publish || contains(github.event.head_commit.message, '[publish-release]') }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v${{ steps.pkg.outputs.version }}"
+          Copy-Item smoke\workbench.png dist\WorkAI-workbench.png
+          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag "${{ steps.pkg.outputs.zip }}" dist\SHA256SUMS.txt dist\WorkAI-workbench.png --clobber --repo $env:GITHUB_REPOSITORY
+          } else {
+            gh release create $tag "${{ steps.pkg.outputs.zip }}" dist\SHA256SUMS.txt dist\WorkAI-workbench.png --target $env:GITHUB_SHA --latest `
+              --title "WorkAI $tag · 超声导波仿真桌面版" --notes-file desktop/RELEASE-NOTES.md --repo $env:GITHUB_REPOSITORY
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Publishing the release failed' }
