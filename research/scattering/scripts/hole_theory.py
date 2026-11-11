@@ -72,3 +72,9 @@ if __name__ == '__main__':
         g = B * hankel1(n, be * a); g1 = B * be * h1vp(n, be * a); g2 = B * be ** 2 * h1vp(n, be * a, 2)
         fr = hole._fields(n, a, f, f1, f2, g, g1, g2); worst = max(worst, abs(fr[2]) / ((hole.lp + 2 * hole.mu) * al ** 2), abs(fr[3]) / ((hole.lp + 2 * hole.mu) * al ** 2))
     print('max |traction| on the hole / incident stress:', f'{worst:.1e}')
+    # series convergence at the top of the band used in analyze_hole.py (3 MHz) and the farthest receiver (r = 2a)
+    w = 2 * math.pi * 3e6; worst = 0.
+    for th in (0., 90., 180.):
+        a40 = np.array(hole.displacement(w, 2 * hole.a, math.radians(th))); a80 = np.array(Hole(lam, mu, rho, 4e-3, nmax=80).displacement(w, 2 * hole.a, math.radians(th)))
+        worst = max(worst, np.abs(a40 - a80).max() / np.abs(a80).max())
+    print('3 MHz, r = 2a: nmax 40 vs 80 relative difference', f'{worst:.1e}')

@@ -61,6 +61,7 @@ if __name__ == '__main__':
             row[f'network_h{h:g}'] = coefficients(sim, plate, t); ss = split(sim - plate)
             row[f'network_h{h:g}_scattered_rel_l2'] = {k: rel(ss[k], sr[k]) for k in sr}
             row[f'network_h{h:g}_total_rel_l2'] = rel(sim, ref)
+            if h == 1.: row['trace'] = {'t_us': t[::4].tolist(), **{f'{src}_{k}': v[::4].tolist() for src, d in (('ref', sr), ('net', ss)) for k, v in d.items()}}
         out[name] = row
         print(name, 'ref', {k: round(v, 4) for k, v in row['reference'].items()}, 'ref self', {k: f'{v:.1e}' for k, v in row['reference_self_check'].items()})
         for h in (1., 1.5):

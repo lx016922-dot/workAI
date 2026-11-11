@@ -31,14 +31,23 @@ if __name__ == '__main__':
     rec = receivers(); pts = [p for _, _, p in rec]
     t, hole = read('hole', pts); _, plate = read('plate', pts + [[X0, Y0, T / 2]])
     inc = plate[:, -1, 0]; plate = plate[:, :-1]; dt = (t[1] - t[0]) * 1e-6
-    theory = Hole(LAM, MU, RHO, A * 1e-3)
-    N = 1 << 13; U = np.fft.rfft(inc, N); w = 2 * math.pi * np.fft.rfftfreq(N, dt); keep = (w > 0) & (np.abs(U) > 1e-6 * np.abs(U).max())
-    c = theory.cp; front = (X0 - A) / (c * 1e-3); window_end = front + (W - 2 * A - 1) / (c * 1e-3)   # μs: first image return
+    theory = Hole(LAM, MU, RHO, A * 1e-3); c = theory.cp
+    front = (X0 - A) / (c * 1e-3); window_end = front + (W - 2 * A - 1) / (c * 1e-3)   # μs: first image return
     window_end = min(window_end, (2 * L - X0 - A) / (c * 1e-3))
-    out = {'ka_at_carrier': 2 * math.pi * .25e6 / c * A * 1e-3, 'window_us': [0., window_end], 'receivers': []}
+    # The prediction inside the window needs the incident only up to window_end + r_max/c (receivers upstream of the centre
+    # see the wave earlier). Taper it to zero before the far-end reflection reaches the centre, so the spectrum is band
+    # limited (a record cut at 20 μs would put content up to 10 MHz, where the Bessel series with nmax 40 does not converge).
+    need = window_end + max(r for r, _, _ in rec) / (c * 1e-3); back = (2 * L - X0) / (c * 1e-3)
+    taper = np.where(t <= need, 1., np.where(t >= back, 0., .5 * (1 + np.cos(np.pi * (t - need) / (back - need)))))
+    inc = inc * taper
+    N = 1 << 13; U = np.fft.rfft(inc, N); w = 2 * math.pi * np.fft.rfftfreq(N, dt); FMAX = 3e6
+    keep = (w > 0) & (w <= 2 * math.pi * FMAX)
+    out = {'ka_at_carrier': 2 * math.pi * .25e6 / c * A * 1e-3, 'window_us': [0., window_end], 'incident_taper_us': [need, back],
+           'band_mhz': FMAX / 1e6, 'spectrum_above_band': float(np.abs(U[~keep & (w > 0)]).max() / np.abs(U).max()), 'receivers': []}
     win = t <= window_end
     for j, (r, th, p) in enumerate(rec):
         Ht = np.zeros((len(w), 2), complex); Hs = np.zeros((len(w), 2), complex)
+        Ht[0] = [1., 0.]   # ω → 0: the incident displacement is a rigid translation, which the hole does not scatter
         for i in np.flatnonzero(keep):
             al = w[i] / c; ux, uy = theory.displacement(w[i], r * 1e-3, math.radians(th)); sx, sy = theory.displacement(w[i], r * 1e-3, math.radians(th), scattered_only=True)
             norm = 1j * al   # incident u_x at the hole centre for φ_i = e^{iαx}
