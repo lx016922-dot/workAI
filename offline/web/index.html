@@ -2,60 +2,62 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>WorkAI 导波仿真</title>
+<title>WorkAI 超声导波仿真</title>
 <link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/offline.css"><link rel="stylesheet" href="/workbench.css">
 </head>
-<body class="wb">
-<header class="wb-top">
-  <a class="wb-brand" href="/"><b>W</b><span>workAI</span><small>非线性导波 · 物理 AI 仿真</small></a>
-  <div class="wb-scene-name" id="scene-title" title="场景名称"></div>
-  <div class="wb-actions">
-    <label class="wb-select-button"><span>新建</span><select id="template" aria-label="从模板新建"></select></label>
-    <label class="wb-button">导入<input id="import-scene" type="file" accept=".json,application/json" hidden></label>
-    <button id="export-scene" class="wb-button" type="button">导出</button>
-    <button id="undo" class="wb-button" type="button" title="撤销（Ctrl+Z）" disabled>撤销</button>
-    <button id="run" class="wb-button primary" type="button" disabled>运行</button>
-  </div>
-  <span class="wb-chip" id="engine-chip">● 本机离线</span>
-</header>
+<body class="wb desk">
+<header id="ribbon" class="rb" aria-label="功能区"></header>
 
-<div class="wb-body">
-  <aside class="wb-left" aria-label="模型树与计算记录">
-    <div class="wb-pane-title">模型</div>
-    <nav id="tree" class="wb-tree"></nav>
-    <div class="wb-pane-title">计算记录<button id="refresh" class="wb-link" type="button">刷新</button></div>
-    <div id="jobs" class="wb-jobs"></div>
-  </aside>
+<div class="dk-body" id="desk">
+  <section class="pane mb" aria-label="模型开发器">
+    <div class="pane-head"><span>模型开发器</span>
+      <span class="pane-tools"><button type="button" class="pane-tool" id="tree-expand" title="全部展开">＋</button><button type="button" class="pane-tool" id="tree-collapse" title="全部折叠">－</button></span></div>
+    <div id="tree" class="mb-tree" role="tree" aria-label="模型树"></div>
+  </section>
+  <div class="split v" id="split-left" aria-hidden="true"></div>
 
-  <main class="wb-center">
-    <div class="wb-tabs" role="tablist">
-      <button type="button" role="tab" data-tab="model" aria-selected="true">模型视图</button>
-      <button type="button" role="tab" data-tab="signal" aria-selected="false">激励信号</button>
-      <button type="button" role="tab" data-tab="result" aria-selected="false">结果</button>
-    </div>
-    <section id="tab-model" class="wb-tab" role="tabpanel">
-      <div class="wb-view-wrap"><canvas id="view" aria-label="模型三维视图：拖动旋转，滚轮缩放，点击选中"></canvas>
-        <div class="wb-view-tools">
-          <button type="button" data-view="iso" class="active">等轴</button><button type="button" data-view="front">正视</button><button type="button" data-view="top">俯视</button><button type="button" data-view="side">侧视</button>
-          <label><input type="checkbox" id="show-grid" checked> 单元网格</label><label><input type="checkbox" id="exaggerate" checked> 放大薄方向</label>
-        </div>
-        <ul class="wb-legend"><li><i class="src"></i>激励</li><li><i class="sym"></i>对称面</li><li><i class="anti"></i>反对称面</li><li><i class="abs"></i>吸收层</li><li><i class="fix"></i>固定面</li><li><i class="rx"></i>接收点</li><li><i class="fib"></i>纤维方向</li></ul>
+  <section class="pane st" aria-label="设置">
+    <div class="pane-head"><span>设置</span><span class="pane-sub" id="inspector-title">几何</span></div>
+    <div class="st-scroll"><div id="inspector-head" class="st-head"></div><div id="inspector" class="wb-inspector"></div></div>
+  </section>
+  <div class="split v" id="split-mid" aria-hidden="true"></div>
+
+  <section class="dk-main" aria-label="图形与消息">
+    <div class="pane gw">
+      <div class="gw-tabs" role="tablist">
+        <button type="button" role="tab" data-tab="model" aria-selected="true">图形</button>
+        <button type="button" role="tab" data-tab="signal" aria-selected="false">激励信号</button>
+        <button type="button" role="tab" data-tab="result" aria-selected="false">结果</button>
+        <span class="gw-doc" id="scene-title"></span>
       </div>
-    </section>
-    <section id="tab-signal" class="wb-tab" role="tabpanel" hidden><div id="signals" class="wb-scroll"></div></section>
-    <section id="tab-result" class="wb-tab" role="tabpanel" hidden>
-      <div class="wb-scroll"><div id="result-head" class="wb-result-head"></div><div id="results"></div></div>
-    </section>
-  </main>
-
-  <aside class="wb-right" aria-label="属性">
-    <div class="wb-pane-title" id="inspector-title">属性</div>
-    <div id="inspector" class="wb-inspector"></div>
-  </aside>
+      <section id="tab-model" class="wb-tab" role="tabpanel">
+        <div class="gw-tools" id="gw-tools"></div>
+        <div class="wb-view-wrap"><canvas id="view" aria-label="模型三维视图：拖动旋转，滚轮缩放，Shift 拖动平移，点击选中"></canvas>
+          <ul class="wb-legend"><li><i class="src"></i>激励</li><li><i class="sym"></i>对称面</li><li><i class="anti"></i>反对称面</li><li><i class="abs"></i>吸收层</li><li><i class="fix"></i>固定面</li><li><i class="rx"></i>接收点</li><li><i class="fib"></i>纤维方向</li></ul>
+          <input type="checkbox" id="show-grid" checked hidden><input type="checkbox" id="exaggerate" checked hidden>
+        </div>
+      </section>
+      <section id="tab-signal" class="wb-tab" role="tabpanel" hidden><div id="signals" class="wb-scroll"></div></section>
+      <section id="tab-result" class="wb-tab" role="tabpanel" hidden>
+        <div class="wb-scroll"><div id="result-head" class="wb-result-head"></div><div id="results"></div></div>
+      </section>
+    </div>
+    <div class="split h" id="split-dock" aria-hidden="true"></div>
+    <div class="pane dock" id="dock">
+      <div class="dock-tabs" role="tablist">
+        <button type="button" role="tab" data-dock="messages" aria-selected="true">消息<span class="dock-badge" id="msg-badge" hidden></span></button>
+        <button type="button" role="tab" data-dock="progress" aria-selected="false">进度</button>
+        <button type="button" role="tab" data-dock="log" aria-selected="false">日志</button>
+      </div>
+      <div class="dock-body" id="dock-messages"></div>
+      <div class="dock-body" id="dock-progress" hidden></div>
+      <div class="dock-body log" id="dock-log" hidden></div>
+    </div>
+  </section>
 </div>
 
-<footer class="wb-status" id="status-bar"><span class="wb-check pending">正在检查场景…</span></footer>
-<div id="issues" class="wb-issues" hidden></div>
+<footer class="sb" id="status-bar"><span id="sb-state" class="sb-state">正在启动…</span><span id="sb-model" class="sb-mid"></span><span id="sb-app" class="sb-right"></span></footer>
+<input id="import-scene" type="file" accept=".json,application/json" hidden>
 <p id="toast" class="wb-toast" role="alert" hidden></p>
 <script type="module" src="/app.js"></script>
 </body>

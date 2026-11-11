@@ -1,21 +1,27 @@
-// WorkAI workbench: model tree, 3-D view, property inspector, signal preview, local physics-AI jobs and results.
+// WorkAI desktop workbench: ribbon, model builder, settings, graphics / signals / results, messages-progress-log dock.
 import { unitVector } from './solid-data.js';
 import { decodeSpectralField, spectralPointSeries } from './spectral-data.js';
 import { solidResultMarkup, mountSolidResult, chart, responseLabels } from './solid-viewer.js';
 import { solidPathMarkup, mountSolidPath } from './solid-path-viewer.js';
-import { tree, upgrade, workbenchTemplates, addSource, removeSource, addBoundary, removeBoundary, addReceiver, removeReceiver, V2, BOUNDARY_LABELS } from './scene-model.js';
+import { treeNodes, upgrade, workbenchTemplates, addSource, removeSource, addBoundary, removeBoundary, addReceiver, removeReceiver, sourcesOf, V2, BOUNDARY_LABELS, FACES, KIND_LABELS } from './scene-model.js';
 import { drawScene, pick } from './model-view.js';
 import { inspectorMarkup, bindInspector, escapeHtml, COARSE_MODELS, DEFAULT_COARSE_MODEL } from './inspector.js';
 import { signalsMarkup } from './signal-view.js';
 import { materialDerivedMarkup } from './material-form.js';
+import { mountRibbon } from './ribbon.js';
+import { icon } from './icons.js';
+import { renderTreeView, popupMenu, createLog, dialog, initSplitters, previewMessages, renderMessages, fmtBytes } from './shell.js';
 
 const $ = s => document.querySelector(s);
 const PHASES = { starting: '准备中', meshing: '生成连接图', running: '计算中', exporting: '保存结果', completed: '已完成', failed: '未完成', paused: '已暂停' };
 const VIEWS = { iso: [-.62, .52], front: [0, 0], top: [0, 1.5699], side: [-Math.PI / 2, 0] };
 const DRAFT = 'workai.workbench.draft.v1';
+const ENGINE_LABELS = { network: '物理 AI · 冻结网络', coarse: '物理 AI · 粗网格算子' };
+const host = window.chrome?.webview || null;   // present inside the WorkAI desktop window (WebView2)
 const state = { scene: null, degree: 4, engine: 'network', coarseModel: DEFAULT_COARSE_MODEL, selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
-  view: { yaw: VIEWS.iso[0], pitch: VIEWS.iso[1], zoom: 1, exaggerate: true, grid: true }, history: [], templates: {}, token: '', picks: [], submitting: false };
-let previewTimer = 0, previewStamp = 0, poll = 0, generation = 0, viewer = null, pathViewer = null;
+  view: { yaw: VIEWS.iso[0], pitch: VIEWS.iso[1], zoom: 1, exaggerate: true, grid: true, preset: 'iso' }, history: [], templates: {}, token: '', picks: [], submitting: false,
+  expanded: new Set(['scene', 'component', 'physics', 'sources', 'boundaries', 'receivers', 'study', 'results']), info: null, phases: {}, lastPreviewKey: '' };
+let previewTimer = 0, previewStamp = 0, poll = 0, generation = 0, viewer = null, pathViewer = null, ribbon = null, log = null;
 
 async function api(url, body) {
   const response = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WorkAI-Token': state.token }, body: JSON.stringify(body) } : undefined);
@@ -24,6 +30,7 @@ async function api(url, body) {
 function toast(message, kind = 'error') {
   const el = $('#toast'); el.textContent = message; el.className = `wb-toast ${kind}`; el.hidden = false;
   clearTimeout(toast.timer); toast.timer = setTimeout(() => { el.hidden = true; }, kind === 'error' ? 7000 : 3500);
+  log?.add(kind === 'error' ? 'error' : 'info', message);
 }
 const fail = error => toast(error?.message || String(error));
 function requestBody() { return { scene: state.scene, degree: state.degree, ...(state.engine === 'coarse' ? { engine: 'coarse', coarse_model: state.coarseModel } : {}) }; }
@@ -31,15 +38,17 @@ function requestBody() { return { scene: state.scene, degree: state.degree, ...(
 function takeEngine(d) { state.engine = d?.engine === 'coarse' ? 'coarse' : 'network'; state.coarseModel = COARSE_MODELS[d?.coarse_model] ? d.coarse_model : DEFAULT_COARSE_MODEL; }
 function storeDraft() { try { localStorage.setItem(DRAFT, JSON.stringify(requestBody())); } catch { /* storage unavailable */ } }
 function readDraft() { try { const d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); return d?.scene?.schema === V2 ? d : null; } catch { return null; } }
+const running = () => state.jobs.find(j => !['completed', 'failed', 'paused'].includes(j.phase));
+window.workaiBusy = () => Boolean(running());   // asked by the desktop window before it closes
 
 // ---------- editing ----------
 function snapshot() { return JSON.stringify(requestBody()); }
-function remember() { state.history.push(snapshot()); if (state.history.length > 60) state.history.shift(); $('#undo').disabled = false; }
+function remember() { state.history.push(snapshot()); if (state.history.length > 60) state.history.shift(); ribbon?.refresh(); }
 function undo() {
   const last = state.history.pop(); if (!last) return;
-  const d = JSON.parse(last); state.scene = d.scene; state.degree = d.degree; takeEngine(d); $('#undo').disabled = !state.history.length;
+  const d = JSON.parse(last); state.scene = d.scene; state.degree = d.degree; takeEngine(d);
   if (!validSelection(state.selection)) state.selection = 'geometry';
-  renderAll(); schedulePreview(); storeDraft();
+  renderAll(); schedulePreview(); storeDraft(); log.add('info', '已撤销上一步编辑。');
 }
 function validSelection(id) {
   const [kind, raw] = id.split(':'), i = Number(raw), s = state.scene;
@@ -47,6 +56,7 @@ function validSelection(id) {
   if (kind === 'boundary') return i < (s.boundaries || []).length;
   if (kind === 'receiver') return i < s.receivers.length;
   if (kind === 'fixed') return s.boundary.fixed_face !== 'none';
+  if (kind === 'job') return state.jobs.some(j => j.job_id === raw);
   return true;
 }
 function loadScene(scene, degree = state.degree, keepHistory = true) {
@@ -59,8 +69,7 @@ function changed(kind) {
   if (kind?.remove) { removeItem(kind.remove); return; }
   if (kind === 'structure') { renderTree(); renderInspector(); }
   else renderTree();
-  $('#scene-title').textContent = state.scene.name;
-  drawView(); schedulePreview(); storeDraft();
+  renderTitle(); drawView(); schedulePreview(); storeDraft(); ribbon.refresh();
 }
 function removeItem(id) {
   const [kind, raw] = id.split(':'), i = Number(raw);
@@ -69,55 +78,109 @@ function removeItem(id) {
     if (kind === 'source') removeSource(state.scene, i);
     if (kind === 'boundary') removeBoundary(state.scene, i);
     if (kind === 'receiver') removeReceiver(state.scene, i);
-    if (!validSelection(state.selection)) state.selection = kind === 'source' ? 'source:0' : kind === 'receiver' ? 'receiver:0' : 'boundaries';
-    renderAll(); schedulePreview(); storeDraft();
+    if (kind === 'fixed') state.scene.boundary.fixed_face = 'none';
+    if (!validSelection(state.selection)) state.selection = kind === 'source' ? 'sources' : kind === 'receiver' ? 'receivers' : 'boundaries';
+    renderAll(); schedulePreview(); storeDraft(); log.add('info', `已删除 ${id}。`);
   } catch (error) { state.history.pop(); fail(error); }
+}
+function freeFace() {
+  const s = state.scene, used = new Set([...(s.boundaries || []).map(b => b.face), ...sourcesOf(s).map(x => x.face)]);
+  const faces = s.geometry.kind === 'pipe' ? ['xmax', 'xmin'] : ['xmax', 'xmin', ...FACES.filter(f => f[0] !== 'x')];
+  return faces.find(f => !used.has(f)) || null;
 }
 function addItem(kind, type) {
   try {
     remember();
-    if (kind === 'source') state.selection = `source:${addSource(state.scene, 'zmax')}`;
-    if (kind === 'boundary') state.selection = `boundary:${addBoundary(state.scene, type)}`;
+    if (kind === 'source') state.selection = `source:${addSource(state.scene, state.scene.geometry.kind === 'pipe' ? 'xmin' : 'zmax')}`;
+    if (kind === 'boundary' && type === 'fixed') {
+      const face = freeFace(); if (!face) throw Error('没有可用的端面放置固定面。');
+      state.scene.boundary.fixed_face = face; state.selection = 'fixed';
+    } else if (kind === 'boundary') state.selection = `boundary:${addBoundary(state.scene, type)}`;
     if (kind === 'receiver') state.selection = `receiver:${addReceiver(state.scene)}`;
+    state.expanded.add(kind === 'source' ? 'sources' : kind === 'receiver' ? 'receivers' : 'boundaries');
     renderAll(); schedulePreview(); storeDraft();
+    log.add('info', `已添加${kind === 'source' ? '激励源' : kind === 'receiver' ? '接收点' : (type === 'fixed' ? '固定面' : BOUNDARY_LABELS[type])}。`);
   } catch (error) { state.history.pop(); fail(error); }
+}
+function setKind(kind) {
+  if (state.scene.geometry.kind === kind) { select('geometry'); return; }
+  remember(); state.scene.geometry.kind = kind;
+  if (kind === 'pipe') for (const s of sourcesOf(state.scene)) if (s.face[0] !== 'x') { s.face = 'xmin'; s.center_mm = [0, 0, 0]; s.direction = [1, 0, 0]; }
+  state.selection = 'geometry'; renderAll(); schedulePreview(); storeDraft(); log.add('info', `结构类型改为${KIND_LABELS[kind]}。`);
 }
 
 // ---------- rendering ----------
+const NODE_TITLES = { scene: '模型', component: '组件 1', geometry: '几何 1', material: '材料', physics: '超声导波（固体力学）', sources: '激励源', source: '激励源', boundaries: '边界条件',
+  boundary: '边界条件', fixed: '固定面', receivers: '接收点', receiver: '接收点', mesh: '网格 1', study: '研究 1 · 瞬态', engine: '求解器配置', results: '结果', job: '计算记录' };
+const NODE_ICONS = { scene: 'document', component: 'component', geometry: 'geometry', material: 'material', physics: 'physics', sources: 'folder', source: 'source', boundaries: 'folder',
+  boundary: 'boundary', fixed: 'fixed', receivers: 'folder', receiver: 'receiver', mesh: 'mesh', study: 'study', engine: 'engine', results: 'results', job: 'job' };
+function select(id, focus = false) {
+  state.selection = id; const kind = id.split(':')[0];
+  if (kind === 'job') { setTab('result'); openJob(id.slice(4)); }
+  renderTree(); renderInspector(); drawView(); ribbon?.refresh();
+  if (focus) $('#tree').querySelector('.mb-row.sel')?.focus();
+}
 function renderTree() {
-  const rows = tree(state.scene);
-  $('#tree').innerHTML = rows.map(r => {
-    const active = r.id === state.selection ? ' active' : '';
-    if (r.group === 'header') {
-      const add = r.add === 'boundary'
-        ? `<span class="wb-add-menu"><button type="button" class="wb-icon" data-add="boundary" title="添加边界条件" aria-label="添加边界条件">+</button><span class="wb-menu" hidden>${Object.entries(BOUNDARY_LABELS).map(([k, v]) => `<button type="button" data-add-boundary="${k}">${v}</button>`).join('')}</span></span>`
-        : `<button type="button" class="wb-icon" data-add="${r.add}" title="添加" aria-label="添加${escapeHtml(r.label)}">+</button>`;
-      return `<div class="wb-tree-head${active}" data-id="${r.id}"><span>${escapeHtml(r.label)}</span><span class="count">${escapeHtml(r.detail)}</span>${add}</div>`;
-    }
-    return `<div class="wb-tree-row ${r.group}${active}" data-id="${r.id}" tabindex="0" role="button"><span class="label">${escapeHtml(r.label)}</span><span class="detail">${escapeHtml(r.detail)}</span>${r.removable ? `<button type="button" class="wb-icon remove" data-remove="${r.id}" title="删除" aria-label="删除">×</button>` : ''}</div>`;
-  }).join('');
-  $('#tree').querySelectorAll('[data-id]').forEach(el => {
-    const select = () => { state.selection = el.dataset.id; renderTree(); renderInspector(); drawView(); };
-    el.addEventListener('click', ev => { if (ev.target.closest('button')) return; select(); });
-    el.addEventListener('keydown', ev => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); select(); } });
+  renderTreeView($('#tree'), treeNodes(state.scene, { degree: state.degree, engine: ENGINE_LABELS[state.engine], jobs: state.jobs, phases: PHASES }), {
+    selected: state.selection, expanded: state.expanded,
+    onSelect: (id, focus) => select(id, focus),
+    onToggle: id => { state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id); renderTree(); },
+    onAdd: (kind, anchor) => {
+      if (kind !== 'boundary') return addItem(kind);
+      const r = anchor.getBoundingClientRect();
+      popupMenu(r.left, r.bottom + 2, boundaryMenu(), type => addItem('boundary', type));
+    },
+    onRemove: id => removeItem(id),
+    onContext: (id, x, y) => contextMenu(id, x, y),
   });
-  $('#tree').querySelectorAll('[data-remove]').forEach(b => b.addEventListener('click', () => removeItem(b.dataset.remove)));
-  $('#tree').querySelectorAll('[data-add]').forEach(b => b.addEventListener('click', ev => {
-    if (b.dataset.add === 'boundary') { const menu = b.nextElementSibling; menu.hidden = !menu.hidden; ev.stopPropagation(); return; }
-    addItem(b.dataset.add);
-  }));
-  $('#tree').querySelectorAll('[data-add-boundary]').forEach(b => b.addEventListener('click', () => addItem('boundary', b.dataset.addBoundary)));
+}
+function boundaryMenu() { return [...Object.entries(BOUNDARY_LABELS).map(([k, v]) => ({ id: k, label: v, icon: k })), { id: 'fixed', label: '固定面', icon: 'fixed' }]; }
+function contextMenu(id, x, y) {
+  const kind = id.split(':')[0], rows = [];
+  if (kind === 'sources') rows.push({ id: 'add:source', label: '添加激励源', icon: 'source' });
+  if (kind === 'boundaries') rows.push(...boundaryMenu().map(r => ({ ...r, id: `add-boundary:${r.id}`, label: `添加${r.label}` })));
+  if (kind === 'receivers') rows.push({ id: 'add:receiver', label: '添加接收点', icon: 'receiver' });
+  if (kind === 'job') rows.push({ id: 'open-job', label: '打开结果', icon: 'results' }, { id: 'reuse-job', label: '载入该计算的模型', icon: 'open' }, { id: 'export-result', label: '导出结果 ZIP', icon: 'export' });
+  if (kind === 'study' || kind === 'engine') rows.push({ id: 'run', label: '计算', icon: 'compute' });
+  if (kind === 'geometry') rows.push(...Object.entries(KIND_LABELS).map(([k, v]) => ({ id: `kind:${k}`, label: `改为${v}`, icon: 'geometry' })));
+  const removable = ['source', 'boundary', 'receiver', 'fixed'].includes(kind) && !(kind === 'source' && id === 'source:0') && !(kind === 'receiver' && state.scene.receivers.length < 2);
+  if (removable) rows.push({ sep: true }, { id: 'remove', label: '删除', icon: 'remove' });
+  if (!rows.length) return;
+  popupMenu(x, y, rows, cmd => cmd === 'remove' ? removeItem(id) : cmd === 'open-job' ? select(id) : cmd === 'reuse-job' ? reuseJob(id.slice(4)) : command(cmd));
+}
+function nodeLabel(id) {
+  const [kind, raw] = id.split(':'), i = Number(raw), s = state.scene;
+  if (kind === 'source') return sourcesOf(s)[i]?.name || `激励 ${i + 1}`;
+  if (kind === 'boundary') return BOUNDARY_LABELS[s.boundaries[i]?.type] || '边界条件';
+  if (kind === 'receiver') return s.receivers[i]?.name || '接收点';
+  if (kind === 'job') return state.jobs.find(j => j.job_id === raw)?.name || '计算记录';
+  if (kind === 'scene') return s.name;
+  return NODE_TITLES[kind] || '设置';
 }
 function renderInspector() {
-  const titles = { geometry: '几何', material: '材料与本构', source: '激励源', boundary: '边界条件', receiver: '接收点', study: '记录与网格', fixed: '记录与网格', sources: '激励源', boundaries: '边界条件', receivers: '接收点' };
-  $('#inspector-title').textContent = titles[state.selection.split(':')[0]] || '属性';
+  const kind = state.selection.split(':')[0];
+  $('#inspector-title').textContent = NODE_TITLES[kind] || '设置';
+  const iconName = kind === 'boundary' ? state.scene.boundaries[Number(state.selection.split(':')[1])]?.type || 'boundary' : NODE_ICONS[kind];
+  $('#inspector-head').innerHTML = `${icon(iconName)}<b>${escapeHtml(nodeLabel(state.selection))}</b>`;
+  if (kind === 'job') { renderJobInspector(state.selection.slice(4)); return; }
   $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, state.degree, { materials: state.materials, engine: state.engine, coarseModel: state.coarseModel });
   renderMaterialDerived(); renderEngineDerived();
   let before = snapshot();
   bindInspector($('#inspector'), state.scene, state, kind => {
-    if (!kind?.error && !kind?.remove) { state.history.push(before); if (state.history.length > 60) state.history.shift(); $('#undo').disabled = false; before = snapshot(); }
+    if (!kind?.error && !kind?.remove) { state.history.push(before); if (state.history.length > 60) state.history.shift(); before = snapshot(); }
     changed(kind);
   });
+}
+function renderJobInspector(id) {
+  const j = state.jobs.find(x => x.job_id === id); if (!j) { $('#inspector').innerHTML = ''; return; }
+  const progress = j.duration_us ? Math.round(100 * (j.completed_time_us || 0) / j.duration_us) : null;
+  $('#inspector').innerHTML = `<section class="wb-section"><h3>计算记录</h3><table class="wb-table">
+      <tr><th>名称</th><td>${escapeHtml(j.name || id)}</td></tr><tr><th>状态</th><td><span class="wb-phase ${j.phase}">${PHASES[j.phase] || escapeHtml(j.phase)}</span>${progress !== null && j.phase !== 'completed' ? ` ${progress}%` : ''}</td></tr>
+      <tr><th>开始</th><td>${new Date(j.started_at_utc).toLocaleString()}</td></tr><tr><th>编号</th><td><code>${escapeHtml(id)}</code></td></tr></table>
+      <div class="st-actions"><button type="button" class="wb-button" data-job-act="open">${icon('results')}打开结果</button><button type="button" class="wb-button" data-job-act="reuse">${icon('open')}载入模型</button>
+      ${j.phase === 'completed' ? `<a class="wb-button" href="/api/jobs/${id}/export">${icon('export')}导出 ZIP</a>` : ''}</div></section>`;
+  $('#inspector').querySelector('[data-job-act="open"]').onclick = () => { setTab('result'); openJob(id); };
+  $('#inspector').querySelector('[data-job-act="reuse"]').onclick = () => reuseJob(id);
 }
 function renderEngineDerived() {
   const box = $('#engine-derived'), e = state.preview?.engine; if (!box) return;
@@ -135,41 +198,50 @@ function drawView() {
   catch (error) { console.error(error); }
 }
 function renderSignals() { $('#signals').innerHTML = signalsMarkup(state.preview, $('#signals').clientWidth || 900); }
-function bytes(n) { return n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(2)} GiB` : n >= 2 ** 20 ? `${(n / 2 ** 20).toFixed(1)} MiB` : `${Math.round(n / 1024)} KiB`; }
+function renderTitle() {
+  $('#scene-title').textContent = state.scene.name; $('#rb-doc').textContent = state.scene.name;
+  document.title = `${state.scene.name} — WorkAI ${state.info?.app?.version || ''}`.trim();
+}
 function renderStatus() {
-  const p = state.preview, bar = $('#status-bar'), issues = $('#issues');
-  if (!p) { bar.innerHTML = '<span class="wb-check pending">正在检查场景…</span>'; return; }
-  const parts = [p.ok ? '<span class="wb-check ok">✓ 场景有效，可以运行</span>' : `<button type="button" class="wb-check bad" id="show-issues">✗ ${p.errors.length} 个问题</button>`];
-  if (p.engine) parts.push(`<span class="wb-res ${p.engine.out_of_training_range.length ? 'warn' : 'ok'}" title="${escapeHtml(p.engine.out_of_training_range.join('；') || '在训练范围内')}">快速引擎 ${escapeHtml(p.engine.label || p.engine.name)} · 测试 ${p.engine.test_passed}/${p.engine.test_cases}${p.engine.out_of_training_range.length ? ` · 超出训练范围 ${p.engine.out_of_training_range.length} 项` : ''}</span>`);
-  if (p.mesh) parts.push(`<span>${p.engine ? '粗网格' : '网格'} ${p.mesh.elements.toLocaleString()} 单元 · ${p.mesh.nodes.toLocaleString()} 节点 · p=${p.mesh.degree}</span>`);
-  if (p.record) parts.push(`<span title="三组控制的完整未压缩记录">记录 ${p.record.samples.toLocaleString()} 点 · ${bytes(p.record.uncompressed_bytes)}${p.record.free_bytes ? ` / 可用 ${bytes(p.record.free_bytes)}` : ''}</span>`);
-  for (const r of p.resolution || []) {
-    const n = r.nodes_per_2f_shear_wavelength, level = n >= 8 ? 'ok' : n >= 4 ? 'warn' : 'bad';
-    parts.push(`<span class="wb-res ${level}" title="2f 剪切波长内的节点数（按 −30 dB 带宽上限）。小于 4：二次谐波分辨不足；4–8：短记录可用，长记录需复核；≥ 8：分辨充分。">2f 分辨率 · ${escapeHtml(r.name)} ${n.toFixed(1)}</span>`);
+  const p = state.preview, rows = previewMessages(p);
+  renderMessages($('#dock-messages'), rows);
+  const issues = rows.filter(r => r.kind === 'error' || r.kind === 'warn').length, badge = $('#msg-badge');
+  badge.hidden = !issues; badge.textContent = issues; badge.className = `dock-badge${rows.some(r => r.kind === 'error') ? ' bad' : ''}`;
+  const parts = [];
+  if (p?.mesh) parts.push(`${p.mesh.nodes.toLocaleString()} 节点 · ${p.mesh.elements.toLocaleString()} 单元 · p ${p.mesh.degree}`);
+  if (p?.record) parts.push(`${p.record.samples.toLocaleString()} 采样点 · ${fmtBytes(p.record.uncompressed_bytes)}`);
+  if (p?.resolution?.length) parts.push(`2f 分辨率 ${Math.min(...p.resolution.map(r => r.nodes_per_2f_shear_wavelength)).toFixed(1)}`);
+  $('#sb-model').textContent = parts.join('　|　');
+  renderStateText();
+  if (p) {
+    const key = JSON.stringify([p.ok, p.errors, p.mesh?.nodes]);
+    if (key !== state.lastPreviewKey) { state.lastPreviewKey = key; log?.add(p.ok ? 'ok' : 'error', p.ok ? `模型检查通过${p.mesh ? `：${p.mesh.nodes.toLocaleString()} 个节点` : ''}。` : `模型有 ${p.errors.length} 个问题：${p.errors.join('；')}`); }
   }
-  if (p.scope?.length) parts.push(`<button type="button" class="wb-scope" id="show-scope" title="${escapeHtml(p.scope.join('；'))}">超出原验收范围 ${p.scope.length} 项</button>`);
-  else if (p.ok) parts.push('<span class="wb-scope ok">在原验收范围内</span>');
-  for (const w of p.warnings || []) parts.push(`<span class="wb-res warn">${escapeHtml(w)}</span>`);
-  bar.innerHTML = parts.join('');
-  const show = (title, list, note) => { issues.innerHTML = `<header><b>${title}</b><button type="button" class="wb-icon" aria-label="关闭">×</button></header><ul>${list.map(e => `<li>${escapeHtml(e)}</li>`).join('')}</ul>${note ? `<p>${note}</p>` : ''}`; issues.hidden = false; issues.querySelector('button').onclick = () => { issues.hidden = true; }; };
-  $('#show-issues')?.addEventListener('click', () => show('需要修改', p.errors));
-  $('#show-scope')?.addEventListener('click', () => show('超出原八例验收范围', p.scope, '可以计算，但结果属于研究结果：原验收结论不能直接套用，需要用细网格参考（谱元求解器或 COMSOL）逐例核对。'));
-  updateRun();
+  ribbon?.refresh();
 }
-function renderAll() {
-  $('#scene-title').textContent = state.scene.name; renderTree(); renderInspector(); drawView(); renderStatus(); $('#undo').disabled = !state.history.length;
+function renderStateText() {
+  const r = running(), el = $('#sb-state');
+  if (r) { const pct = r.duration_us ? Math.round(100 * (r.completed_time_us || 0) / r.duration_us) : 0; el.innerHTML = `${icon('jobRunning')}${PHASES[r.phase] || r.phase} ${pct}% · ${escapeHtml(r.name || '')}`; el.className = 'sb-state busy'; return; }
+  if (!state.preview) { el.innerHTML = '正在检查模型…'; el.className = 'sb-state'; return; }
+  el.innerHTML = state.preview.ok ? `${icon('check')}就绪` : `${icon('error')}模型有 ${state.preview.errors.length} 个问题`; el.className = `sb-state ${state.preview.ok ? 'ok' : 'bad'}`;
 }
+function renderAll() { renderTitle(); renderTree(); renderInspector(); drawView(); renderStatus(); ribbon?.refresh(); }
 function setTab(tab) {
   state.tab = tab;
   document.querySelectorAll('[data-tab]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
   for (const t of ['model', 'signal', 'result']) $(`#tab-${t}`).hidden = t !== tab;
   if (tab === 'model') requestAnimationFrame(drawView);
   if (tab === 'signal') renderSignals();
+  ribbon?.refresh();
+}
+function setDock(name) {
+  document.querySelectorAll('[data-dock]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.dock === name)));
+  for (const n of ['messages', 'progress', 'log']) $(`#dock-${n}`).hidden = n !== name;
 }
 
 // ---------- preview ----------
 function schedulePreview() {
-  clearTimeout(previewTimer); state.preview = null; renderStatus(); $('#issues').hidden = true;
+  clearTimeout(previewTimer); state.preview = null; renderStatus();
   previewTimer = setTimeout(async () => {
     const stamp = ++previewStamp;
     try {
@@ -179,29 +251,36 @@ function schedulePreview() {
     } catch (error) { if (stamp === previewStamp) { state.preview = { ok: false, errors: [error.message], signals: [] }; renderStatus(); } }
   }, 320);
 }
-function updateRun() {
-  const busy = state.jobs.some(j => !['completed', 'failed', 'paused'].includes(j.phase));
-  $('#run').disabled = state.submitting || busy || !state.preview?.ok;
-  $('#run').title = busy ? '已有任务在计算' : state.preview?.ok ? '用物理 AI 网络计算这个场景' : '先修正场景中的问题';
-}
 
 // ---------- jobs and results ----------
 async function refreshJobs() {
   state.jobs = await api('/api/jobs');
-  $('#jobs').innerHTML = state.jobs.length ? state.jobs.map(j => {
-    const progress = j.duration_us ? Math.round(100 * (j.completed_time_us || 0) / j.duration_us) : null;
-    return `<button type="button" class="wb-job${j.job_id === state.job ? ' active' : ''}" data-job="${j.job_id}"><span class="name">${escapeHtml(j.name || j.job_id)}</span>
-      <span class="wb-phase ${j.phase}">${PHASES[j.phase] || escapeHtml(j.phase)}${progress !== null && !['completed', 'failed'].includes(j.phase) ? ` ${progress}%` : ''}</span>
-      <span class="when">${new Date(j.started_at_utc).toLocaleString()}</span></button>`;
-  }).join('') : '<p class="wb-empty small">还没有计算记录。</p>';
-  $('#jobs').querySelectorAll('[data-job]').forEach(b => b.addEventListener('click', () => { setTab('result'); openJob(b.dataset.job); }));
-  updateRun();
+  for (const j of state.jobs) {
+    const before = state.phases[j.job_id];
+    if (before && before !== j.phase) log.add(j.phase === 'completed' ? 'ok' : j.phase === 'failed' ? 'error' : j.phase === 'paused' ? 'warn' : 'info', `${j.name || j.job_id}：${PHASES[j.phase] || j.phase}${j.message ? `（${j.message}）` : ''}`);
+    state.phases[j.job_id] = j.phase;
+  }
+  if (!validSelection(state.selection)) state.selection = 'results';
+  renderTree(); renderProgress(); renderStateText(); ribbon?.refresh();
+  if (state.selection.startsWith('job:')) renderInspector();   // keep the record's status current
+}
+function renderProgress() {
+  const j = running() || state.jobs.find(x => x.job_id === state.job) || state.jobs[0], box = $('#dock-progress');
+  if (!j) { box.innerHTML = '<p class="dock-empty">还没有计算。设置好模型后点击功能区的“计算”（F8）。</p>'; return; }
+  const pct = j.phase === 'completed' ? 100 : j.duration_us ? 100 * (j.completed_time_us || 0) / j.duration_us : 0;
+  box.innerHTML = `<div class="pg"><div class="pg-head">${icon(j.phase === 'completed' ? 'job' : j.phase === 'failed' ? 'jobBad' : j.phase === 'paused' ? 'jobPaused' : 'jobRunning')}<b>${escapeHtml(j.name || j.job_id)}</b>
+      <span class="wb-phase ${j.phase}">${PHASES[j.phase] || escapeHtml(j.phase)}</span><span class="muted">${new Date(j.started_at_utc).toLocaleString()}</span></div>
+      <div class="pg-bar"><span style="width:${pct.toFixed(1)}%"></span></div><div class="pg-foot"><span>${pct.toFixed(0)}%${j.completed_time_us !== undefined && j.duration_us ? ` · 已算到 ${(+j.completed_time_us).toFixed(2)} / ${j.duration_us} μs` : ''}</span>
+      <span>${j.message ? escapeHtml(j.message) : ''}</span></div></div>`;
 }
 function clearResults() { viewer?.(); pathViewer?.cleanup(); viewer = null; pathViewer = null; $('#results').replaceChildren(); }
+async function reuseJob(id) {
+  try { const d = await api('/api/jobs/' + id + '/request'); takeEngine(d); loadScene(d.scene, d.degree ?? 4); setTab('model'); toast('已载入该计算的模型。', 'info'); } catch (e) { fail(e); }
+}
 async function openJob(id, restore = false) {
   clearTimeout(poll); const stamp = ++generation, oldView = restore ? viewer?.snapshot() : null, oldPath = restore ? pathViewer?.snapshot() : null;
-  clearResults(); state.job = id; $('#jobs').querySelectorAll('[data-job]').forEach(b => b.classList.toggle('active', b.dataset.job === id));
-  if (!id) { $('#result-head').innerHTML = '<p class="wb-empty">在左侧“计算记录”中选择一个任务，或点击“运行”计算当前场景。</p>'; return; }
+  clearResults(); state.job = id; renderProgress(); ribbon?.refresh();
+  if (!id) { $('#result-head').innerHTML = '<p class="wb-empty">在模型开发器的“结果”下选择一条计算记录，或点击功能区的“计算”计算当前模型。</p>'; return; }
   try {
     const s = await api('/api/jobs/' + id); if (stamp !== generation) return;
     const done = ['completed', 'failed', 'paused'].includes(s.phase), progress = s.duration_us ? 100 * (s.completed_time_us || 0) / s.duration_us : 100 * (s.controls_completed || 0) / 3;
@@ -209,13 +288,13 @@ async function openJob(id, restore = false) {
       <span class="muted">${Math.round(s.elapsed_s || 0)} 秒${s.message ? ' · ' + escapeHtml(s.message) : ''}</span></div>
       ${done ? '' : `<progress max="100" value="${progress.toFixed(1)}"></progress>`}
       <div class="wb-result-tools">${s.phase === 'completed' ? `<label class="wb-field inline"><span>响应</span><select id="part">${Object.entries(responseLabels).map(([k, v]) => `<option value="${k}" ${k === state.part ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
-        <a class="wb-button" href="/api/jobs/${id}/export">下载全部结果 ZIP</a>` : ''}
-        <button type="button" class="wb-button" id="reuse">载入该任务的场景</button>
-        ${s.duration_us >= 5000 && !done ? '<button type="button" class="wb-button" id="pause-job">保存后暂停</button>' : ''}${s.phase === 'paused' ? '<button type="button" class="wb-button primary" id="resume-job">继续计算</button>' : ''}</div>`;
+        <a class="wb-button" href="/api/jobs/${id}/export">${icon('export')}下载全部结果 ZIP</a>` : ''}
+        <button type="button" class="wb-button" id="reuse">${icon('open')}载入该计算的模型</button>
+        ${s.duration_us >= 5000 && !done ? `<button type="button" class="wb-button" id="pause-job">${icon('pause')}保存后暂停</button>` : ''}${s.phase === 'paused' ? `<button type="button" class="wb-button primary" id="resume-job">${icon('resume')}继续计算</button>` : ''}</div>`;
     $('#part')?.addEventListener('change', ev => { state.part = ev.target.value; openJob(id, true); });
-    $('#reuse').onclick = async () => { try { const d = await api('/api/jobs/' + id + '/request'); takeEngine(d); loadScene(d.scene, d.degree ?? 4); setTab('model'); toast('已载入该任务的场景。', 'info'); } catch (e) { fail(e); } };
-    $('#pause-job')?.addEventListener('click', async () => { try { await api('/api/jobs/' + id + '/pause', {}); toast('当前分块保存后暂停。', 'info'); } catch (e) { fail(e); } });
-    $('#resume-job')?.addEventListener('click', async () => { try { await api('/api/jobs/' + id + '/resume', {}); await refreshJobs(); await openJob(id); } catch (e) { fail(e); } });
+    $('#reuse').onclick = () => reuseJob(id);
+    $('#pause-job')?.addEventListener('click', () => command('pause'));
+    $('#resume-job')?.addEventListener('click', () => command('resume'));
     if (s.phase === 'completed') {
       const base = '/api/jobs/' + id, query = '?part=' + state.part, result = await api(base + '/result' + query), response = await fetch(base + '/field' + query);
       if (!response.ok) throw Error('位移场读取失败');
@@ -246,11 +325,105 @@ function recordExtractor(base, result) {
   const extract = async (_r, _f, point, direction) => (await batch([point], direction))[0]; extract.batch = batch; return extract;
 }
 async function run() {
-  state.submitting = true; updateRun();
+  state.submitting = true; ribbon.refresh();
   try {
     const d = await api('/api/jobs', requestBody());
-    state.job = d.job_id; await refreshJobs(); setTab('result'); await openJob(d.job_id); toast('已开始计算。首次运行需要编译，请稍候。', 'info');
+    state.job = d.job_id; log.add('info', `已提交计算：${state.scene.name}（${ENGINE_LABELS[state.engine]}）。首次运行需要编译，请稍候。`);
+    await refreshJobs(); state.expanded.add('results'); state.selection = `job:${d.job_id}`; renderTree(); renderInspector();
+    setTab('result'); setDock('progress'); await openJob(d.job_id);
   } catch (error) { fail(error); } finally { state.submitting = false; await refreshJobs().catch(fail); }
+}
+function selectedJob() { const raw = state.selection.startsWith('job:') ? state.selection.slice(4) : state.job; return state.jobs.find(j => j.job_id === raw); }
+
+// ---------- commands (ribbon, menus, keys) ----------
+function download(name, data) {
+  const url = URL.createObjectURL(data instanceof Blob ? data : new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function setView(name) {
+  const [yaw, pitch] = VIEWS[name]; Object.assign(state.view, { yaw, pitch, zoom: 1, panX: 0, panY: 0, preset: name });
+  if (state.tab !== 'model') setTab('model'); drawView(); renderGraphicsTools(); ribbon.refresh();
+}
+async function command(id) {
+  const [verb, arg] = id.split(':');
+  try {
+    switch (verb) {
+      case 'template': { const t = state.templates[arg]; if (t) { loadScene(structuredClone(t.scene), state.degree); setTab('model'); log.add('info', `从模板新建：${t.label}`); } break; }
+      case 'new': ribbon.showTab('home'); document.querySelector('[data-cmd="new"]')?.click(); break;
+      case 'open': $('#import-scene').click(); break;
+      case 'save': download(`${(state.scene.name || 'workai-model').replace(/[\\/:*?"<>|]/g, '_')}.json`, requestBody()); log.add('info', '已保存模型文件。'); break;
+      case 'undo': undo(); break;
+      case 'sel': select(arg); if (['geometry', 'material', 'mesh', 'study', 'engine', 'sources', 'receivers', 'results'].includes(arg)) setTab(arg === 'results' ? 'result' : 'model'); break;
+      case 'add': addItem(arg); break;
+      case 'add-boundary': addItem('boundary', arg); break;
+      case 'kind': setKind(arg); break;
+      case 'run': if (!disabled('run')) await run(); break;
+      case 'pause': { const j = running(); if (j) { await api(`/api/jobs/${j.job_id}/pause`, {}); log.add('warn', '当前分块保存后暂停。'); } break; }
+      case 'resume': { const j = selectedJob(); if (j?.phase === 'paused') { await api(`/api/jobs/${j.job_id}/resume`, {}); log.add('info', `继续计算：${j.name}`); await refreshJobs(); await openJob(j.job_id); setDock('progress'); } break; }
+      case 'tab': setTab(arg); if (arg === 'result' && !state.job && state.jobs[0]) openJob(state.jobs[0].job_id); break;
+      case 'export-result': { const j = selectedJob(); if (j?.phase === 'completed') { const a = document.createElement('a'); a.href = `/api/jobs/${j.job_id}/export`; a.click(); log.add('info', `导出结果：${j.name}`); } break; }
+      case 'refresh': await refreshJobs(); if (state.job) await openJob(state.job); break;
+      case 'view': setView(arg); break;
+      case 'zoom-fit': Object.assign(state.view, { zoom: 1, panX: 0, panY: 0 }); drawView(); break;
+      case 'toggle':
+        if (arg === 'grid') { state.view.grid = !state.view.grid; drawView(); }
+        if (arg === 'thin') { state.view.exaggerate = !state.view.exaggerate; drawView(); }
+        if (arg === 'dock') $('#desk').classList.toggle('no-dock');
+        renderGraphicsTools(); ribbon.refresh(); window.dispatchEvent(new Event('resize')); break;
+      case 'screenshot': if (state.tab !== 'model') setTab('model'); $('#view').toBlob(b => b && download(`${state.scene.name || 'workai'}-图形.png`, b)); break;
+      case 'help': await showHelp(); break;
+      case 'about': await showAbout(); break;
+      case 'exit':
+        if (host) host.postMessage({ type: 'exit' });
+        else toast('浏览器模式：关闭此页面，并在启动窗口按 Ctrl+C 结束程序。', 'info');
+        break;
+      default: break;
+    }
+  } catch (error) { fail(error); }
+}
+function disabled(id) {
+  const [verb, arg] = id.split(':');
+  if (verb === 'undo') return !state.history.length;
+  if (verb === 'run') return state.submitting || Boolean(running()) || !state.preview?.ok;
+  if (verb === 'pause') { const j = running(); return !j || !(j.duration_us >= 5000); }
+  if (verb === 'resume') return selectedJob()?.phase !== 'paused' || Boolean(running());
+  if (verb === 'export-result') return selectedJob()?.phase !== 'completed';
+  if (verb === 'add-boundary' && arg === 'fixed') return state.scene?.boundary.fixed_face !== 'none';
+  return false;
+}
+function active(id) {
+  const [verb, arg] = id.split(':');
+  if (verb === 'view') return state.view.preset === arg;
+  if (verb === 'toggle') return arg === 'grid' ? state.view.grid : arg === 'thin' ? state.view.exaggerate : arg === 'dock' ? !$('#desk').classList.contains('no-dock') : false;
+  if (verb === 'kind') return state.scene?.geometry.kind === arg;
+  if (verb === 'tab') return state.tab === arg;
+  return false;
+}
+function renderGraphicsTools() {
+  const b = (cmd, ic, tip) => `<button type="button" class="gw-tool${active(cmd) ? ' on' : ''}" data-cmd="${cmd}" title="${tip}">${icon(ic)}</button>`;
+  $('#gw-tools').innerHTML = b('zoom-fit', 'zoomFit', '缩放到窗口（双击图形也可复位）') + '<span class="gw-sep"></span>' + b('view:iso', 'viewIso', '等轴视图') + b('view:front', 'viewFront', '正视 XZ') + b('view:top', 'viewTop', '俯视 XY') + b('view:side', 'viewSide', '侧视 YZ') +
+    '<span class="gw-sep"></span>' + b('toggle:grid', 'grid', '显示单元网格') + b('toggle:thin', 'thin', '放大薄方向') + '<span class="gw-sep"></span>' + b('screenshot', 'camera', '保存图形截图（PNG）') +
+    '<span class="gw-hint">拖动旋转 · 滚轮缩放 · Shift+拖动平移 · 点击选中</span>';
+  $('#gw-tools').querySelectorAll('[data-cmd]').forEach(x => x.addEventListener('click', () => command(x.dataset.cmd)));
+}
+
+// ---------- dialogs ----------
+async function showAbout() {
+  const i = state.info || {}, m = i.model || {};
+  await dialog({ title: '关于 WorkAI', body: `<div class="about">${icon('logo')}<div><h2>WorkAI 超声导波仿真</h2><p class="ver">版本 ${escapeHtml(i.app?.version || '')}${i.app?.build ? ` · 构建 ${escapeHtml(i.app.build)}` : ''}</p>
+      <p>非线性超声导波物理 AI 仿真软件。冻结图网络等价于 GLL 谱元离散，逐时前向计算线性、几何非线性（StVK）与材料非线性（Murnaghan / 自定义应变能）三组响应。</p>
+      <table class="wb-table"><tr><th>物理 AI 模型</th><td>${escapeHtml(m.version || '')}</td></tr><tr><th>运行方式</th><td>本机离线，不需要联网</td></tr><tr><th>数据目录</th><td><code>${escapeHtml(i.data_directory || '')}</code></td></tr></table>
+      <p class="muted">核验报告（文献对照、1 ms 精度、缺口 / 通孔 / 管的散射）见源码仓库 research/ 目录。</p></div></div>` });
+}
+async function showHelp() {
+  await dialog({ title: '使用说明', wide: true, body: `<ol class="help">
+      <li><b>新建模型：</b>功能区“主屏幕 → 新建”选择模板（平板、圆管、带孔板、带缺口板、高斯激励、双贴片等），或“打开”已保存的模型文件（JSON）。</li>
+      <li><b>设置模型：</b>在左侧“模型开发器”中选中节点，在“设置”窗口编辑：几何、材料、激励源、边界条件（对称 / 反对称 / 吸收层 / 固定面）、接收点、网格和研究（记录时长、采样间隔、求解器）。右键节点可添加或删除。</li>
+      <li><b>检查：</b>“消息”窗口实时列出模型检查结果、网格和记录大小、每个激励的 2f 分辨率，以及是否超出原验收范围。图形窗口显示几何、加载区、边界和接收点。</li>
+      <li><b>计算：</b>点击“计算”（F8）。“进度”窗口显示计算进度；5 ms 及以上的长记录可“暂停”并在之后“继续”。首次计算需要几分钟编译。</li>
+      <li><b>结果：</b>在“结果”下选择计算记录：位移场动画、任意点波形与频谱、多点提取、五种响应（完整、线性、StVK、几何增量、材料增量），可导出全部结果 ZIP。</li>
+      <li><b>精度：</b>精度由节点间距决定；1 ms 级长记录建议 2f 分辨率 ≥ 15。新模型的结果属于研究结果，应用细网格参考逐例核对。</li></ol>
+      <p class="muted">快捷键：Ctrl+O 打开 · Ctrl+S 保存 · Ctrl+Z 撤销 · F8 计算 · F1 帮助</p>` });
 }
 
 // ---------- view interaction ----------
@@ -260,61 +433,68 @@ function bindView() {
   canvas.addEventListener('pointermove', ev => {
     if (!drag) return; const dx = ev.clientX - drag.x, dy = ev.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 3) drag.moved = true;
     if (drag.pan) { state.view.panX = (state.view.panX || 0) + dx; state.view.panY = (state.view.panY || 0) + dy; }
-    else { state.view.yaw -= dx * .008; state.view.pitch = Math.max(-1.55, Math.min(1.5699, state.view.pitch + dy * .008)); }
-    drag.x = ev.clientX; drag.y = ev.clientY; document.querySelectorAll('[data-view]').forEach(b => b.classList.remove('active')); drawView();
+    else { state.view.yaw -= dx * .008; state.view.pitch = Math.max(-1.55, Math.min(1.5699, state.view.pitch + dy * .008)); if (state.view.preset) { state.view.preset = ''; renderGraphicsTools(); ribbon.refresh(); } }
+    drag.x = ev.clientX; drag.y = ev.clientY; drawView();
   });
   canvas.addEventListener('pointerup', ev => {
-    if (drag && !drag.moved) { const r = canvas.getBoundingClientRect(), hit = pick(state.picks, ev.clientX - r.left, ev.clientY - r.top); if (hit) { state.selection = hit; renderTree(); renderInspector(); drawView(); } }
+    if (drag && !drag.moved) { const r = canvas.getBoundingClientRect(), hit = pick(state.picks, ev.clientX - r.left, ev.clientY - r.top); if (hit) select(hit); }
     drag = null;
   });
   canvas.addEventListener('wheel', ev => { ev.preventDefault(); state.view.zoom = Math.max(.3, Math.min(8, state.view.zoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12))); drawView(); }, { passive: false });
-  canvas.addEventListener('dblclick', () => { Object.assign(state.view, { yaw: VIEWS.iso[0], pitch: VIEWS.iso[1], zoom: 1, panX: 0, panY: 0 }); drawView(); });
-  document.querySelectorAll('[data-view]').forEach(b => b.addEventListener('click', () => {
-    const [yaw, pitch] = VIEWS[b.dataset.view]; Object.assign(state.view, { yaw, pitch, zoom: 1, panX: 0, panY: 0 });
-    document.querySelectorAll('[data-view]').forEach(x => x.classList.toggle('active', x === b)); drawView();
-  }));
-  $('#show-grid').addEventListener('change', ev => { state.view.grid = ev.target.checked; drawView(); });
-  $('#exaggerate').addEventListener('change', ev => { state.view.exaggerate = ev.target.checked; drawView(); });
+  canvas.addEventListener('dblclick', () => setView('iso'));
   new ResizeObserver(() => drawView()).observe(canvas);
   let lastWidth = 0; new ResizeObserver(() => { const w = $('#signals').clientWidth; if (state.tab === 'signal' && Math.abs(w - lastWidth) > 40) { lastWidth = w; renderSignals(); } }).observe($('#signals'));
 }
 
 // ---------- start ----------
-function download(name, data) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-  const a = document.createElement('a'); a.href = url; a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 async function start() {
+  log = createLog($('#dock-log'));
+  ribbon = mountRibbon($('#ribbon'), { command, disabled, active,
+    menu: kind => kind === 'boundary' ? boundaryMenu() : Object.entries(state.templates).map(([k, t]) => ({ id: k, label: t.label, icon: 'new' })) });
+  renderGraphicsTools();
   document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => setTab(b.dataset.tab)));
-  document.addEventListener('click', ev => { if (!ev.target.closest('.wb-add-menu')) document.querySelectorAll('.wb-menu').forEach(m => { m.hidden = true; }); });
-  document.addEventListener('keydown', ev => { if ((ev.ctrlKey || ev.metaKey) && ev.key === 'z' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName)) { ev.preventDefault(); undo(); } });
-  $('#undo').addEventListener('click', undo);
-  $('#run').addEventListener('click', run);
-  $('#refresh').addEventListener('click', () => refreshJobs().then(() => state.job && openJob(state.job)).catch(fail));
-  $('#export-scene').addEventListener('click', () => download('workai-scene.json', requestBody()));
+  document.querySelectorAll('[data-dock]').forEach(b => b.addEventListener('click', () => setDock(b.dataset.dock)));
+  $('#inspector').addEventListener('click', ev => { const h = ev.target.closest('.wb-section > h3'); if (h) h.parentElement.classList.toggle('collapsed'); });
+  $('#tree-expand').addEventListener('click', () => { const walk = n => { state.expanded.add(n.id); (n.children || []).forEach(walk); }; walk(treeNodes(state.scene, { jobs: state.jobs })); renderTree(); });
+  $('#tree-collapse').addEventListener('click', () => { state.expanded = new Set(['scene']); renderTree(); });
+  document.addEventListener('keydown', ev => {
+    const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName);
+    if ((ev.ctrlKey || ev.metaKey) && ev.key === 'z' && !typing) { ev.preventDefault(); undo(); }
+    else if ((ev.ctrlKey || ev.metaKey) && ev.key === 's') { ev.preventDefault(); command('save'); }
+    else if ((ev.ctrlKey || ev.metaKey) && ev.key === 'o') { ev.preventDefault(); command('open'); }
+    else if (ev.key === 'F8') { ev.preventDefault(); command('run'); }
+    else if (ev.key === 'F1') { ev.preventDefault(); command('help'); }
+  });
   $('#import-scene').addEventListener('change', async ev => {
     try {
-      const file = ev.target.files[0]; if (!file) return; if (file.size > 65536) throw Error('配置不能超过 64 KiB。');
-      const d = JSON.parse(await file.text()), scene = d.scene || d; if (!scene?.geometry || !scene.source) throw Error('配置格式不正确：需要 {scene, degree} 或场景对象。');
-      takeEngine(d); loadScene(scene, [3, 4, 5].includes(d.degree) ? d.degree : state.degree); toast('已导入场景。', 'info');
+      const file = ev.target.files[0]; if (!file) return; if (file.size > 65536) throw Error('模型文件不能超过 64 KiB。');
+      const d = JSON.parse(await file.text()), scene = d.scene || d; if (!scene?.geometry || !scene.source) throw Error('模型文件格式不正确：需要 {scene, degree} 或场景对象。');
+      takeEngine(d); loadScene(scene, [3, 4, 5].includes(d.degree) ? d.degree : state.degree); toast(`已打开模型：${file.name}`, 'info');
     } catch (error) { fail(error); } finally { ev.target.value = ''; }
   });
+  initSplitters($('#desk'), [
+    { handle: $('#split-left'), variable: '--mb-w', axis: 'x', min: 200, max: 560 },
+    { handle: $('#split-mid'), variable: '--st-w', axis: 'x', min: 260, max: 680 },
+    { handle: $('#split-dock'), variable: '--dock-h', axis: 'y', min: 80, max: 520, invert: true },
+  ]);
   bindView();
   try {
     const [info, templates, materials] = await Promise.all([api('/api/info'), api('/api/templates'), api('/api/materials')]);
-    state.token = info.token; state.templates = workbenchTemplates(templates); state.materials = materials;
+    state.info = info; state.token = info.token; state.templates = workbenchTemplates(templates); state.materials = materials;
     if (materials.cfrp_ud && state.templates.gaussian) {
       const c = structuredClone(state.templates.gaussian.scene); c.name = 'CFRP 单向板 · 顶面高斯激励 · 两端吸收 · 半模型';
       c.material = structuredClone(materials.cfrp_ud.material); c.source.frequency_mhz = .3;
       state.templates.cfrp = { label: 'CFRP 单向板 · 顶面高斯激励（自定义应变能）', scene: c };
     }
-    $('#engine-chip').textContent = `● 本机离线 · 物理 AI ${info.model.version || ''}`.trim(); $('#engine-chip').title = info.model.user_notice || '';
-    $('#template').innerHTML = '<option value="">从模板新建…</option>' + Object.entries(state.templates).map(([k, t]) => `<option value="${k}">${escapeHtml(t.label)}</option>`).join('');
-    $('#template').addEventListener('change', ev => { const t = state.templates[ev.target.value]; ev.target.value = ''; if (t) { loadScene(structuredClone(t.scene), state.degree); setTab('model'); } });
+    $('#sb-app').textContent = `WorkAI ${info.app?.version || ''} · 物理 AI ${info.model.version || ''} · 本机离线`;
+    $('#sb-app').title = `数据目录：${info.data_directory}`;
     const draft = readDraft();
     if (draft) { state.scene = draft.scene; state.degree = draft.degree || 4; takeEngine(draft); } else { state.scene = structuredClone(state.templates.gaussian?.scene || Object.values(state.templates)[0].scene); }
-    renderAll(); schedulePreview();
+    log.add('info', `WorkAI ${info.app?.version || ''} 已启动。数据目录：${info.data_directory}`);
+    renderAll(); schedulePreview(); setDock('messages');
     await refreshJobs(); await openJob(state.jobs[0]?.job_id || '');
-  } catch (error) { fail(error); }
+    setInterval(() => { if (running()) refreshJobs().catch(() => {}); }, 4000);
+    document.body.dataset.ready = '1';
+  } catch (error) { fail(error); document.body.dataset.ready = 'error'; }
 }
 start();

@@ -108,18 +108,40 @@ const ENGINES = { network: '物理 AI · 冻结网络（细网格，默认）', 
 export const COARSE_MODELS = { 'p4-h3-harmonic': '快速 · h 3 mm（默认）', 'p4-h2-multisource': '精确 · h 2 mm（节点约 1.5 倍，二次谐波更准）' };
 export const DEFAULT_COARSE_MODEL = Object.keys(COARSE_MODELS)[0];
 
-function studyForm(scene, degree, engine = 'network', coarseModel = DEFAULT_COARSE_MODEL) {
-  const a = scene.acquisition, n = scene.numerics, faces = { none: '无（全部自由）', ...Object.fromEntries(FACES.map(f => [f, FACE_LABELS[f]])) };
-  return section('记录', num('记录时长', 'acquisition.duration_us', a.duration_us, { unit: 'μs', min: .1, max: 20000, hint: '最长 20 ms；5 ms 及以上的记录可在计算中暂停、之后续算。' }) +
-      num('输出采样间隔', 'acquisition.sample_step_us', a.sample_step_us, { unit: 'μs', min: .01, max: .2, hint: '二次谐波每周期至少 8 个采样点。' })) +
-    section('计算引擎', `<label class="wb-field wide"><span>引擎</span><select data-action="engine">${Object.entries(ENGINES).map(([k, v]) => `<option value="${k}" ${k === engine ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+function recordForm(scene) {
+  const a = scene.acquisition;
+  return section('瞬态记录', num('记录时长', 'acquisition.duration_us', a.duration_us, { unit: 'μs', min: .1, max: 20000, hint: '最长 20 ms；5 ms 及以上的记录可在计算中暂停、之后续算。' }) +
+      num('输出采样间隔', 'acquisition.sample_step_us', a.sample_step_us, { unit: 'μs', min: .01, max: .2, hint: '二次谐波每周期至少 8 个采样点。' }),
+    '计算保存全部节点、全部输出时刻的完整位移场（线性、StVK、完整三组控制），结果窗口可任取点和直线提取波形与频谱。');
+}
+
+function engineForm(engine = 'network', coarseModel = DEFAULT_COARSE_MODEL) {
+  return section('计算引擎', `<label class="wb-field wide"><span>引擎</span><select data-action="engine">${Object.entries(ENGINES).map(([k, v]) => `<option value="${k}" ${k === engine ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       ${engine === 'coarse' && Object.keys(COARSE_MODELS).length > 1 ? `<label class="wb-field wide"><span>粗网格模型</span><select data-action="coarse-model">${Object.entries(COARSE_MODELS).map(([k, v]) => `<option value="${k}" ${k === coarseModel ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
       <div class="wb-field wide" id="engine-derived"></div>`,
-      engine === 'coarse' ? '粗网格算子是同一个网络换上学到的单元算子（求导滤波、刚度与质量积分），在模型自带的粗网格上计算，比细网格冻结网络快数倍到一个数量级。快速模型（h 3 mm）最省；精确模型（h 2 mm）节点约 1.5 倍，顶面、端面和双贴片的留出测试全部通过，需要二次谐波时选它。它们是研究模型，只在 48 × 2 mm 半宽铝板、板厚 1.6–2.4 mm、0.2–0.4 MHz、30 μs 记录上训练和测试过；超出范围要逐例核对。下面的 h 与 p 只用于检查场景本身，计算用模型的网格。' : '') +
-    section('网格与物理 AI 求解', num('单元尺寸 h', 'numerics.h_mm', n.h_mm, { unit: 'mm', min: .8, max: 2.5 }) +
-      `<label class="wb-field"><span>图阶次 p</span><select data-action="degree">${[3, 4, 5].map(d => `<option value="${d}" ${d === degree ? 'selected' : ''}>${d}</option>`).join('')}</select><small>节点间距 = h / p</small></label>` +
-      sel('固定面', 'boundary.fixed_face', scene.boundary.fixed_face, faces),
-      '求解器是冻结图网络（物理 AI）：学到的求导、能量和状态更新逐时前向传播，不调用有限元求解器，也不做预测后的数值校正。精度由节点间距决定，见下方“2f 分辨率”；新场景要用细网格参考逐例核对。');
+    engine === 'coarse' ? '粗网格算子是同一个网络换上学到的单元算子（求导滤波、刚度与质量积分），在模型自带的粗网格上计算，比细网格冻结网络快数倍到一个数量级。快速模型（h 3 mm）最省；精确模型（h 2 mm）节点约 1.5 倍，顶面、端面和双贴片的留出测试全部通过，需要二次谐波时选它。它们是研究模型，只在 48 × 2 mm 半宽铝板、板厚 1.6–2.4 mm、0.2–0.4 MHz、30 μs 记录上训练和测试过；超出范围要逐例核对。网格设置中的 h 与 p 只用于检查模型本身，计算用模型自带的网格。'
+      : '求解器是冻结图网络（物理 AI）：学到的求导、能量和状态更新逐时前向传播，不调用有限元求解器，也不做预测后的数值校正。精度由节点间距决定，见“消息”窗口中的 2f 分辨率；新模型要用细网格参考逐例核对。');
+}
+
+function meshForm(scene, degree) {
+  const n = scene.numerics;
+  return section('网格与物理 AI 图', num('单元尺寸 h', 'numerics.h_mm', n.h_mm, { unit: 'mm', min: .8, max: 2.5 }) +
+      `<label class="wb-field"><span>图阶次 p</span><select data-action="degree">${[3, 4, 5].map(d => `<option value="${d}" ${d === degree ? 'selected' : ''}>${d}</option>`).join('')}</select><small>节点间距 = h / p</small></label>`,
+    'GLL 六面体网格（曲面用等参映射）。节点数、记录大小和每个激励的 2f 分辨率显示在“消息”窗口；长记录（≥ 100 个周期）建议 2f 分辨率不低于 15。');
+}
+
+function fixedForm(scene) {
+  const faces = { none: '无（全部自由）', ...Object.fromEntries(FACES.map(f => [f, FACE_LABELS[f]])) };
+  return section('固定面', sel('固定面', 'boundary.fixed_face', scene.boundary.fixed_face, faces) +
+    '<div class="wb-field wide"><button type="button" class="wb-button danger small" data-action="remove" data-id="fixed">删除固定面</button></div>', '固定面上三个位移分量为零。管只能固定 X 端面。');
+}
+
+function overviewForm(scene, kind) {
+  if (kind === 'scene') return section('模型', text('名称', 'name', scene.name, 100), '模型文件保存为 JSON（文件 → 保存），包含几何、材料、激励、边界、接收点、记录、网格和计算引擎设置。');
+  if (kind === 'component') return section('组件 1', `<p class="wb-note">三维固体组件。单位：长度 mm，时间 μs，频率 MHz，应力 MPa。坐标原点在${scene.geometry.kind === 'pipe' ? '管轴一端（管轴为 X）' : '板的一角，X 为长度方向，Z 为厚度方向'}。</p>`);
+  if (kind === 'physics') return section('超声导波（固体力学）', `<p class="wb-note">非线性弹性动力学：线性、StVK（几何非线性）和完整 Murnaghan / 应变能（材料非线性）三组控制同时计算，结果给出完整、线性、StVK、几何增量和材料增量五种响应。</p>
+    <p class="wb-note">在下方添加激励源、边界条件（对称、反对称、吸收层、固定面）和接收点。</p>`);
+  return section('结果', '<p class="wb-note">每次计算生成一条记录。选中一条记录查看位移场动画、任意点波形与频谱、多点提取，并可导出全部结果 ZIP。</p>');
 }
 
 /** HTML for the selected item. */
@@ -130,9 +152,13 @@ export function inspectorMarkup(scene, selection, degree, context = {}) {
   if (kind === 'source') return sourceForm(scene, index);
   if (kind === 'boundary') return boundaryForm(scene, index);
   if (kind === 'receiver') return receiverForm(scene, index);
-  if (kind === 'fixed' || kind === 'study') return studyForm(scene, degree, context.engine, context.coarseModel);
-  if (kind === 'sources') return section('激励源', '<p class="wb-note">点击左侧的“+”添加激励源，或选中一个激励编辑。每个激励有独立的加载面、方向、时间信号和空间分布。</p>');
-  if (kind === 'boundaries') return section('边界条件', '<p class="wb-note">点击“+”添加对称面、反对称面或吸收层。固定面在“记录与网格”中设置。</p>');
+  if (kind === 'fixed') return fixedForm(scene);
+  if (kind === 'study') return recordForm(scene);
+  if (kind === 'engine') return engineForm(context.engine, context.coarseModel);
+  if (kind === 'mesh') return meshForm(scene, degree);
+  if (['scene', 'component', 'physics', 'results'].includes(kind)) return overviewForm(scene, kind);
+  if (kind === 'sources') return section('激励源', '<p class="wb-note">点击“+”添加激励源，或选中一个激励编辑。每个激励有独立的加载面、方向、时间信号和空间分布。</p>');
+  if (kind === 'boundaries') return section('边界条件', '<p class="wb-note">点击“+”添加对称面、反对称面、吸收层或固定面。</p>');
   if (kind === 'receivers') return section('接收点', '<p class="wb-note">点击“+”添加接收点。完整位移场全部保存，结果页可以任取点、直线提取波形。</p>');
   return '';
 }

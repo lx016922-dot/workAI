@@ -153,6 +153,36 @@ export function tree(scene) {
   return rows;
 }
 
+/**
+ * Hierarchical model-builder tree: model → component (geometry, material, physics with sources / boundaries /
+ * receivers, mesh) → study (solver) → results (computed jobs). Node ids are the inspector selections.
+ */
+export function treeNodes(scene, { degree = 4, engine = '物理 AI · 冻结网络', jobs = [], phases = {} } = {}) {
+  const src = sourcesOf(scene), bnd = scene.boundaries || [], fixed = scene.boundary.fixed_face !== 'none';
+  const jobIcon = phase => phase === 'completed' ? 'job' : phase === 'failed' ? 'jobBad' : phase === 'paused' ? 'jobPaused' : 'jobRunning';
+  return { id: 'scene', label: scene.name, icon: 'document', children: [
+    { id: 'component', label: '组件 1', icon: 'component', detail: KIND_LABELS[scene.geometry.kind], children: [
+      { id: 'geometry', label: '几何 1', icon: 'geometry', detail: geometrySummary(scene.geometry) },
+      { id: 'material', label: '材料', icon: 'material', detail: materialSummary(scene.material) },
+      { id: 'physics', label: '超声导波（固体力学）', icon: 'physics', detail: '非线性弹性动力学', children: [
+        { id: 'sources', label: '激励源', icon: 'folder', count: src.length, add: 'source', children: src.map((s, i) =>
+          ({ id: `source:${i}`, label: s.name || (i ? `激励 ${i + 1}` : '主激励'), icon: 'source', detail: sourceSummary(s), removable: i > 0 })) },
+        { id: 'boundaries', label: '边界条件', icon: 'folder', count: bnd.length + (fixed ? 1 : 0), add: 'boundary', children: [
+          ...(fixed ? [{ id: 'fixed', label: '固定面', icon: 'fixed', detail: FACE_LABELS[scene.boundary.fixed_face], removable: true }] : []),
+          ...bnd.map((b, i) => ({ id: `boundary:${i}`, label: BOUNDARY_LABELS[b.type], icon: b.type, detail: boundarySummary(b), removable: true }))] },
+        { id: 'receivers', label: '接收点', icon: 'folder', count: scene.receivers.length, add: 'receiver', children: scene.receivers.map((r, i) =>
+          ({ id: `receiver:${i}`, label: r.name, icon: 'receiver', detail: `(${r.point_mm.join(', ')}) mm`, removable: scene.receivers.length > 1 })) },
+      ] },
+      { id: 'mesh', label: '网格 1', icon: 'mesh', detail: `h ${scene.numerics.h_mm} mm · p ${degree}` },
+    ] },
+    { id: 'study', label: '研究 1 · 瞬态', icon: 'study', detail: `${scene.acquisition.duration_us} μs · Δt ${scene.acquisition.sample_step_us} μs`, children: [
+      { id: 'engine', label: '求解器配置', icon: 'engine', detail: engine },
+    ] },
+    { id: 'results', label: '结果', icon: 'results', count: jobs.length, children: jobs.map(j =>
+      ({ id: `job:${j.job_id}`, label: j.name || j.job_id, icon: jobIcon(j.phase), detail: phases[j.phase] || j.phase })) },
+  ] };
+}
+
 /** Read/write a nested value with a dotted path (array indices allowed). */
 export function getPath(object, path) { return path.split('.').reduce((o, k) => o?.[k], object); }
 export function setPath(object, path, value) { const keys = path.split('.'), last = keys.pop(); const target = keys.reduce((o, k) => o[k], object); target[last] = value; }
