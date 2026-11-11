@@ -14,7 +14,7 @@ from pathlib import Path
 import numpy as np
 import scipy.sparse as sp
 from pipe_safe import gll
-from pipe import CASES, RO, RI, LENGTH, DURATION, STEP, receivers
+from pipe import CASES, RO, RI, LENGTH, DURATION, STEP, receivers, line_points
 
 REF = Path(__file__).resolve().parents[1] / 'reference'
 LAM, MU, RHO = 58.1e9, 26.1e9, 2700.
@@ -81,7 +81,7 @@ def simulate(case, p, hx_mm, nr, dt_factor=1.):
     sec = Section(n, p, hx_mm * 1e-3, nr); wmax = sec.omega_max()
     sub = int(math.ceil(STEP * 1e-6 / (dt_factor * 2.5 / wmax))); dt = STEP * 1e-6 / sub   # RK4 stability limit 2.83 / ω_max
     frames = int(round(DURATION / STEP)) + 1; F = sec.load_vector(traction); N3 = 3 * sec.N
-    probes = [sec.probe(q[0] * 1e-3, np.hypot(q[1], q[2]) * 1e-3) for _, q in receivers()]
+    probes = [sec.probe(q[0] * 1e-3, np.hypot(q[1], q[2]) * 1e-3) for _, q in receivers() + line_points()]   # receivers, then the line
     u = np.zeros(N3); v = np.zeros(N3); out = np.zeros((frames, len(probes), 3)); t0 = time.time()
     def acc(u, t_s): return sec.inv_mass * (F * tone_burst(t_s * 1e6, f, cycles) - sec.K @ u)
     for frame in range(1, frames):

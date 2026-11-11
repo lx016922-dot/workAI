@@ -29,6 +29,13 @@ def receivers():
     return [((x, r, th), [x, r * np.cos(np.radians(th)), r * np.sin(np.radians(th))]) for x in STATIONS for r in RADII for th in ANGLES]
 
 
+LINE_X = np.arange(2., 58.001, .25)   # outer-surface line at θ = 0 for frequency–wavenumber analysis
+
+
+def line_points():
+    return [((x, RO - .02, 0.), [x, RO - .02, 0.]) for x in LINE_X]
+
+
 def scene(case, h):
     direction, _, f, cycles = CASES[case]
     s = copy.deepcopy(BASE); s['name'] = f'pipe {case}'; s['receiver_lines'] = []
