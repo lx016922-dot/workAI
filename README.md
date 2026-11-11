@@ -80,6 +80,8 @@ python tools/build-desktop.py --cache build-cache --launcher desktop-out --outpu
 
 GitHub Actions 的 [desktop.yml](.github/workflows/desktop.yml) 在 Windows 上完成以上构建，打开真实窗口截图、在打包的运行时中完成一次计算，并按需发布 Release。
 
+![WorkAI 1.0 在 Windows 上的窗口（CI 截图）](desktop/screenshot-windows.png)
+
 **离线便携包（浏览器界面，Windows / Linux）。** 从 [v0.3.0 发布页](https://github.com/lx016922-dot/workAI/releases/tag/v0.3.0) 下载；Windows 解压后运行 `Start-WorkAI.bat`，Linux 运行 `sh start-workai.sh`。从源码构建：
 
 ```sh

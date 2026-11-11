@@ -9,6 +9,7 @@
   --wb-warn: var(--warn); --wb-warn-soft: var(--warn-soft); --wb-bad: var(--bad); --wb-bad-soft: var(--bad-soft);
   font-family: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
 }
+@media (max-width: 1366px) { :root { --mb-w: 240px; --st-w: 320px; --dock-h: 170px; } .gw-hint { display: none; } }
 html, body.wb { height: 100%; }
 body.wb { margin: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) 24px; background: var(--bg); color: var(--ink); overflow: hidden; font-size: 12px; line-height: 1.45; min-width: 1024px; }
 .wb button, .wb input, .wb select, .wb textarea { font: inherit; }
