@@ -48,6 +48,12 @@ def rel(a, b): return float(np.linalg.norm(a - b) / max(np.linalg.norm(b), 1e-30
 if __name__ == '__main__':
     t = np.arange(int(round(45 / STEP)) + 1) * STEP; out = {}
     plate_ref, plate_ref_coarse = reference('plate', .25), reference('plate', .5)
+    # propagation alone (no notch): network plate vs reference plate at every station
+    pr = split(plate_ref); prc = split(plate_ref_coarse); out['plate'] = {'reference_self_check': {k: rel(prc[k], pr[k]) for k in ('S30', 'S75')}}
+    for h in (1., 1.5):
+        pn = network('plate', h)
+        if pn is not None: pn = split(pn); out['plate'][f'network_h{h:g}_rel_l2'] = {k: rel(pn[k], pr[k]) for k in ('S30', 'S75')}
+    print('plate (no notch)', out['plate'])
     for name, (kind, w, d) in CASES.items():
         if kind == 'plate': continue
         ref, coarse = reference(name, .25), reference(name, .5)
@@ -69,6 +75,6 @@ if __name__ == '__main__':
                 print(f'   net h{h:g}', {k: round(v, 4) for k, v in row[f'network_h{h:g}'].items()}, 'scattered rel', {k: f'{v:.1e}' for k, v in row[f'network_h{h:g}_scattered_rel_l2'].items()}, f"total {row[f'network_h{h:g}_total_rel_l2']:.1e}")
     # interference model for the width dependence (two edges of opposite reflection sign): R(w) ∝ |sin(k w)|
     k = 2 * math.pi * F * 1e6 / CS0
-    widths = {n: r for n, r in out.items() if r['depth_mm'] == .8}
+    widths = {n: r for n, r in out.items() if n != 'plate' and r['depth_mm'] == .8}
     for n, r in widths.items(): r['interference_sin_kw'] = abs(math.sin(k * r['width_mm'] * 1e-3))
     (HERE / 'results' / 'notch.json').write_text(json.dumps(out, indent=1))

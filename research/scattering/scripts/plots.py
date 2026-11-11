@@ -10,7 +10,7 @@ for f in ('Noto Sans CJK SC', 'WenQuanYi Zen Hei'):
     if any(f in x.name for x in matplotlib.font_manager.fontManager.ttflist): plt.rcParams['font.family'] = f; break
 REF, NET, NET2 = '#3a3a3a', '#2b6cb0', '#dd6b20'   # reference ink, network h 1 mm, network h 1.5 mm (also told apart by line style)
 
-notch = json.loads((HERE / 'results/notch.json').read_text())
+notch = json.loads((HERE / 'results/notch.json').read_text()); cases = {n: v for n, v in notch.items() if n != 'plate'}
 
 # fig1: scattered waveforms of one notch, reference vs network
 name = 'd0.8-w4' if 'trace' in notch.get('d0.8-w4', {}) else next(n for n, r in notch.items() if 'trace' in r)
@@ -28,15 +28,15 @@ fig.tight_layout(); fig.savefig(OUT / 'fig1-notch-waveforms.png'); plt.close(fig
 
 # fig2: coefficients vs depth (width 1 mm) and vs width (depth 0.8 mm)
 fig, ax = plt.subplots(1, 2, figsize=(9, 3.4))
-for a, rows, xkey, xlabel in ((ax[0], sorted([v for v in notch.values() if v['width_mm'] == 1.], key=lambda v: v['depth_mm']), 'depth_mm', '缺口深度 (mm)，宽 1 mm'),
-                              (ax[1], sorted([v for v in notch.values() if v['depth_mm'] == .8], key=lambda v: v['width_mm']), 'width_mm', '缺口宽度 (mm)，深 0.8 mm')):
+for a, rows, xkey, xlabel in ((ax[0], sorted([v for v in cases.values() if v['width_mm'] == 1.], key=lambda v: v['depth_mm']), 'depth_mm', '缺口深度 (mm)，宽 1 mm'),
+                              (ax[1], sorted([v for v in cases.values() if v['depth_mm'] == .8], key=lambda v: v['width_mm']), 'width_mm', '缺口宽度 (mm)，深 0.8 mm')):
     x = [v[xkey] for v in rows]
     for coef, marker, label in (('R_S0', 'o', 'S0 反射'), ('R_A0', 's', '反射中转换的 A0'), ('T_A0', '^', '透射中转换的 A0')):
         a.plot(x, [v['reference'][coef] for v in rows], color=REF, lw=1, marker=marker, ms=6, mfc='none', label=f'{label} · 参考')
         a.plot(x, [v['network_h1'][coef] for v in rows if 'network_h1' in v], color=NET, lw=0, marker=marker, ms=3.5, label=f'{label} · 软件')
     a.set_xlabel(xlabel); a.set_ylim(bottom=0)
 ax[0].set_ylabel('幅值 / 入射 S0 幅值')
-rows = sorted([v for v in notch.values() if v['depth_mm'] == .8], key=lambda v: v['width_mm'])
+rows = sorted([v for v in cases.values() if v['depth_mm'] == .8], key=lambda v: v['width_mm'])
 if rows:
     k = 2 * np.pi * .3e6 / 5401.; w = np.linspace(0, max(v['width_mm'] for v in rows), 200)
     peak = max(v['reference']['R_S0'] for v in rows)
