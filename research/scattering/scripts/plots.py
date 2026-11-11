@@ -10,7 +10,7 @@ for f in ('Noto Sans CJK SC', 'WenQuanYi Zen Hei'):
     if any(f in x.name for x in matplotlib.font_manager.fontManager.ttflist): plt.rcParams['font.family'] = f; break
 REF, NET, NET2 = '#3a3a3a', '#2b6cb0', '#dd6b20'   # reference ink, network h 1 mm, network h 1.5 mm (also told apart by line style)
 
-notch = json.loads((HERE / 'results/notch.json').read_text()); cases = {n: v for n, v in notch.items() if n != 'plate'}
+notch = json.loads((HERE / 'results/notch.json').read_text()); cases = {n: v for n, v in notch.items() if n not in ('plate', 'models')}
 
 # fig1: scattered waveforms of one notch, reference vs network
 name = 'd0.8-w4' if 'trace' in notch.get('d0.8-w4', {}) else next(n for n, r in notch.items() if 'trace' in r)
@@ -26,23 +26,37 @@ ax[0, 0].legend(fontsize=7, loc='upper left')
 fig.suptitle(f"缺口宽 {r['width_mm']:g} mm、深 {r['depth_mm']:g} mm（板厚 2 mm，0.3 MHz S0 入射）：散射场为有缺口与无缺口两次计算之差", fontsize=9)
 fig.tight_layout(); fig.savefig(OUT / 'fig1-notch-waveforms.png'); plt.close(fig)
 
-# fig2: coefficients vs depth (width 1 mm) and vs width (depth 0.8 mm)
-fig, ax = plt.subplots(1, 2, figsize=(9, 3.4))
+# fig2: reflection and mode conversion vs depth and width, and |R(f)| for each width
+fig, ax = plt.subplots(1, 3, figsize=(12, 3.5), gridspec_kw={'width_ratios': [1, 1, 1.25]})
 for a, rows, xkey, xlabel in ((ax[0], sorted([v for v in cases.values() if v['width_mm'] == 1.], key=lambda v: v['depth_mm']), 'depth_mm', '缺口深度 (mm)，宽 1 mm'),
                               (ax[1], sorted([v for v in cases.values() if v['depth_mm'] == .8], key=lambda v: v['width_mm']), 'width_mm', '缺口宽度 (mm)，深 0.8 mm')):
     x = [v[xkey] for v in rows]
-    for coef, marker, label in (('R_S0', 'o', 'S0 反射'), ('R_A0', 's', '反射中转换的 A0'), ('T_A0', '^', '透射中转换的 A0')):
-        a.plot(x, [v['reference'][coef] for v in rows], color=REF, lw=1, marker=marker, ms=6, mfc='none', label=f'{label} · 参考')
-        a.plot(x, [v['network_h1'][coef] for v in rows if 'network_h1' in v], color=NET, lw=0, marker=marker, ms=3.5, label=f'{label} · 软件')
-    a.set_xlabel(xlabel); a.set_ylim(bottom=0)
-ax[0].set_ylabel('幅值 / 入射 S0 幅值')
-rows = sorted([v for v in cases.values() if v['depth_mm'] == .8], key=lambda v: v['width_mm'])
-if rows:
-    k = 2 * np.pi * .3e6 / 5401.; w = np.linspace(0, max(v['width_mm'] for v in rows), 200)
-    peak = max(v['reference']['R_S0'] for v in rows)
-    ax[1].plot(w, peak * np.abs(np.sin(k * w * 1e-3)), color='#8a8a8a', lw=.8, ls=':', label='|sin kw|（两端反射干涉，按最大值缩放）')
-ax[0].legend(fontsize=6); ax[1].legend(fontsize=6)
+    for coef, marker, label in (('R_S0_spectral', 'o', '|R| S0（0.3 MHz）'), ('R_A0', 's', '反射中转换的 A0'), ('T_A0', '^', '透射中转换的 A0')):
+        a.plot(x, [v['reference'][coef] for v in rows], color=REF, lw=1, marker=marker, ms=7, mfc='none', label=f'{label} · 参考')
+        a.plot(x, [v['network_h1'][coef] for v in rows], color=NET, lw=0, marker=marker, ms=3.5, label=f'{label} · 软件')
+    a.set_xlabel(xlabel); a.set_ylim(0, .65)
+ax[0].set_ylabel('幅值 / 入射 S0 幅值'); ax[0].legend(fontsize=6, loc='upper left')
+a = ax[2]; rows = sorted([v for v in cases.values() if v['depth_mm'] == .8 and 'reflection_spectrum_x50_network' in v], key=lambda v: v['width_mm'])
+blues = plt.get_cmap('Blues')(np.linspace(.35, .95, len(rows)))
+for v, col in zip(rows, blues):
+    sp = v['reflection_spectrum_x50_network']; a.plot(sp['f_mhz'], sp['R'], color=col, lw=1.4, label=f"宽 {v['width_mm']:g} mm")
+m = notch.get('models', {}).get('two_step_max_2r_over_1_plus_r2')
+if m: a.axhline(m, color='#8a8a8a', lw=.8, ls=':'); a.text(.152, m + .012, f'两台阶模型上限 2r/(1+r²) = {m:.2f}', fontsize=6.5, color='#555555')
+a.set(xlabel='频率 (MHz)', ylabel='|R(f)| S0', title='深 0.8 mm 缺口的反射谱（软件 h 1 mm，x = 50 mm）'); a.title.set_fontsize(8.5); a.set_ylim(0, .55); a.legend(fontsize=6.5, loc='lower left')
 fig.tight_layout(); fig.savefig(OUT / 'fig2-notch-coefficients.png'); plt.close(fig)
+
+# fig4: mesh convergence of the scattered field (d0.8-w1), 2D solver and network on the same mesh sizes
+row = cases.get('d0.8-w1', {}); conv = row.get('convergence_vs_extrapolated')
+if conv:
+    fig, a = plt.subplots(figsize=(4.6, 3.3)); key = 'S30'
+    h2 = sorted(float(h) for h in conv['2d']); a.loglog(h2, [100 * conv['2d'][f'{h:g}'][key] for h in h2], color=REF, marker='o', mfc='none', ms=7, lw=1, label='二维谱元（独立求解器）')
+    hn = sorted(float(h) for h in conv['network']); a.loglog(hn, [100 * conv['network'][f'{h:g}'][key] for h in hn], color=NET, marker='o', ms=3.5, lw=0, label='软件网络')
+    g = np.array([.25, 1.5]); a.loglog(g, 100 * conv['2d']['1'][key] * g, color='#8a8a8a', ls=':', lw=.8, label='一阶收敛 ∝ h')
+    from matplotlib.ticker import FuncFormatter
+    for ax_ in (a.xaxis, a.yaxis): ax_.set_major_formatter(FuncFormatter(lambda v, _: f'{v:g}')); ax_.set_minor_formatter(FuncFormatter(lambda v, _: ''))
+    a.set_xticks([.25, .5, 1, 1.5]); a.set_yticks([.25, .5, 1, 1.5])
+    a.set(xlabel='单元尺寸 h (mm)', ylabel='散射场误差 (%)', title='缺口 宽 1、深 0.8 mm：反射 S0 散射场的网格收敛'); a.title.set_fontsize(8.5); a.legend(fontsize=7)
+    fig.tight_layout(); fig.savefig(OUT / 'fig4-notch-convergence.png'); plt.close(fig)
 
 # fig3: through hole, scattered field vs the analytical solution
 hole = json.loads((HERE / 'results/hole.json').read_text()); recs = hole['receivers']

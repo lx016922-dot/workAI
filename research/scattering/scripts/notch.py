@@ -39,9 +39,10 @@ def scene(name, h, dimension='3d'):
     return s
 
 
-def reference(name):
+def reference(name, sizes=(.5, .25)):
+    """2D plane-strain spectral elements; h 0.5 and 0.25 mm are the reference, h 1 and 1.5 mm are the network's own mesh sizes."""
     from spectral2d.run import simulate
-    for h in (.5, .25):
+    for h in sizes:
         path = REF / f'notch-{name}-h{h:g}.npy'
         if path.exists(): continue
         s = scene(name, h, '2d'); s['constitutive'] = 'linear'; started = time.time(); r = simulate(s, degree=4)
@@ -53,4 +54,4 @@ if __name__ == '__main__':
     if kind == 'network':
         h = float(sys.argv[3]) if len(sys.argv) > 3 else 1.
         job = run(f'N-{name}-h{h:g}', scene(name, h)); print('network', name, h, 'done', (job / 'elapsed_s').read_text(), flush=True)
-    else: reference(name)
+    else: reference(name, tuple(float(v) for v in sys.argv[3:]) or (.5, .25))
