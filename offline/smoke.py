@@ -53,6 +53,40 @@ def main():
                 receiver['point_mm'] = [2. if i == 0 else 6., 1.5, .75]
             body = {'scene': scene, 'degree': 4}
             headers = {'Content-Type': 'application/json', 'X-WorkAI-Token': info['token']}
+            def wait(job, limit_s):
+                deadline = time.monotonic() + limit_s
+                while time.monotonic() < deadline:
+                    status = request('/api/jobs/' + job)
+                    if status['phase'] in ('completed', 'failed'):
+                        break
+                    time.sleep(2)
+                if status['phase'] != 'completed':
+                    raise AssertionError((status, (directory / 'data/jobs' / job / 'worker.log').read_text(encoding='utf-8')))
+                return status
+            # Fast engine (learned coarse-graph operator), as the workbench's v2 top-face Gaussian template: every shipped
+            # model must match its recorded evaluation (a CRLF checkout broke this in 1.0.0) and the default model must run.
+            fast = request('/api/templates')['plate']
+            fast.pop('signal'); fast.update(schema='workai.hyperelastic.solid.v2', name='fast engine smoke')
+            fast['geometry'].update(length_mm=48., width_mm=2., thickness_mm=1.6)
+            fast['source'] = {'name': 'top', 'face': 'zmax', 'center_mm': [16., 1., 1.6], 'radius_mm': 0., 'direction': [0., 0., -1.], 'amplitude_mpa': 1.,
+                              'frequency_mhz': .4, 'cycles': 5., 'delay_us': 0., 'phase_deg': 0., 'signal': {'type': 'tone_burst', 'window': 'hann'},
+                              'profile': {'type': 'gaussian', 'sigma_mm': 2.}}
+            fast['sources'] = []
+            fast['boundaries'] = [{'type': 'symmetry', 'face': 'ymax'}] + [{'type': 'absorbing', 'face': face, 'length_mm': 8., 'ramp': 'cubic', 'attenuation_db': 60.} for face in ('xmin', 'xmax')]
+            fast['acquisition'] = {'duration_us': 20., 'sample_step_us': .05}
+            fast['receivers'] = [{'name': 'top', 'point_mm': [22., 1., 1.6], 'direction': [0., 0., 1.]}]
+            fast_models = ('p4-h3-harmonic', 'p4-h2-multisource')
+            for name in fast_models:
+                checked = request('/api/preview', {'scene': fast, 'degree': 4, 'engine': 'coarse', 'coarse_model': name}, headers)
+                assert checked['ok'] and not checked['errors'], checked['errors']
+                assert checked['engine']['name'] == name and len(checked['engine']['test_by_excitation']) == 4, checked['engine']
+            fast_job = request('/api/jobs', {'scene': fast, 'degree': 4, 'engine': 'coarse'}, headers)['job_id']
+            fast_status = wait(fast_job, 900)
+            fast_result = request('/api/jobs/' + fast_job + '/result?part=full')
+            assert fast_result['engine'] == 'workai_coarse_graph_offline' and fast_result['coarse_model']['name'] == fast_models[0]
+            assert len(fast_result['times_us']) == 401 and all(c['energy_balance_within_1_percent'] for c in fast_result['controls'])
+            fast_field = np.frombuffer(gzip.decompress(request('/api/jobs/' + fast_job + '/field?part=full')), dtype='<f8')
+            assert np.isfinite(fast_field).all() and np.max(abs(fast_field)) > 1e-12
             for bad in [{'Content-Type': 'application/json'}, dict(headers, Origin='https://unrelated.example')]:
                 try:
                     request('/api/jobs', body, bad)
@@ -67,14 +101,7 @@ def main():
             except HTTPError as error:
                 assert error.code == 422
             job = request('/api/jobs', body, headers)['job_id']
-            deadline = time.monotonic() + 5400
-            while time.monotonic() < deadline:
-                status = request('/api/jobs/' + job)
-                if status['phase'] in ('completed', 'failed'):
-                    break
-                time.sleep(2)
-            if status['phase'] != 'completed':
-                raise AssertionError((status, (directory / 'data/jobs' / job / 'worker.log').read_text(encoding='utf-8')))
+            status = wait(job, 5400)
             fields = {}
             for part in ['full', 'linear', 'stvk', 'geometric', 'material']:
                 result = request('/api/jobs/' + job + '/result?part=' + part)
@@ -104,7 +131,8 @@ def main():
             print(json.dumps({'passed': True, 'python': sys.version, 'platform': sys.platform,
                               'weights_sha256': result['neural_model']['weights_sha256'],
                               'original_weights_sha256': info['model']['weights_sha256'], 'elapsed_s': status['elapsed_s'],
-                              'duration_us':5000,'full_samples':25001,'controls': 3, 'response_parts': 5, 'authentication_checks': 2, 'invalid_scene_rejected': True}), flush=True)
+                              'duration_us':5000,'full_samples':25001,'controls': 3, 'response_parts': 5, 'authentication_checks': 2, 'invalid_scene_rejected': True,
+                              'fast_engine_models_checked': len(fast_models), 'fast_engine_elapsed_s': fast_status['elapsed_s']}), flush=True)
         finally:
             server.terminate()
             server.wait(timeout=15)
