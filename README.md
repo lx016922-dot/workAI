@@ -4,7 +4,7 @@
 - **数值求解器**：三维谱元、三维四面体、二维平面应变。
 - **物理 AI**：冻结图网络及其继续训练、v2 输入层、粗网格算子。
 - **COMSOL 参考解流程**。
-- **可离线运行的软件**。
+- **桌面仿真软件 WorkAI 1.0**（Windows，WorkAI.exe）与可离线运行的便携包。
 - **网页工作台**。
 
 所有结论都附有证据文件；没有通过的验收如实保留。整合前的完整说明见 [项目历史](docs/history.md)。
@@ -13,6 +13,7 @@
 
 | 部分 | 状态 | 关键结果 | 详细 |
 |---|---|---|---|
+| 桌面软件 1.0.0 | Windows 正式版：WorkAI.exe 原生窗口，仿工程仿真软件的界面（功能区、模型开发器、设置、图形窗口、消息 / 进度 / 日志、状态栏）；本机离线，解压即用，见 [桌面版说明](desktop/README-DESKTOP.txt) | 计算核心与 0.3.0 相同（冻结网络）；核验见 [文献对照](research/literature-verification/README.md)、[1 ms 精度](research/long-record-accuracy/README.md)、[散射](research/scattering/README.md) | [下载 v1.0.0](https://github.com/lx016922-dot/workAI/releases/tag/v1.0.0)、[构建](.github/workflows/desktop.yml) |
 | 离线软件 0.3.0 | 研究预发布版，Windows / Linux 便携包；界面已重建为仿真工作台（模型树、三维模型视图、属性面板、激励信号预览、2f 分辨率与验收范围检查），可在界面中编辑多源、任意信号、对称面和吸收层；材料可用自定义应变能密度 W(E) 定义（各向异性，如 CFRP），见 [材料](docs/materials.md) | 默认权重的 5 ms 长记录：20 组 0 组达到 5%，全场相对 L2 24.83%–141.97%，能量收支全部通过；原 0.2.0 模型 14 μs 误差 0.438% | [5 ms 验证](research/long-validation/README.md)、[离线说明](offline/README-OFFLINE.txt) |
 | 冻结图网络继续训练 v6–v10 | 均未采纳为发布模型 | 最好的 v10（六阶、h 1.6 mm）5 ms 每组最差接收点差异 15.01%–105.71%，0/20 | [第 10 轮](research/comsol-validation/CONTINUATION-V10.md)、[路线总表](research/comsol-validation/README.md) |
 | 模态降阶 v11–v12 | 研究候选，未采纳 | v12 原生 COMSOL 20 μs 核对 1.96% / 1.62%；5 ms 线性对照波形向量 19/20，全部分量与频带 11/20，最差 35%–40%；尚无收敛的 5 ms 非线性参考 | [第 11 轮](research/comsol-validation/CONTINUATION-V11.md)、[第 12 轮](research/comsol-validation/CONTINUATION-V12.md) |
@@ -47,7 +48,8 @@
 | `graphwave/` | 冻结图网络（离线软件的推理核心，运行时文件按哈希锁定）及 v6–v12 继续训练、模态降阶 |
 | `graphnet/` | 冻结网络的 v2 输入层：多源载荷、按分量约束、吸收层，短记录与分块长记录 |
 | `coarsegraph/` | 粗网格算子学习、训练好的模型、COMSOL 数据检查导入与比较 |
-| `offline/` | 离线便携软件（本机浏览器界面）；`tools/build-offline.py` 打包 |
+| `offline/` | 离线软件：本机计算服务与工作台界面（`offline/web/`）；`tools/build-offline.py` 打包 |
+| `desktop/` | Windows 桌面窗口 WorkAI.exe（WinForms + WebView2）、图标、使用说明；`tools/build-desktop.py` 打包 |
 | `server/`、`public/` | 网页工作台，连接远程 COMSOL 服务 |
 | `tools/` | COMSOL 作业提交与收集、验证矩阵、证据打包、离线构建、`run-unit-tests.py` |
 | `research/` | 训练与验证证据：COMSOL 对照、5 ms 验证、P1 数据、各轮报告 |
@@ -68,7 +70,17 @@
 
 ## 快速开始
 
-**离线软件。** 从 [v0.3.0 发布页](https://github.com/lx016922-dot/workAI/releases/tag/v0.3.0) 下载便携包；Windows 解压后运行 `Start-WorkAI.bat`，Linux 运行 `sh start-workai.sh`。从源码构建：
+**桌面软件（Windows）。** 从 [v1.0.0 发布页](https://github.com/lx016922-dot/workAI/releases/tag/v1.0.0) 下载 `WorkAI-1.0.0-windows-x64.zip`，完整解压到可写目录后双击 `WorkAI.exe`；使用方法见压缩包内的“使用说明.txt”（[源文件](desktop/README-DESKTOP.txt)）。从源码构建（Windows，需要 .NET SDK）：
+
+```sh
+dotnet build desktop/WorkAI.csproj -c Release -o desktop-out
+python tools/download-offline.py --cache build-cache --platform windows
+python tools/build-desktop.py --cache build-cache --launcher desktop-out --output dist --archive
+```
+
+GitHub Actions 的 [desktop.yml](.github/workflows/desktop.yml) 在 Windows 上完成以上构建，打开真实窗口截图、在打包的运行时中完成一次计算，并按需发布 Release。
+
+**离线便携包（浏览器界面，Windows / Linux）。** 从 [v0.3.0 发布页](https://github.com/lx016922-dot/workAI/releases/tag/v0.3.0) 下载；Windows 解压后运行 `Start-WorkAI.bat`，Linux 运行 `sh start-workai.sh`。从源码构建：
 
 ```sh
 python tools/download-offline.py --cache build-cache --platform linux
