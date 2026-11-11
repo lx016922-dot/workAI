@@ -25,6 +25,10 @@ parser.add_argument('--archive', action='store_true')
 args = parser.parse_args()
 
 version = json.loads((REPO / 'offline/version.json').read_text(encoding='utf-8'))['version']
+project = (REPO / 'desktop/WorkAI.csproj').read_text(encoding='utf-8')
+for tag, expected in (('Version', version), ('FileVersion', version + '.0'), ('AssemblyVersion', version + '.0')):
+    if f'<{tag}>{expected}</{tag}>' not in project:
+        raise SystemExit(f'desktop/WorkAI.csproj <{tag}> must be {expected} (offline/version.json is {version}).')
 name = f'WorkAI-{version}-windows-x64'
 target = args.output / name
 if target.exists():

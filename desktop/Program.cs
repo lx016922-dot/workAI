@@ -21,7 +21,8 @@ namespace WorkAI.Desktop
 {
     internal static class Program
     {
-        public const string Version = "1.0.0";
+        // From the assembly version in WorkAI.csproj; tools/build-desktop.py requires it to equal offline/version.json.
+        public static readonly string Version = typeof(Program).Assembly.GetName().Version.ToString(3);
         public const string Title = "WorkAI 超声导波仿真";
 
         [STAThread]
