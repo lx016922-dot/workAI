@@ -130,7 +130,7 @@ if __name__ == '__main__':
         for case, (_, _, f, cycles) in CASES.items():
             print(case, 'tone burst vs the workbench signal, max |difference|:', float(np.abs(tone_burst(t, f, cycles) - evaluate(scene(case, 1.25)['source'], t)).max()))
         print('sliding-end eigenfrequencies vs SAFE (k = mπ/L, below 1 MHz):', sliding_end_check()); sys.exit()
-    case, p, hx = sys.argv[1], int(sys.argv[2]), float(sys.argv[3]); dtf = float(sys.argv[4]) if len(sys.argv) > 4 else 1.; nr = int(sys.argv[5]) if len(sys.argv) > 5 else 2
+    case, p, hx = sys.argv[1], int(sys.argv[2]), float(sys.argv[3]); dtf = float(sys.argv[4]) if len(sys.argv) > 4 else 1.; nr = int(sys.argv[5]) if len(sys.argv) > 5 else 1
     REF.mkdir(exist_ok=True); path = REF / f'pipe-{case}-p{p}-h{hx:g}-nr{nr}-dt{dtf:g}.npy'
     if not path.exists(): np.save(path, simulate(case, p, hx, nr, dtf))
     print('saved', path)

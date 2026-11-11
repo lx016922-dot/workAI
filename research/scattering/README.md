@@ -1,11 +1,12 @@
-# 缺口与通孔的散射
+# 缺口、通孔与管的散射
 
-2026-11-11。核验离线工作台默认引擎“物理 AI · 冻结网络”计算导波遇到缺口和通孔时的散射。两类缺陷各用一个与软件无关的参考：
+2026-11-11。核验离线工作台默认引擎“物理 AI · 冻结网络”计算导波遇到缺口、通孔时的散射，以及管中的导波和管端反射。每类问题各用一个与软件无关的参考：
 
 - **通孔：** 平面应力解析解（Pao & Mow 级数解），完全不经过软件；
-- **矩形缺口：** 本仓库另一套二维平面应变谱元求解器 `spectral2d`，与网络不共用代码路径。它在比软件细 2–4 倍的网格上计算作为参考，自身收敛程度用两级网格核对；另外也在软件自己的网格尺寸上算一遍，用来区分“网络误差”和“网格误差”。
+- **矩形缺口：** 本仓库另一套二维平面应变谱元求解器 `spectral2d`，与网络不共用代码路径。它在比软件细 2–4 倍的网格上计算作为参考，自身收敛程度用两级网格核对；另外也在软件自己的网格尺寸上算一遍，用来区分“网络误差”和“网格误差”；
+- **管：** 本次新写的两个独立程序：空心圆柱的半解析有限元（SAFE）频散求解器，以及按周向阶数分解的 2.5D 瞬态谱元求解器。两者都不调用软件代码。
 
-缺口算例走工作台的同一条路径：请求校验 → `offline.worker` → 完整 float64 记录 → 结果页取波形用的 `offline.recording.traces`。通孔网格有 8.6 万个节点，超过工作台 3 万节点的显示上限，所以直接调用 worker 内部同一个网络推演函数（`graphnet.rollout`），记录仍用 `offline.recording.traces` 读取。
+缺口算例走工作台的同一条路径：请求校验 → `offline.worker` → 完整 float64 记录 → 结果页取波形用的 `offline.recording.traces`。通孔和管的网格分别有 8.6 万和 6.2 万个节点，超过工作台 3 万节点的显示上限，所以直接调用 worker 内部同一个网络推演函数（`graphnet.rollout`），记录仍用 `offline.recording.traces` 读取。
 
 ## 结论
 
@@ -18,7 +19,12 @@
 - **通孔（S0 入射，ka = 1.16）：** 孔边 5 个方位和 r = 2a 处 3 个方位，共 8 个接收点。
   - 软件的散射场与解析解相差 0.1–0.6%（相对 L2），散射峰值相差 ≤ 0.4%；
   - 总场相差 0.1–0.4%，其中最多约 0.2% 来自三维板中 S0 的真实频散，平面应力模型不含这部分。
-- **只核验了线性响应。** 缺口和孔处的非线性散射（如二次谐波）没有独立参考，未作定量核验。
+- **管（外半径 3 mm、壁厚 1 mm、长 60 mm，两端自由）：** 软件的管只支持直管和端面加载，没有管壁缺陷选项，所以核验的是管中导波和管端反射。
+  - 轴向加载（轴对称 L(0,1)、L(0,2)，0.5 MHz）：24 个接收点 40 μs 全程，与独立的 2.5D 参考相差 3e-5–6e-5，包括管端反射、L(0,2)→L(0,1) 模态转换和多次往返；
+  - 横向加载（弯曲 F(1,1)、F(1,2)，0.25 MHz）：相差 7e-5–1.2e-4；
+  - 轴对称加载下，软件结果在四个方位上一致到 1e-13；
+  - 两个算例的波数–频率谱都落在 SAFE 频散曲线上。
+- **只核验了线性响应。** 缺口、孔和管端的非线性散射（如二次谐波）没有独立参考，未作定量核验。
 
 ## 1. 通孔：平面应力解析解
 
@@ -155,14 +161,77 @@
 
 ![缺口反射与模态转换](figures/fig2-notch-coefficients.png)
 
-## 4. 适用范围
+## 4. 管：导波传播与管端反射
+
+**软件能算的管。** 软件的管是环形截面直管：几何参数只有长度和内、外半径，只能在两个端面加载或设边界。没有管壁缺口或孔的选项，生成管网格的 `spectral3d/curved_mesh.py` 又属于哈希锁定的冻结文件，不能为本次核验改动。因此管中能算的“散射体”只有管端，本节核验两件事：管中导波的传播（频散、模态），以及自由管端的反射和模态转换。
+
+**算例。** 铝管外半径 3 mm、壁厚 1 mm（内半径 2 mm）、长 60 mm，两端自由。环频 c_plate/(2π r_mean) = 346 kHz。
+
+- **轴向加载：** xmin 端面均匀轴向牵引，0.5 MHz、3 周期 Hann 脉冲，只激发轴对称模态（周向阶 n = 0）。
+  - 在环频之上，L(0,1) 与 L(0,2) 都传播；
+  - SAFE 给出 0.5 MHz 的相速 / 群速：L(0,2) 5740 / 4689 m/s（以轴向位移为主），L(0,1) 2152 / 2168 m/s（以径向位移为主）。
+- **横向加载：** xmin 端面均匀 y 向牵引，0.25 MHz、3 周期，只激发弯曲模态（n = 1）。0.25 MHz 时有 F(1,1)（相速 2106 m/s）和刚过截止频率的 F(1,2)。
+- **软件计算：** 4 阶，h 1.25 mm，61760 个节点，记录 40 μs，约 21 min/算例；另算 h 1.0 mm（96400 个节点）看收敛。
+- **接收点：**
+  - x = 15、30、45 mm，外表面附近（r = 2.98 mm）和壁厚中点（r = 2.5 mm），θ = 0°、90°、180°、270°，共 24 点，三个位移分量全取；
+  - 另取外表面一条线（x 2–58 mm，225 点），用于波数–频率分析。
+
+**独立参考一：SAFE 频散求解器**（`scripts/pipe_safe.py`）。把位移写成 U(r) cos nθ e^{i(kx−ωt)}，只离散管壁厚度方向（单个 24 阶 GLL 单元），对每个实波数 k 解对称特征值问题得到 ω。这就是 Hayashi 等（2003）的半解析有限元方法，结果应与 Gazis（1959）空心圆柱的精确频散方程一致。自检：
+
+- T(0,1) 相速等于剪切波速，相差 2e-9；
+- 低频 L(0,1) 等于杆速 √(E/ρ)；
+- 半径 1 m、壁厚 1 mm 的“管”即平板：L(0,2)、L(0,1) 与平板 Rayleigh–Lamb 方程的 S0、A0 相差 1e-6；
+- 12 阶与 24 阶结果相同。
+
+**独立参考二：2.5D 瞬态谱元求解器**（`scripts/pipe_reference.py`）。
+
+- **方法：** 周向阶为 n 的载荷只激发 U(x, r) cos nθ（或 sin nθ）形式的位移，三维问题因此化为 (x, r) 半截面上的二维问题，应变中保留 1/r 和 n/r 项。8 阶 GLL 单元，经典四阶 Runge–Kutta 时间积分。
+- **激励：** 横向均匀牵引 e_y = cos θ e_r − sin θ e_θ，属于 n = 1，径向和周向分量为 (1, −1)。
+- **自检：**
+  - 两端设滑动边界（u_x = 0）时，截面的本征频率应恰好等于 SAFE 在 k = mπ/L 处的频率。1 MHz 以下 n = 0 的 23 个、n = 1 的 34 个频率，最大相差 4e-8；
+  - 6 阶与 8 阶相差 2e-6，时间步减半相差 9e-7；
+  - 激励时程与工作台的信号函数逐点相同。
+
+**一处需要说明的细节：** 工作台的 tone burst 不归一到峰值 1。3 周期 Hann 窗正弦的峰值是 0.9365，只有高斯脉冲、线性调频和多频信号才归一。参考解最初按峰值 1 处理，结果出现处处相同的 6.35% 幅值差；改正后差异降到 1e-4 以下。
+
+**结果**（三个位移分量、40 μs 全程相对 L2）：
+
+| 算例 | 24 个接收点最大 | 中位数 | 外表面线（225 点） | 参考解自检（6 阶 vs 8 阶） |
+|---|---|---|---|---|
+| 轴向加载（n = 0，0.5 MHz） | 6.4e-5 | 5.8e-5 | 5.0e-5 | 2.2e-6 |
+| 横向加载（n = 1，0.25 MHz） | 1.2e-4 | 9.4e-5 | 1.0e-4 | 1.9e-6 |
+
+- **轴对称性：** 轴向加载时，软件在 θ = 0°、90°、180°、270° 四个方位的柱坐标位移彼此一致到 9e-14。三维曲面网格没有引入非轴对称的误差。
+- **管端反射：** 40 μs 内 L(0,2) 传播约 190 mm，在 60 mm 管中往返 1.5 次以上；L(0,1) 传播约 87 mm，到达远端后开始返回。记录包含入射、自由端反射、L(0,2) 与 L(0,1) 之间的模态转换和加载端的再反射，全程误差都在 1.3e-4 以内。
+- **网格收敛：** PIPE_H1
+
+![管中波形](figures/fig5-pipe-waveforms.png)
+
+**波数–频率谱与 SAFE 频散曲线。** 对外表面一条线的位移在时间和空间上做二维傅里叶变换（下图），正波数沿 +x 传播，负波数是管端反射回来的波。
+
+- **能量位置：** 能量都落在 SAFE 曲线上，轴向加载为 L(0,2) 和 L(0,1)，横向加载为 F(1,1) 和 F(1,2)；
+- **载频处的谱峰：** 软件与参考的谱峰波数完全相同。与 SAFE 相比：
+
+| 模态（载频） | SAFE k (rad/m) | 谱峰 k，前行 / 反射 |
+|---|---|---|
+| L(0,2)（0.5 MHz） | 547 | 516 / −546 |
+| L(0,1)（0.5 MHz） | 1460 | 1432 / −1481 |
+| F(1,1)（0.25 MHz） | 746 | 745 / −710 |
+| F(1,2)（0.25 MHz） | 200 | 202 / −277 |
+
+  56 mm 长的线经 Hann 窗后，波数分辨率约 ±110 rad/m，表中偏差都在分辨率以内。波数的精确核对由上面的 2.5D 参考解完成，它的本征频率与 SAFE 一致到 4e-8。
+
+![管的波数–频率谱](figures/fig6-pipe-fk.png)
+
+## 5. 适用范围
 
 - **只核验线性响应：** 缺口和孔处的二次谐波等非线性散射没有独立参考，未作定量核验。
 - **通孔：** 只测了一个 ka（1.16）和一个板厚（1 mm）。平面应力模型只在低 fd 下成立，更高频率需要三维参考。
 - **缺口：** 只测了贯穿宽度的矩形缺口（平面应变）。有限宽度的三维缺口、裂纹（闭合接触）不在本页范围。
+- **管：** 软件没有管壁缺陷，所以管中缺陷散射无法用软件计算，也就无从核验。只测了一种管径（外半径 3 mm、壁厚 1 mm）、两个周向阶数（n = 0、1）和自由管端；扭转模态 T(0,m) 需要周向牵引，软件的端面加载方向是固定矢量，激发不出纯扭转模态。
 - **文献：** 期刊全文在本环境无法读取，文献只用于物理规律（深度、宽度趋势）的定性对照，定量对照用的是上面的独立参考解。
 
-## 5. 计算时间
+## 6. 计算时间
 
 同一台 4 核云机器，同时运行 3–5 个任务，所以以下是偏慢的数字：
 
@@ -173,8 +242,10 @@
 | 无缺口板，h 1 mm | 2.0 万 | 45 μs | 15 min |
 | 通孔板，h 2.5 mm | 8.6 万 | 20 μs | 84 min |
 | 无孔板，h 2.5 mm | 3.3 万 | 20 μs | 11 min |
+| 管，h 1.25 mm | 6.2 万 | 40 μs | 21 min |
+| 管，h 1.0 mm | 9.6 万 | 40 μs | PIPE_T1 |
 
-二维参考解只算线性响应、单线程：h 0.25 mm 每个算例 27–36 min，h 0.5 mm 4–5 min，h 1 mm 约 1 min。
+二维参考解只算线性响应、单线程：h 0.25 mm 每个算例 27–36 min，h 0.5 mm 4–5 min，h 1 mm 约 1 min。管的 2.5D 参考解（8 阶）每个算例约 5 min。
 
 ## 参考文献
 
@@ -183,6 +254,9 @@
 3. M. J. S. Lowe, O. Diligent, *Low-frequency reflection characteristics of the s0 Lamb wave from a rectangular notch in a plate*, J. Acoust. Soc. Am. 111(1), 64–74 (2002)（摘要：反射系数随缺口宽度周期变化，来自缺口两端反射的干涉）。
 4. M. J. S. Lowe, P. Cawley, J.-Y. Kao, O. Diligent, *The low frequency reflection characteristics of the fundamental antisymmetric Lamb wave a0 from a rectangular notch in a plate*, J. Acoust. Soc. Am. 112(6), 2612–2622 (2002)；[DOI 10.1121/1.1512702](https://doi.org/10.1121/1.1512702)（摘要：A0 反射系数随缺口宽度呈余弦型周期变化，来自缺口两端反射的干涉；反射随频率和深度增大）。
 5. G. Kirsch (1898)：无限板圆孔的静力应力集中（经典结果，用于解析解的静力极限自检）。
+6. D. C. Gazis, *Three-dimensional investigation of the propagation of waves in hollow circular cylinders. I. Analytical foundation; II. Numerical results*, J. Acoust. Soc. Am. 31(5), 568–573、573–578 (1959)（书目与摘要：空心圆柱导波的精确频散方程）。
+7. T. Hayashi, W.-J. Song, J. L. Rose, *Guided wave dispersion curves for a bar with an arbitrary cross-section, a rod and rail example*, Ultrasonics 41(3), 175–183 (2003)；[DOI 10.1016/S0041-624X(03)00097-0](https://doi.org/10.1016/S0041-624X(03)00097-0)（摘要：半解析有限元 SAFE 方法）。
+8. M. G. Silk, K. F. Bainton, *The propagation in metal tubing of ultrasonic wave modes equivalent to Lamb waves*, Ultrasonics 17(1), 11–19 (1979)；[DOI 10.1016/0041-624X(79)90006-4](https://doi.org/10.1016/0041-624X(79)90006-4)（书目：L(0,m)、T(0,m)、F(n,m) 模态命名）。
 
 ## 复现
 
@@ -199,7 +273,11 @@ done
 python research/scattering/scripts/analyze_notch.py
 python research/scattering/scripts/hole.py run plate && python research/scattering/scripts/hole.py run hole
 (cd research/scattering/scripts && python hole_theory.py && python analyze_hole.py)
+for c in axial transverse; do for h in 1.25 1; do python research/scattering/scripts/pipe.py run $c $h; done; done   # 管，网络
+(cd research/scattering/scripts && python pipe_safe.py && python pipe_reference.py check \
+   && for c in axial transverse; do python pipe_reference.py $c 8 1 && python pipe_reference.py $c 6 1; done \
+   && python pipe_reference.py axial 6 1 0.5 && python analyze_pipe.py)
 python research/scattering/scripts/plots.py                     # 需要 matplotlib
 ```
 
-结果在 [`results/notch.json`](results/notch.json) 与 [`results/hole.json`](results/hole.json)。参考数组（`reference/*.npy`）可重新生成，不入库。
+结果在 [`results/notch.json`](results/notch.json)、[`results/hole.json`](results/hole.json) 与 [`results/pipe.json`](results/pipe.json)。参考数组（`reference/*.npy`）可重新生成，不入库。

@@ -61,7 +61,7 @@
 - **物理与材料：** [自定义应变能材料（CFRP 等）](docs/materials.md)、[铝材料参数与三阶本构](docs/aluminum-material.md)、[非线性导波核对依据](docs/nonlinear-guided-waves.md)、[COMSOL 非线性实现](docs/nonlinear-comsol.md)
 - **数值求解：** [三维超弹性](docs/solid-hyperelastic.md)、[五组对照](docs/solid-harmonics.md)、[直达波与沿程比较](docs/solid-propagation.md)、[高阶参考解](docs/spectral-reference.md)、[激励 v2](docs/solver-excitation-v2.md)、[平面应变与频散](docs/plane-strain-dispersion.md)、[有限宽截面核对](docs/rectangular-waveguide.md)
 - **扫描与数据：** [参数扫描、数据集与收敛复核](docs/sweep-and-datasets.md)，示例规格在 `docs/examples/`
-- **软件核验：** [与文献和解析解对照（材料、波速、频散、二次谐波、吸收层）](research/literature-verification/README.md)、[1 ms 长记录精度](research/long-record-accuracy/README.md)、[缺口与通孔散射](research/scattering/README.md)
+- **软件核验：** [与文献和解析解对照（材料、波速、频散、二次谐波、吸收层）](research/literature-verification/README.md)、[1 ms 长记录精度](research/long-record-accuracy/README.md)、[缺口、通孔与管的散射](research/scattering/README.md)
 - **物理 AI：** [图网络输入层与 v2 设计](docs/graph-network-input-design.md)、[粗网格算子](docs/coarse-graph-operator.md)、[COMSOL 对照与继续训练总表](research/comsol-validation/README.md)、[5 ms 验证](research/long-validation/README.md)、[继续训练八例复核](research/continued-training/README.md)
 - **早期代理模型：** [物理约束训练](docs/physics-training.md)、[三维跨工况训练](docs/operator-training-3d.md)、[传播表示改进](docs/operator-training-improvement.md)、[谱算子](docs/spectral-operator.md)、[模态能量耦合](docs/modal-energy-training.md)
 - **COMSOL 参考数据：** [仿真要求、数据格式与进度](docs/comsol/comsol-data-request.md)、[P1 数据任务](research/comsol-p1-20261024/README.md)
