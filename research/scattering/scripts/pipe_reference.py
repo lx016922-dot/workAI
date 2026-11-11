@@ -22,11 +22,10 @@ LAM, MU, RHO = 58.1e9, 26.1e9, 2700.
 
 
 def tone_burst(t_us, f_mhz, cycles):
-    """Hann-windowed sine normalised to unit peak (the workbench's tone burst definition)."""
-    def raw(t):
-        x = t * f_mhz / cycles; return np.where((x >= 0) & (x <= 1), .5 * (1 - np.cos(2 * np.pi * x)) * np.sin(2 * np.pi * f_mhz * t), 0.)
-    peak = np.abs(raw(np.linspace(0, cycles / f_mhz, 200001))).max()
-    return raw(np.asarray(t_us, dtype=float)) / peak
+    """Hann-windowed sine, not rescaled (the workbench's tone burst definition: only Gaussian pulses, chirps and multi-tone
+    signals are normalised to unit peak; a 3-cycle Hann tone burst peaks at 0.9365)."""
+    t = np.asarray(t_us, dtype=float); x = t * f_mhz / cycles
+    return np.where((x >= 0) & (x <= 1), .5 * (1 - np.cos(2 * np.pi * x)) * np.sin(2 * np.pi * f_mhz * t), 0.)
 
 
 class Section:
@@ -124,6 +123,12 @@ def sliding_end_check(length=20e-3, fmax=1e6):
 
 if __name__ == '__main__':
     if sys.argv[1] == 'check':
+        # the load history must be the workbench's: compare with physics.signals.evaluate for each case's source
+        from physics.signals import evaluate
+        from pipe import scene
+        t = np.linspace(0, DURATION, 40001)
+        for case, (_, _, f, cycles) in CASES.items():
+            print(case, 'tone burst vs the workbench signal, max |difference|:', float(np.abs(tone_burst(t, f, cycles) - evaluate(scene(case, 1.25)['source'], t)).max()))
         print('sliding-end eigenfrequencies vs SAFE (k = mπ/L, below 1 MHz):', sliding_end_check()); sys.exit()
     case, p, hx = sys.argv[1], int(sys.argv[2]), float(sys.argv[3]); dtf = float(sys.argv[4]) if len(sys.argv) > 4 else 1.; nr = int(sys.argv[5]) if len(sys.argv) > 5 else 2
     REF.mkdir(exist_ok=True); path = REF / f'pipe-{case}-p{p}-h{hx:g}-nr{nr}-dt{dtf:g}.npy'
