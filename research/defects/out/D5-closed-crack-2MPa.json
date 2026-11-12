@@ -1,0 +1,41 @@
+{
+ "case": "D5-closed-crack-2MPa",
+ "nodes": 13077,
+ "h_mm": 1.5353,
+ "steps": 9100,
+ "seconds": 290.55594313099937,
+ "energy_balance": 1.1018241051430637e-05,
+ "contact": {
+  "model": "unilateral_penalty_frictionless",
+  "pairs": 36,
+  "stiffness_per_area_n_m3": {
+   "min": 2464019999999996.5,
+   "median": 2464019999999997.0,
+   "max": 2464019999999997.5
+  },
+  "stability_limited_fraction": 1.0,
+  "omega_dt_max": 0.6,
+  "compression_reflection": {
+   "source_frequency": 0.006600655642259892,
+   "second_harmonic": 0.013200448624021493
+  },
+  "note": "受压时界面靠罚函数弹簧传力（有限刚度带来很小的反射，见 compression_reflection），受拉时张开、无牵引；切向无摩擦。"
+ },
+ "mesh": {
+  "mode": "auto",
+  "degree": 4,
+  "h_mm": 1.5353,
+  "node_spacing_mm": 0.383825,
+  "nodes": 13077,
+  "elements": 160,
+  "min_node_spacing_mm": 0.13813853171680904,
+  "band_top_mhz": 0.8099999999999999,
+  "nodes_per_2f_shear_wavelength": 10.00046269488363,
+  "target": 10.0,
+  "limited_by": "accuracy",
+  "reason": "按 2f 剪切波长 10 个节点选取",
+  "curved": false,
+  "split_nodes": 36,
+  "contact_pairs": 36
+ }
+}
