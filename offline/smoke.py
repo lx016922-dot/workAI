@@ -87,6 +87,22 @@ def main():
             assert len(fast_result['times_us']) == 401 and all(c['energy_balance_within_1_percent'] for c in fast_result['controls'])
             fast_field = np.frombuffer(gzip.decompress(request('/api/jobs/' + fast_job + '/field?part=full')), dtype='<f8')
             assert np.isfinite(fast_field).all() and np.max(abs(fast_field)) > 1e-12
+            # Defects, automatic mesh, text box and one-click defects (1.1): preview, then a short job with a closed crack.
+            cracked = json.loads(json.dumps(fast)); cracked['defects'] = [{'type': 'crack', 'x_mm': 24., 'depth_mm': .5, 'closed': True}]
+            checked = request('/api/preview', {'scene': cracked, 'mesh': 'auto'}, headers)
+            assert checked['ok'] and checked['mesh']['auto']['contact_pairs'] > 0, (checked['errors'], checked.get('mesh'))
+            told = request('/api/interpret', {'text': '在 34 mm 处添加直径 0.6 mm 的通孔；在 8 到 14 mm 之间添加分层，距上表面 0.8 mm', 'scene': cracked}, headers)
+            assert told['changed'] and [d['type'] for d in told['scene']['defects']] == ['crack', 'hole', 'delamination'], told['operations']
+            assert request('/api/preview', {'scene': told['scene'], 'mesh': 'auto'}, headers)['ok']
+            assert request('/api/defect', {'type': 'contact', 'scene': cracked}, headers)['defect']['type'] == 'contact'
+            small = json.loads(json.dumps(cracked)); small['geometry']['length_mm'] = 16.; small['defects'][0]['x_mm'] = 8.
+            small['source']['center_mm'] = [4., 1., 1.6]; small['source']['frequency_mhz'] = .3; small['source']['cycles'] = 2.; small['source']['profile'] = {'type': 'gaussian', 'sigma_mm': 1.}
+            small['boundaries'] = [{'type': 'symmetry', 'face': 'ymax'}]; small['acquisition'] = {'duration_us': 10., 'sample_step_us': .05}
+            small['receivers'] = [{'name': 'after', 'point_mm': [12., 1., 1.6], 'direction': [0., 0., 1.]}]
+            defect_job = request('/api/jobs', {'scene': small, 'mesh': 'auto'}, headers)['job_id']
+            defect_status = wait(defect_job, 1800)
+            defect_result = request('/api/jobs/' + defect_job + '/result?part=full')
+            assert defect_result['scene']['defects'][0]['closed'] is True and all(c['energy_balance_within_1_percent'] for c in defect_result['controls'])
             for bad in [{'Content-Type': 'application/json'}, dict(headers, Origin='https://unrelated.example')]:
                 try:
                     request('/api/jobs', body, bad)
@@ -132,7 +148,8 @@ def main():
                               'weights_sha256': result['neural_model']['weights_sha256'],
                               'original_weights_sha256': info['model']['weights_sha256'], 'elapsed_s': status['elapsed_s'],
                               'duration_us':5000,'full_samples':25001,'controls': 3, 'response_parts': 5, 'authentication_checks': 2, 'invalid_scene_rejected': True,
-                              'fast_engine_models_checked': len(fast_models), 'fast_engine_elapsed_s': fast_status['elapsed_s']}), flush=True)
+                              'fast_engine_models_checked': len(fast_models), 'fast_engine_elapsed_s': fast_status['elapsed_s'],
+                              'defect_job_elapsed_s': defect_status['elapsed_s'], 'text_box_operations': len(told['operations'])}), flush=True)
         finally:
             server.terminate()
             server.wait(timeout=15)

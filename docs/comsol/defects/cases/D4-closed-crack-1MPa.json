@@ -1,0 +1,232 @@
+{
+ "scene": {
+  "schema": "workai.hyperelastic.solid.v2",
+  "name": "D4 闭合裂纹 1 MPa",
+  "constitutive": "linear",
+  "material": {
+   "rho_kg_m3": 2700.0,
+   "lambda_pa": 58100000000.0,
+   "mu_pa": 26100000000.0,
+   "l_pa": -143000000000.0,
+   "m_pa": -297000000000.0,
+   "n_pa": -345000000000.0
+  },
+  "geometry": {
+   "kind": "plate",
+   "length_mm": 60.0,
+   "width_mm": 2.0,
+   "thickness_mm": 1.6,
+   "outer_radius_mm": 3.0,
+   "inner_radius_mm": 2.0,
+   "hole_radius_mm": 0.7,
+   "hole_x_mm": 6.0,
+   "hole_y_mm": 2.0,
+   "notch_x_mm": 6.0,
+   "notch_width_mm": 1.0,
+   "notch_depth_mm": 0.6
+  },
+  "source": {
+   "name": "top",
+   "face": "zmax",
+   "center_mm": [
+    15.0,
+    2.0,
+    1.6
+   ],
+   "radius_mm": 0.0,
+   "direction": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "amplitude_mpa": 1.0,
+   "frequency_mhz": 0.3,
+   "cycles": 5.0,
+   "delay_us": 0.0,
+   "phase_deg": 0.0,
+   "signal": {
+    "type": "tone_burst",
+    "window": "hann"
+   },
+   "profile": {
+    "type": "gaussian",
+    "sigma_mm": 2.0
+   }
+  },
+  "sources": [],
+  "boundary": {
+   "fixed_face": "none"
+  },
+  "boundaries": [
+   {
+    "type": "symmetry",
+    "face": "ymax"
+   },
+   {
+    "type": "absorbing",
+    "face": "xmin",
+    "length_mm": 10.0,
+    "ramp": "cubic",
+    "attenuation_db": 60.0
+   },
+   {
+    "type": "absorbing",
+    "face": "xmax",
+    "length_mm": 10.0,
+    "ramp": "cubic",
+    "attenuation_db": 60.0
+   }
+  ],
+  "acquisition": {
+   "duration_us": 35.0,
+   "sample_step_us": 0.05
+  },
+  "numerics": {
+   "h_mm": 1.0,
+   "cfl": 0.3,
+   "max_elements": 40000
+  },
+  "receivers": [
+   {
+    "name": "top_20",
+    "point_mm": [
+     20.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "top_25",
+    "point_mm": [
+     25.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "top_35",
+    "point_mm": [
+     35.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "top_40",
+    "point_mm": [
+     40.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "top_45",
+    "point_mm": [
+     45.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "mid_20",
+    "point_mm": [
+     20.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "mid_25",
+    "point_mm": [
+     25.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "mid_35",
+    "point_mm": [
+     35.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "mid_40",
+    "point_mm": [
+     40.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "mid_45",
+    "point_mm": [
+     45.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   }
+  ],
+  "defects": [
+   {
+    "type": "crack",
+    "x_mm": 30.0,
+    "depth_mm": 0.8,
+    "from": "top",
+    "closed": true
+   }
+  ]
+ },
+ "mesh": "auto"
+}

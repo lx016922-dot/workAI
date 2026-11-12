@@ -81,7 +81,7 @@ def _signals(scene):
 
 
 def _mesh(scene, degree):
-    from spectral3d.mesh import make_mesh
+    from spectral3d.feature_mesh import make_mesh
     mesh = make_mesh(scene, degree, scene['numerics']['h_mm'])
     out = {'nodes': int(len(mesh['points'])), 'elements': int(len(mesh['elements'])), 'degree': degree, 'h_mm': scene['numerics']['h_mm'],
            'node_spacing_mm': scene['numerics']['h_mm'] / degree}
@@ -109,7 +109,8 @@ def preview(body, data_directory=None):
             out['signals'] = _signals(scene or raw)
         except (ValueError, KeyError, TypeError, ZeroDivisionError, OverflowError) as error:
             if not out['errors']: out['errors'].append(str(error))
-    degree = body.get('degree') if body.get('degree') in (3, 4, 5) else 4
+    degree = request['degree'] if scene is not None else (body.get('degree') if body.get('degree') in (3, 4, 5) else 4)
+    if scene is not None and request.get('mesh_report'): out['mesh_auto'] = request['mesh_report']
     if body.get('engine') == 'coarse':
         # the fast engine runs on the learned model's own coarse grid
         from .coarse_engine import DEFAULT_MODEL, MODELS, model_path, model_summary, out_of_range
@@ -120,6 +121,7 @@ def preview(body, data_directory=None):
     if scene is not None:
         try:
             out['mesh'] = _mesh(scene, degree)
+            if out.get('mesh_auto'): out['mesh']['auto'] = out.pop('mesh_auto')
         except (ValueError, KeyError) as error:
             out['ok'] = False; out['errors'].append(f'网格：{error}')
         from physics.materials import slowest_shear_speed

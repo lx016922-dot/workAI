@@ -65,7 +65,7 @@ export function validateSolidResult(r) {
 }
 export function validateDisplacementLayout(r) {
   const n=r.nodes_mm?.length,t=r.times_us?.length;
-  const nodeLimit=r.engine==='workai_graphwave_offline'?30000:12000;
+  const nodeLimit=r.engine==='workai_graphwave_offline'?60000:12000;
   if(!(n>=4&&n<=nodeLimit&&t>=21&&t<=2001&&r.tetra?.length<=40000&&r.surface?.length<=50000))throw new Error('三维结果超出支持规模。');
   if(!r.nodes_mm.every(p=>p.length===3&&p.every(Number.isFinite))||!r.times_us.every(Number.isFinite))throw new Error('三维坐标或时间无效。');
   for(const [values,width] of [[r.tetra,4],[r.surface,3]])if(!values.every(v=>v.length===width&&new Set(v).size===width&&v.every(i=>Number.isInteger(i)&&i>=0&&i<n)))throw new Error('三维网格连接无效。');

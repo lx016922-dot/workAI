@@ -113,6 +113,7 @@ def check(scene, name=DEFAULT_MODEL):
     from physics.materials import is_custom
     require(isinstance(scene, dict) and scene.get('schema') == 'workai.hyperelastic.solid.v2', '快速引擎只接受 v2 场景。')
     require((scene.get('geometry') or {}).get('kind') == 'plate', '快速引擎只在平板上训练过；孔、缺口和管请用冻结网络。')
+    require(not scene.get('defects'), '快速引擎只在无缺陷的平板上训练过；含裂纹、分层、接触界面、缺口或孔的模型请用冻结网络。')
     require(not is_custom(scene.get('material')), '快速引擎的算子只用训练所用的铝训练过；其他材料请用冻结网络。')
     model = json.loads(model_path(name).read_text(encoding='utf-8'))
     frames = round(scene['acquisition']['duration_us'] / scene['acquisition']['sample_step_us']) + 1

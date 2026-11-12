@@ -8,6 +8,9 @@ export const WINDOW_LABELS = { hann: 'Hann', tukey: 'Tukey', gaussian: 'Gaussian
 export const PROFILE_LABELS = { uniform: '均匀', gaussian: '高斯分布', comb: '梳状（叉指）' };
 export const BOUNDARY_LABELS = { symmetry: '对称面', antisymmetry: '反对称面', absorbing: '吸收层' };
 export const RAMP_LABELS = { linear: '线性', quadratic: '二次', cubic: '三次' };
+export const DEFECT_LABELS = { crack: '裂纹', delamination: '分层', contact: '接触界面', notch: '缺口', hole: '孔' };
+export const DEFECT_ICONS = { crack: 'crack', delamination: 'delamination', contact: 'contact', notch: 'notchDefect', hole: 'holeDefect' };
+export const CRACK_FROM = { top: '上表面开口', bottom: '下表面开口', inside: '内部（埋藏）' };
 
 const clone = value => structuredClone(value);
 const axisOf = face => 'xyz'.indexOf(face[0]);
@@ -124,6 +127,18 @@ export function sourceSummary(source) {
   const kind = sig.type === 'tone_burst' ? `${WINDOW_LABELS[sig.window] || ''} ${source.cycles} 周期` : SIGNAL_LABELS[sig.type];
   return `${FACE_LABELS[source.face] || source.face} · ${PROFILE_LABELS[prof.type]}${source.radius_mm > 0 ? ` r=${source.radius_mm}` : ''} · ${source.frequency_mhz} MHz ${kind}`;
 }
+/** One line for a defect (the backend's offline/nlp.describe says the same in full). */
+export function defectSummary(d) {
+  const f = v => +(+v).toPrecision(6), closed = d.closed ? ' · 闭合' : '';
+  if (d.type === 'crack') return `x ${f(d.x_mm)} · ${CRACK_FROM[d.from || 'top']} · ${d.from === 'inside' ? '高' : '深'} ${f(d.depth_mm)} mm${closed}`;
+  if (d.type === 'delamination') return `x ${f(d.x_start_mm)}–${f(d.x_end_mm)} · 距上表面 ${f(d.depth_mm)} mm${closed}`;
+  if (d.type === 'contact') return d.orientation === 'vertical' ? `竖直截面 x ${f(d.x_mm)} mm` : `水平 x ${f(d.x_start_mm)}–${f(d.x_end_mm)} · 距上表面 ${f(d.depth_mm)} mm`;
+  if (d.type === 'notch') return `x ${f(d.x_mm)} · 宽 ${f(d.width_mm)} · 深 ${f(d.depth_mm)} mm`;
+  return `${(d.axis || 'z') === 'z' ? '通孔' : '横孔'} Φ${f(2 * d.radius_mm)} · x ${f(d.x_mm)} mm`;
+}
+export const defectName = (d, i) => d.name || `${DEFECT_LABELS[d.type] || '缺陷'} ${i + 1}`;
+export function addDefect(scene, defect) { if (scene.geometry.kind !== 'plate') throw Error('缺陷目前只能加在平板上：请先在功能区“几何”中选择平板。'); scene.defects ??= []; if (scene.defects.length >= 12) throw Error('最多 12 个缺陷。'); scene.defects.push(defect); return scene.defects.length - 1; }
+export function removeDefect(scene, index) { scene.defects.splice(index, 1); if (!scene.defects.length) delete scene.defects; }
 export function boundarySummary(b) { return `${BOUNDARY_LABELS[b.type]} · ${FACE_LABELS[b.face]}${b.type === 'absorbing' ? ` · ${b.length_mm} mm ${b.attenuation_db} dB` : ''}`; }
 export function geometrySummary(g) {
   if (g.kind === 'pipe') return `${KIND_LABELS.pipe} L ${g.length_mm} · R ${g.outer_radius_mm}/${g.inner_radius_mm} mm`;
@@ -157,12 +172,14 @@ export function tree(scene) {
  * Hierarchical model-builder tree: model → component (geometry, material, physics with sources / boundaries /
  * receivers, mesh) → study (solver) → results (computed jobs). Node ids are the inspector selections.
  */
-export function treeNodes(scene, { degree = 4, engine = '物理 AI · 冻结网络', jobs = [], phases = {} } = {}) {
-  const src = sourcesOf(scene), bnd = scene.boundaries || [], fixed = scene.boundary.fixed_face !== 'none';
+export function treeNodes(scene, { degree = 4, engine = '物理 AI · 冻结网络', jobs = [], phases = {}, mesh = '' } = {}) {
+  const src = sourcesOf(scene), bnd = scene.boundaries || [], fixed = scene.boundary.fixed_face !== 'none', defects = scene.defects || [];
   const jobIcon = phase => phase === 'completed' ? 'job' : phase === 'failed' ? 'jobBad' : phase === 'paused' ? 'jobPaused' : 'jobRunning';
   return { id: 'scene', label: scene.name, icon: 'document', children: [
     { id: 'component', label: '组件 1', icon: 'component', detail: KIND_LABELS[scene.geometry.kind], children: [
       { id: 'geometry', label: '几何 1', icon: 'geometry', detail: geometrySummary(scene.geometry) },
+      ...(scene.geometry.kind === 'plate' ? [{ id: 'defects', label: '缺陷', icon: 'folder', count: defects.length, add: 'defect', children: defects.map((d, i) =>
+        ({ id: `defect:${i}`, label: defectName(d, i), icon: DEFECT_ICONS[d.type], detail: defectSummary(d), removable: true })) }] : []),
       { id: 'material', label: '材料', icon: 'material', detail: materialSummary(scene.material) },
       { id: 'physics', label: '超声导波（固体力学）', icon: 'physics', detail: '非线性弹性动力学', children: [
         { id: 'sources', label: '激励源', icon: 'folder', count: src.length, add: 'source', children: src.map((s, i) =>
@@ -173,7 +190,7 @@ export function treeNodes(scene, { degree = 4, engine = '物理 AI · 冻结网�
         { id: 'receivers', label: '接收点', icon: 'folder', count: scene.receivers.length, add: 'receiver', children: scene.receivers.map((r, i) =>
           ({ id: `receiver:${i}`, label: r.name, icon: 'receiver', detail: `(${r.point_mm.join(', ')}) mm`, removable: scene.receivers.length > 1 })) },
       ] },
-      { id: 'mesh', label: '网格 1', icon: 'mesh', detail: `h ${scene.numerics.h_mm} mm · p ${degree}` },
+      { id: 'mesh', label: '网格 1（自动）', icon: 'mesh', detail: mesh || '软件自动选择' },
     ] },
     { id: 'study', label: '研究 1 · 瞬态', icon: 'study', detail: `${scene.acquisition.duration_us} μs · Δt ${scene.acquisition.sample_step_us} μs`, children: [
       { id: 'engine', label: '求解器配置', icon: 'engine', detail: engine },

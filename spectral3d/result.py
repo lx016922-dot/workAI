@@ -24,7 +24,7 @@ def surface_triangles(elements):
 
 def result_record(job_id,scene,mesh,computed):
     field=computed['fields_m'];raw=np.asarray(field,dtype='<f8').tobytes()
-    if not np.isfinite(field).all() or len(raw)>192*1024**2 or len(mesh['points'])>30000 or mesh['elements'].size>100000:
+    if not np.isfinite(field).all() or len(raw)>192*1024**2 or len(mesh['points'])>60000 or mesh['elements'].size>200000:
         raise ValueError('高阶位移场超出浏览器大小限制。')
     surface=surface_triangles(mesh['elements'])
     if len(surface)>50000:raise ValueError('高阶表面网格超过显示预算。')

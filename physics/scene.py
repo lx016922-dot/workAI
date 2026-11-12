@@ -133,7 +133,7 @@ def validate_scene(value):
     """Version-1 scenes pass through unchanged; version-2 scenes return a normalized copy."""
     require(isinstance(value, dict), '场景需要是对象。')
     if value.get('schema') != V2: return validate_v1(value)
-    s = copy.deepcopy(value); extra_sources = s.pop('sources', []); extra_boundaries = s.pop('boundaries', [])
+    s = copy.deepcopy(value); extra_sources = s.pop('sources', []); extra_boundaries = s.pop('boundaries', []); defects = s.pop('defects', None)
     dim = s.pop('dimension', '3d'); lines = s.pop('receiver_lines', []); require(dim in DIMENSIONS, 'dimension 需为 3d 或 2d_plane_strain。')
     require(isinstance(extra_sources, list) and len(extra_sources) <= MAX_SOURCES - 1, f'额外激励最多 {MAX_SOURCES - 1} 个。')
     primary = s['source'] if isinstance(s.get('source'), dict) else {}
@@ -154,11 +154,17 @@ def validate_scene(value):
     core['boundaries'] = _validate_boundaries(extra_boundaries, core)
     core['dimension'] = dim; core['receiver_lines'] = _validate_lines(lines, core)
     if is_plane_strain(core): _plane_strain_checks(core)
+    if defects:
+        from .defects import validate_defects
+        require(not is_plane_strain(core), '缺陷模型是三维模型，不能声明为二维平面应变。')
+        core['defects'] = validate_defects(defects, core)
+    else: require(defects in (None, []), '缺陷需为列表。')
     return core
 
 def spectral_admissible(scene):
     """What the GLL solvers can load: parametric shapes and complete planar faces (pipes: x ends)."""
     kind = scene['geometry']['kind']; require(kind in ('plate', 'pipe', 'hole', 'notch'), '高阶计算支持参数化板、管、通孔和缺口。')
+    require(not scene.get('defects') or kind == 'plate', '缺陷目前只能加在平板上。')
     require(not is_plane_strain(scene), '该场景声明为二维平面应变，请使用 spectral2d 求解器。')
     for src in sources(scene):
         require(src['face'] in FACES, '高阶计算的激励需放在坐标平面端面上，不支持曲面局部区域。')
