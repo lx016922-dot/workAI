@@ -75,7 +75,9 @@ jobs:
           $checks = Get-Content smoke\workbench.json -Raw -Encoding utf8
           $checks
           $c = $checks | ConvertFrom-Json
-          if ($c.treeRows -lt 10 -or $c.ribbonButtons -lt 10 -or -not ($c.app -match '1\.0')) { throw 'The workbench did not render completely' }
+          $v = '${{ steps.pkg.outputs.version }}'
+          if ($c.treeRows -lt 10 -or $c.ribbonButtons -lt 10 -or -not $c.app.Contains("WorkAI $v ")) { throw 'The workbench did not render completely' }
+          if (-not (Select-String -Path smoke\data\logs\server.log -SimpleMatch "[launcher] WorkAI $v " -Quiet)) { throw "WorkAI.exe does not report version $v" }
       - name: Computation smoke test in the packaged runtime (API, 5 ms prediction, export)
         shell: pwsh
         timeout-minutes: 60

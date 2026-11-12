@@ -93,7 +93,7 @@ function boundaryForm(scene, index) {
   const b = scene.boundaries[index], p = `boundaries.${index}`;
   let body = sel('类型', `${p}.type`, b.type, BOUNDARY_LABELS, { action: 'boundary-type' }) + sel('作用面', `${p}.face`, b.face, Object.fromEntries(FACES.map(f => [f, FACE_LABELS[f]])));
   if (b.type === 'absorbing') body += num('层厚', `${p}.length_mm`, b.length_mm, { unit: 'mm', min: 0 }) + sel('阻尼分布', `${p}.ramp`, b.ramp, RAMP_LABELS) + num('目标衰减', `${p}.attenuation_db`, b.attenuation_db, { unit: 'dB', min: 1, max: 200 });
-  const notes = { symmetry: '对称面：法向位移为零，切向自由。用来只算半个模型。', antisymmetry: '反对称面：切向位移为零，法向自由。', absorbing: '质量比例阻尼层 f = −ρ₀α(d)∂u/∂t，α 按层内深度的幂次增加，峰值由层厚和目标衰减确定；三个分量都加。不会改动材料本构。' };
+  const notes = { symmetry: '对称面（镜像面）：几何、材料和所有激励都关于这个面镜像对称时，只建一半模型，结果与整块板相同、计算量减半。面上法向位移为零，切向自由。例：默认模板半宽 2 mm 加 y 最大面对称，代表 4 mm 宽的整板。', antisymmetry: '反对称面：几何和材料关于这个面对称、激励镜像后反向时（例如垂直于该面的力）用它只算一半。面上切向位移为零，法向自由。', absorbing: '质量比例阻尼层 f = −ρ₀α(d)∂u/∂t，α 按层内深度的幂次增加，峰值由层厚和目标衰减确定；三个分量都加。不会改动材料本构。' };
   return section('边界条件', body + `<div class="wb-field wide"><button type="button" class="wb-button danger small" data-action="remove" data-id="boundary:${index}">删除此边界</button></div>`, notes[b.type]);
 }
 

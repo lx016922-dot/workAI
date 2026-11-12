@@ -33,6 +33,11 @@ EXCITATIONS = {'labels-a-top-gaussian': '顶面高斯', 'labels-b-end-axial': '�
 TRAINED_FACES = ('zmax', 'zmin', 'xmin', 'xmax')  # top/bottom (A, C) and end faces (B); the plate is mirror-symmetric
 
 
+def model_digest(path):
+    """SHA-256 of a model file as committed (LF line endings), so a checkout that rewrote them to CRLF still matches its evaluation."""
+    return hashlib.sha256(Path(path).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+
+
 def model_path(name=DEFAULT_MODEL):
     require(name in MODELS, f'粗网格模型需为 {"、".join(MODELS)} 之一。')
     return MODELS_DIRECTORY / name / 'model.json'
@@ -49,7 +54,7 @@ def by_excitation(path=MODEL):
     file = Path(path).parent / EXCITATION_EVALUATION
     if not file.exists(): return None
     evaluation = json.loads(file.read_text(encoding='utf-8'))
-    require(evaluation['model_sha256'] == hashlib.sha256(Path(path).read_bytes()).hexdigest(), f'{EXCITATION_EVALUATION} 不是这个模型的评估。')
+    require(evaluation['model_sha256'] == model_digest(path), f'{EXCITATION_EVALUATION} 不是这个模型的评估。')
     gll = {r['key']: r for r in evaluation['evaluation']['baseline_gll']['rows']}; rows = []
     for group, label in EXCITATIONS.items():
         test = [r for r in evaluation['evaluation']['learned']['rows'] if r['split'] == 'test' and r['key'].split(':')[0] == group]
@@ -70,7 +75,7 @@ def model_summary(path=MODEL):
     return {'name': Path(path).parent.name, 'label': MODELS.get(Path(path).parent.name, Path(path).parent.name), 'degree': model['degree'], 'h_mm': model['h_mm'], 'parameters': model['parameter_count'],
             'test_cases': test['pairs'], 'test_passed': test['passed'], 'baseline_test_passed': base['passed'],
             'test_worst_waveform_l2': test['worst_waveform_l2'], 'test_worst_increment_a2': test['worst_increment_a2'], 'test_by_excitation': forms or [],
-            'coarse_nodes_example': model['cost']['coarse_nodes'], 'model_sha256': hashlib.sha256(Path(path).read_bytes()).hexdigest()}
+            'coarse_nodes_example': model['cost']['coarse_nodes'], 'model_sha256': model_digest(path)}
 
 
 def _tested(forms, group):

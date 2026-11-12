@@ -1,5 +1,8 @@
 # Preserve frozen model evidence byte-for-byte on every platform.
 offline/model/* -text
+# Learned coarse-graph models: evaluation files record the SHA-256 of model.json, so a Windows checkout
+# (core.autocrlf) must not rewrite their line endings.
+coarsegraph/models/** -text
 graphwave/*.py text eol=lf
 spectral3d/*.py text eol=lf
 solid/*.py text eol=lf

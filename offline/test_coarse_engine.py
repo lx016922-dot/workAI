@@ -72,6 +72,24 @@ class FastEngine(unittest.TestCase):
         self.assertEqual([r['group'] for r in forms], list(EXCITATIONS))
         self.assertEqual(sum(r['cases'] for r in forms), model_summary()['test_cases']); self.assertEqual(sum(r['passed'] for r in forms), model_summary()['test_passed'])
 
+    def test_a_windows_checkout_with_crlf_line_endings_still_matches_its_evaluation(self):
+        # v1.0.0 on Windows: core.autocrlf rewrote model.json to CRLF and every fast-engine preview failed with
+        # "evaluation-abcd.json 不是这个模型的评估。"
+        for name in MODELS:
+            source = REPO / 'coarsegraph/models' / name
+            with tempfile.TemporaryDirectory() as tmp:
+                copy_dir = Path(tmp) / name; copy_dir.mkdir()
+                for file in ('model.json', 'evaluation-abcd.json'):
+                    (copy_dir / file).write_bytes((source / file).read_bytes().replace(b'\n', b'\r\n'))
+                self.assertIn(b'\r\n', (copy_dir / 'model.json').read_bytes())
+                crlf = model_summary(copy_dir / 'model.json')
+                self.assertEqual(crlf['model_sha256'], model_summary(source / 'model.json')['model_sha256'])
+                self.assertEqual([r['group'] for r in crlf['test_by_excitation']], list(EXCITATIONS))
+                tampered = json.loads((source / 'model.json').read_text(encoding='utf-8')); tampered['h_mm'] += 1
+                (copy_dir / 'model.json').write_text(json.dumps(tampered), encoding='utf-8')
+                with self.assertRaises(ValueError) as caught: model_summary(copy_dir / 'model.json')
+                self.assertIn('不是这个模型的评估', str(caught.exception))
+
     def test_a_job_runs_and_exports_the_five_responses(self):
         for name, duration in [(DEFAULT_MODEL, 20.), ('p4-h2-multisource', 20.)]:
             with self.subTest(model=name): self._job(name, duration)
