@@ -2,6 +2,7 @@
 import {
   FACES, FACE_LABELS, KIND_LABELS, SIGNAL_LABELS, WINDOW_LABELS, PROFILE_LABELS, BOUNDARY_LABELS, RAMP_LABELS,
   getPath, setPath, sourceAt, setSignalType, setProfileType, setSourceFace, inwardNormal, parseSamples, extent,
+  DEFECT_LABELS, CRACK_FROM, defectName,
 } from './scene-model.js';
 
 import { escapeHtml } from './inspector-util.js';
@@ -37,7 +38,8 @@ function geometryForm(scene) {
   else body += num('宽度 Y', `${p}.width_mm`, g.width_mm, { unit: 'mm' }) + num('厚度 Z', `${p}.thickness_mm`, g.thickness_mm, { unit: 'mm' });
   if (g.kind === 'hole') body += num('孔半径', `${p}.hole_radius_mm`, g.hole_radius_mm, { unit: 'mm' }) + num('孔中心 X', `${p}.hole_x_mm`, g.hole_x_mm, { unit: 'mm' }) + num('孔中心 Y', `${p}.hole_y_mm`, g.hole_y_mm, { unit: 'mm' });
   if (g.kind === 'notch') body += num('缺口中心 X', `${p}.notch_x_mm`, g.notch_x_mm, { unit: 'mm' }) + num('缺口宽度', `${p}.notch_width_mm`, g.notch_width_mm, { unit: 'mm' }) + num('缺口深度', `${p}.notch_depth_mm`, g.notch_depth_mm, { unit: 'mm' });
-  return section('几何', body, g.kind === 'pipe' ? '管轴为 X，截面中心在 Y = Z = 0；管只能在 X 端面加载。' : '坐标原点在板的一角，X 为长度方向，Z 为厚度方向。') +
+  return section('几何', body, g.kind === 'pipe' ? '管轴为 X，截面中心在 Y = Z = 0；管只能在 X 端面加载。' : '坐标原点在板的一角，X 为长度方向，Z 为厚度方向（Z 最大为上表面）。' +
+      (g.kind === 'plate' ? '裂纹、孔、分层、接触界面和缺口在功能区“几何 → 一键添加缺陷”中添加，也可以在顶部文字框里描述，例如“在 100 mm 处添加裂纹”。' : '')) +
     section('名称', text('场景名称', 'name', scene.name, 100));
 }
 
@@ -123,11 +125,62 @@ function engineForm(engine = 'network', coarseModel = DEFAULT_COARSE_MODEL) {
       : '求解器是冻结图网络（物理 AI）：学到的求导、能量和状态更新逐时前向传播，不调用有限元求解器，也不做预测后的数值校正。精度由节点间距决定，见“消息”窗口中的 2f 分辨率；新模型要用细网格参考逐例核对。');
 }
 
-function meshForm(scene, degree) {
-  const n = scene.numerics;
-  return section('网格与物理 AI 图', num('单元尺寸 h', 'numerics.h_mm', n.h_mm, { unit: 'mm', min: .8, max: 2.5 }) +
-      `<label class="wb-field"><span>图阶次 p</span><select data-action="degree">${[3, 4, 5].map(d => `<option value="${d}" ${d === degree ? 'selected' : ''}>${d}</option>`).join('')}</select><small>节点间距 = h / p</small></label>`,
-    'GLL 六面体网格（曲面用等参映射）。节点数、记录大小和每个激励的 2f 分辨率显示在“消息”窗口；长记录（≥ 100 个周期）建议 2f 分辨率不低于 15。');
+function meshForm(scene, auto) {
+  const rule = '软件按每个激励的 −30 dB 带宽和二次谐波（2f）自动选择单元尺寸：2f 剪切波长内的节点数目标为 10（记录 ≥ 1 ms 时为 15，按 1 ms 平板实测末段误差约 0.1%），'
+    + '单元尺寸限定在网络验证过的 0.8–2.5 mm、阶次 4；网格线穿过每个缺陷的边缘（裂纹尖端、分层前沿、缺口角点、孔的 O 型网格），节点数不超过 60 000。';
+  if (!auto) return section('网格（自动）', '<p class="wb-note">正在根据当前模型选择网格…（模型有错误时显示在“消息”窗口）</p>', rule);
+  const f = (v, d = 3) => (+v).toFixed(d).replace(/\.?0+$/, '');
+  const rows = [['单元尺寸 h', `${f(auto.h_mm)} mm`], ['阶次 p', auto.degree], ['节点间距 h / p', `${f(auto.node_spacing_mm)} mm（最小 ${f(auto.min_node_spacing_mm)} mm）`],
+    ['2f 分辨率', `${f(auto.nodes_per_2f_shear_wavelength, 1)} 个节点 / 2f 剪切波长（目标 ${auto.target}）`], ['二次谐波上限', `${f(auto.band_top_mhz)} MHz（−30 dB 带宽上限的 2 倍）`],
+    ['规模', `${auto.nodes.toLocaleString()} 个节点 · ${auto.elements.toLocaleString()} 个单元${auto.curved ? ' · 含曲边（孔）' : ''}`], ['选择依据', auto.reason]];
+  if (auto.split_nodes) rows.push(['缺陷面', `分开 ${auto.split_nodes} 个节点${auto.contact_pairs ? `，${auto.contact_pairs} 对接触` : ''}`]);
+  return section('网格（自动）', `<table class="wb-table">${rows.map(([k, v]) => `<tr><th>${escapeHtml(k)}</th><td>${escapeHtml(String(v))}</td></tr>`).join('')}</table>` +
+    (auto.warning ? `<p class="wb-note warn">${escapeHtml(auto.warning)}</p>` : ''), rule);
+}
+
+const SPLIT_NOTE = '缺陷面上的节点一分为二，两侧独立运动；位于材料内部的前沿（裂纹尖端）保持连接，位于外表面或对称面上的边缘张开。';
+const CONTACT_NOTE = '闭合：两个面静止时贴合，受压时由罚函数弹簧传递法向力，受拉时张开、不传力，切向无摩擦（“呼吸”裂纹，产生接触非线性的高次谐波）。罚刚度取时间层稳定允许的最大值，受压时的残余反射显示在计算结果的诊断中。';
+function defectForm(scene, index) {
+  const d = scene.defects[index], p = `defects.${index}`, T = scene.geometry.thickness_mm;
+  let body = text('名称', `${p}.name`, defectName(d, index), 40) + `<div class="wb-field"><span>类型</span><b>${escapeHtml(DEFECT_LABELS[d.type])}</b></div>`, note = '';
+  if (d.type === 'crack') {
+    body += num('位置 x', `${p}.x_mm`, d.x_mm, { unit: 'mm' }) + sel('起始面', `${p}.from`, d.from || 'top', CRACK_FROM, { action: 'defect-shape' }) +
+      num(d.from === 'inside' ? '高度' : '深度', `${p}.depth_mm`, d.depth_mm, { unit: 'mm', min: .1, max: T }) + (d.from === 'inside' ? num('中心高度 z', `${p}.z_mm`, d.z_mm, { unit: 'mm', hint: '从底面算起' }) : '') +
+      check('闭合（接触，呼吸裂纹）', `${p}.closed`, d.closed);
+    note = '竖直裂纹面垂直于 X，贯穿板宽。' + SPLIT_NOTE + (d.closed ? CONTACT_NOTE : '');
+  } else if (d.type === 'delamination') {
+    body += num('起点 x', `${p}.x_start_mm`, d.x_start_mm, { unit: 'mm' }) + num('终点 x', `${p}.x_end_mm`, d.x_end_mm, { unit: 'mm' }) +
+      num('距上表面', `${p}.depth_mm`, d.depth_mm, { unit: 'mm', min: .1, max: T }) + check('闭合（接触）', `${p}.closed`, d.closed);
+    note = '水平分层面平行于板面，贯穿板宽。' + SPLIT_NOTE + (d.closed ? CONTACT_NOTE : '');
+  } else if (d.type === 'contact') {
+    body += sel('方向', `${p}.orientation`, d.orientation, { vertical: '竖直截面（整个横截面）', horizontal: '水平层间' }, { action: 'defect-shape' });
+    body += d.orientation === 'vertical' ? num('位置 x', `${p}.x_mm`, d.x_mm, { unit: 'mm' })
+      : num('起点 x', `${p}.x_start_mm`, d.x_start_mm, { unit: 'mm' }) + num('终点 x', `${p}.x_end_mm`, d.x_end_mm, { unit: 'mm' }) + num('距上表面', `${p}.depth_mm`, d.depth_mm, { unit: 'mm', min: .1, max: T });
+    note = '接触界面：' + CONTACT_NOTE + '适合闭合裂纹、弱粘接（kissing bond）和两件对接。';
+  } else if (d.type === 'notch') {
+    body += num('中心 x', `${p}.x_mm`, d.x_mm, { unit: 'mm' }) + num('宽度', `${p}.width_mm`, d.width_mm, { unit: 'mm', min: .1 }) + num('深度', `${p}.depth_mm`, d.depth_mm, { unit: 'mm', min: .1, max: T }) +
+      sel('开口面', `${p}.from`, d.from || 'top', { top: '上表面', bottom: '下表面' });
+    note = '矩形槽，贯穿板宽；槽内的单元被删除。';
+  } else {
+    body += sel('孔的方向', `${p}.axis`, d.axis || 'z', { z: '通孔（贯穿板厚）', y: '横孔（贯穿板宽，侧钻孔）' }, { action: 'defect-shape' }) +
+      num('中心 x', `${p}.x_mm`, d.x_mm, { unit: 'mm' }) + num('直径', `${p}.radius_mm`, d.radius_mm, { unit: 'mm', min: .2, scale: .5 }) +
+      ((d.axis || 'z') === 'z' ? num('中心 y', `${p}.y_mm`, d.y_mm, { unit: 'mm' }) : num('中心高度 z', `${p}.z_mm`, d.z_mm, { unit: 'mm', hint: '从底面算起' }));
+    const mirrored = (scene.boundaries || []).some(b => b.type === 'symmetry' && b.face === 'ymax') && (d.axis || 'z') === 'z';
+    note = '孔周围是贴合孔边的曲边网格（O 型网格），与周围网格逐节点连接。' + (mirrored ? '注意：模型在 Y 最大面对称，这个孔在整体模型中会被镜像为两个孔。' : '');
+  }
+  return section(DEFECT_LABELS[d.type], body + `<div class="wb-field wide"><button type="button" class="wb-button danger small" data-action="remove" data-id="defect:${index}">删除此缺陷</button></div>`, note);
+}
+
+/** Switching a defect's variant (crack origin, contact orientation, hole axis) adds or drops the fields that depend on it. */
+export function reshapeDefect(d, scene) {
+  const { length_mm: L, width_mm: W, thickness_mm: T } = scene.geometry, r = v => +(+v).toFixed(4);
+  if (d.type === 'crack') { if (d.from === 'inside') { d.z_mm ??= r(T / 2); d.depth_mm = Math.min(d.depth_mm, r(T - .3)); } else delete d.z_mm; }
+  if (d.type === 'contact') {
+    if (d.orientation === 'vertical') { const x = d.x_mm ?? ((d.x_start_mm + d.x_end_mm) / 2 || L / 2); for (const k of ['x_start_mm', 'x_end_mm', 'depth_mm', 'y_range_mm']) delete d[k]; d.x_mm = r(x); }
+    else { const x = d.x_mm ?? L / 2; delete d.x_mm; d.x_start_mm = r(Math.max(.2, x - 5)); d.x_end_mm = r(Math.min(L - .2, x + 5)); d.depth_mm = r(T / 2); }
+  }
+  if (d.type === 'hole') { if ((d.axis || 'z') === 'z') { delete d.z_mm; d.y_mm ??= r(W / 2); } else { delete d.y_mm; d.z_mm ??= r(T / 2); d.radius_mm = Math.min(d.radius_mm, r(T / 2 - .2)); } }
+  return d;
 }
 
 function fixedForm(scene) {
@@ -155,7 +208,9 @@ export function inspectorMarkup(scene, selection, degree, context = {}) {
   if (kind === 'fixed') return fixedForm(scene);
   if (kind === 'study') return recordForm(scene);
   if (kind === 'engine') return engineForm(context.engine, context.coarseModel);
-  if (kind === 'mesh') return meshForm(scene, degree);
+  if (kind === 'mesh') return meshForm(scene, context.meshAuto);
+  if (kind === 'defect') return defectForm(scene, index);
+  if (kind === 'defects') return section('缺陷', '<p class="wb-note">在功能区“几何 → 一键添加缺陷”中添加裂纹、孔、分层、接触界面或缺口，或在顶部文字框里描述（例如“在 100 mm 处添加深 0.5 mm 的裂纹”）。缺陷之间需至少相隔 0.2 mm。</p>');
   if (['scene', 'component', 'physics', 'results'].includes(kind)) return overviewForm(scene, kind);
   if (kind === 'sources') return section('激励源', '<p class="wb-note">点击“+”添加激励源，或选中一个激励编辑。每个激励有独立的加载面、方向、时间信号和空间分布。</p>');
   if (kind === 'boundaries') return section('边界条件', '<p class="wb-note">点击“+”添加对称面、反对称面、吸收层或固定面。</p>');
@@ -183,6 +238,7 @@ export function bindInspector(root, scene, state, onChange) {
         else if (el.dataset.action === 'profile-type') setProfileType(sourceAt(scene, sourceIndex()), el.value);
         else if (el.dataset.action === 'source-face') setSourceFace(scene, sourceAt(scene, sourceIndex()), el.value);
         else if (el.dataset.action === 'boundary-type') { const b = scene.boundaries[sourceIndex()]; const face = b.face; Object.keys(b).forEach(k => delete b[k]); Object.assign(b, el.value === 'absorbing' ? { type: 'absorbing', face, length_mm: Math.min(8, extent(scene.geometry).size['xyz'.indexOf(face[0])] / 4), ramp: 'cubic', attenuation_db: 60 } : { type: el.value, face }); }
+        else if (el.dataset.action === 'defect-shape') { setPath(scene, path, el.value); reshapeDefect(scene.defects[sourceIndex()], scene); }
         else if (el.dataset.action === 'geometry-kind') { scene.geometry.kind = el.value; if (el.value === 'pipe') for (const s of [scene.source, ...(scene.sources || [])]) if (s.face[0] !== 'x') setSourceFace(scene, s, 'xmin'); }
         else setPath(scene, path, el.value);
         onChange(el.dataset.action ? 'structure' : (path.endsWith('.name') || path.startsWith('geometry') || path.includes('face') ? 'structure' : 'value'));
@@ -192,7 +248,6 @@ export function bindInspector(root, scene, state, onChange) {
   if (state.selection === 'material') bindMaterial(root, scene, state.materials || {}, onChange);
   root.querySelectorAll('select[data-action="engine"]').forEach(el => el.addEventListener('change', () => { state.engine = el.value; onChange('structure'); }));
   root.querySelectorAll('select[data-action="coarse-model"]').forEach(el => el.addEventListener('change', () => { state.coarseModel = el.value; onChange('structure'); }));
-  root.querySelectorAll('select[data-action="degree"]').forEach(el => el.addEventListener('change', () => { state.degree = Number(el.value); onChange('value'); }));
   root.querySelectorAll('button[data-action]').forEach(el => el.addEventListener('click', () => {
     const action = el.dataset.action;
     try {

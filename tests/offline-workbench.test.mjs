@@ -111,3 +111,30 @@ test('result validation accepts the fast engine and nothing else new', async () 
     assert.throws(() => validateSpectralResult({ ...base, engine }), err => !/离线网络结果格式不正确/.test(err.message));  // passes the engine gate, fails later on the empty layout
   assert.throws(() => validateSpectralResult({ ...base, engine: 'other' }), /离线网络结果格式不正确/);
 });
+
+test('defects: one line each, add / remove on plates only, tree folder, variant switches and the 3D view', async () => {
+  const { defectSummary, addDefect, removeDefect, treeNodes, DEFECT_LABELS, defectName } = await import('../offline/web/scene-model.js');
+  const { reshapeDefect, inspectorMarkup } = await import('../offline/web/inspector.js');
+  const { drawScene } = await import('../offline/web/model-view.js');
+  const s = workbenchTemplates({ plate: v1 }).gaussian.scene;
+  assert.deepEqual(Object.keys(DEFECT_LABELS), ['crack', 'delamination', 'contact', 'notch', 'hole']);
+  const crack = { type: 'crack', x_mm: 24, depth_mm: .5, from: 'top', closed: true };
+  assert.equal(addDefect(s, crack), 0); assert.equal(addDefect(s, { type: 'hole', x_mm: 30, y_mm: 1, radius_mm: .5 }), 1);
+  assert.match(defectSummary(crack), /x 24 · 上表面开口 · 深 0.5 mm · 闭合/); assert.equal(defectName(crack, 0), '裂纹 1');
+  assert.match(defectSummary(s.defects[1]), /通孔 Φ1/);
+  const folder = treeNodes(s, { mesh: 'h 1.2 mm' }).children[0].children.find(n => n.id === 'defects');
+  assert.deepEqual(folder.children.map(n => n.id), ['defect:0', 'defect:1']); assert.equal(folder.add, 'defect');
+  assert.equal(treeNodes(s, { mesh: 'h 1.2 mm' }).children[0].children.find(n => n.id === 'mesh').detail, 'h 1.2 mm');
+  assert.match(inspectorMarkup(s, 'defect:0', 4, {}), /闭合（接触，呼吸裂纹）/);
+  assert.match(inspectorMarkup(s, 'mesh', 4, { meshAuto: { h_mm: 1.2, degree: 4, node_spacing_mm: .3, min_node_spacing_mm: .1, nodes_per_2f_shear_wavelength: 10, target: 10, band_top_mhz: 1, nodes: 9000, elements: 100, reason: '按 2f', split_nodes: 36, contact_pairs: 36 } }), /36 对接触/);
+  assert.doesNotMatch(inspectorMarkup(s, 'mesh', 4, {}), /data-path="numerics.h_mm"/);   // no mesh inputs: the software chooses
+  const contact = reshapeDefect({ type: 'contact', orientation: 'horizontal', x_mm: 20 }, s);
+  assert.equal(contact.x_mm, undefined); assert.ok(contact.x_end_mm > contact.x_start_mm); assert.ok(contact.depth_mm > 0);
+  const hole = reshapeDefect({ type: 'hole', axis: 'y', x_mm: 30, y_mm: 1, radius_mm: .5 }, s); assert.equal(hole.y_mm, undefined); assert.equal(hole.z_mm, .8);
+  const ctx = new Proxy({}, { get: (_, k) => (k === 'measureText' ? () => ({ width: 10 }) : () => {}), set: () => true });
+  const canvas = { clientWidth: 800, clientHeight: 500, width: 800, height: 500, getContext: () => ctx };
+  const picks = drawScene(canvas, s, { yaw: -.6, pitch: .5, zoom: 1, exaggerate: true, grid: false, selected: 'defect:0' });
+  assert.ok(picks.some(p => p.id === 'defect:0') && picks.some(p => p.id === 'defect:1'));
+  removeDefect(s, 0); removeDefect(s, 0); assert.equal(s.defects, undefined);
+  const pipe = structuredClone(s); pipe.geometry.kind = 'pipe'; assert.throws(() => addDefect(pipe, crack), /平板/);
+});

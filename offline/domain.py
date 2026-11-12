@@ -93,14 +93,24 @@ def validate_v2_request(body):
     ratio = duration / sample
     if abs(ratio - round(ratio)) > 1e-7 or round(ratio) > 200000:
         raise ValueError('时长需要为采样间隔的整数倍，最多 200001 个采样点。')
-    h = raw.get('numerics', {}).get('h_mm')
-    if type(h) not in (int, float) or not .8 <= h <= 2.5:
-        raise ValueError('网格尺寸需要在 0.8–2.5 mm 之间。')
-    s = _bounded_network_scene(raw, body['degree'], load(body['degree'], long_record=True)['material'])
+    report = None
+    if body.get('mesh') == 'auto':
+        # The software chooses the degree and element size (offline/automesh.py); any h_mm in the scene is replaced.
+        from .automesh import choose
+        if not isinstance(raw.get('numerics'), dict): raise ValueError('场景需要 numerics。')
+        s, report = choose(raw, lambda trial, degree: _bounded_network_scene(trial, degree, load(degree, long_record=True)['material']))
+        degree = report['degree']
+    else:
+        h = raw.get('numerics', {}).get('h_mm')
+        if type(h) not in (int, float) or not .8 <= h <= 2.5:
+            raise ValueError('网格尺寸需要在 0.8–2.5 mm 之间。')
+        degree = body['degree']
+        s = _bounded_network_scene(raw, degree, load(degree, long_record=True)['material'])
     for src in sources(s):
         if sample * 2 * highest_frequency_mhz(src) > 1 / 8 + 1e-12:
             raise ValueError(f'{src.get("name", "主激励")}：二次谐波最高频率至少需要 8 个输出采样点/周期。')
-    return {'scene': s, 'degree': body['degree']}
+    if report is None: return {'scene': s, 'degree': degree}
+    return {'scene': s, 'degree': degree, 'mesh': 'auto', 'mesh_report': report}
 
 
 def _bounded_network_scene(raw, degree, material):
@@ -132,8 +142,22 @@ ENGINES = ('network', 'coarse')
 
 
 def validate_request(body):
-    if not isinstance(body, dict) or set(body) - {'engine', 'coarse_model'} != {'scene', 'degree'} or type(body['degree']) is not int or body['degree'] not in (3, 4, 5):
-        raise ValueError('需要场景与 3/4/5 阶图设置。')
+    """A job request: {'scene', 'mesh': 'auto'} (the software chooses the mesh) or {'scene', 'degree'} with the scene's h_mm;
+    optional 'engine' and 'coarse_model'. A stored request's 'mesh_report' is recomputed, never trusted."""
+    if not isinstance(body, dict) or 'scene' not in body:
+        raise ValueError('需要场景。')
+    body = {k: v for k, v in body.items() if k != 'mesh_report'}
+    if set(body) - {'scene', 'degree', 'mesh', 'engine', 'coarse_model'}:
+        raise ValueError('请求只能包含 scene、degree、mesh、engine、coarse_model。')
+    auto = body.get('mesh') == 'auto'
+    if 'mesh' in body and not auto:
+        raise ValueError('mesh 只能为 auto（软件自动选择网格）。')
+    if auto:
+        body.pop('degree', None)
+        if not (isinstance(body['scene'], dict) and body['scene'].get('schema') == V2):
+            raise ValueError('自动网格需要 v2 场景。')
+    elif type(body.get('degree')) is not int or body['degree'] not in (3, 4, 5):
+        raise ValueError('需要场景与 3/4/5 阶图设置（或 mesh: auto）。')
     engine = body.get('engine', 'network')
     if engine not in ENGINES:
         raise ValueError('计算引擎需为 network（冻结网络）或 coarse（粗网格算子）。')
@@ -146,10 +170,18 @@ def validate_request(body):
         from .coarse_engine import DEFAULT_MODEL, check, model_path
         name = body.get('coarse_model', DEFAULT_MODEL); model_path(name)
         check(body['scene'], name)  # the engine's own limits first, so a refusal names them
-        result = validate_v2_request({'scene': body['scene'], 'degree': body['degree']}); check(result['scene'], name)
+        if auto:
+            # The fast engine runs on its model's own coarse grid: validate the scene at the accuracy-based size, without the fine-mesh budget.
+            from .automesh import DEGREE, H_MAX, H_MIN, accuracy_h
+            scene = copy.deepcopy(body['scene'])
+            if not isinstance(scene.get('numerics'), dict): raise ValueError('场景需要 numerics。')
+            scene['numerics']['h_mm'] = round(min(H_MAX, max(H_MIN, accuracy_h(scene))), 4)
+            result = dict(validate_v2_request({'scene': scene, 'degree': DEGREE}), mesh='auto')
+        else: result = validate_v2_request({k: v for k, v in body.items() if k in ('scene', 'degree')})
+        check(result['scene'], name)
         return dict(result, engine='coarse', coarse_model=name)
     if isinstance(body['scene'], dict) and body['scene'].get('schema') == V2:
-        return validate_v2_request({'scene': body['scene'], 'degree': body['degree']})
+        return validate_v2_request({k: v for k, v in body.items() if k in ('scene', 'degree', 'mesh')})
     raw = copy.deepcopy(body['scene'])
     signal = raw.pop('signal', {'kind': 'hann'})
     if not isinstance(signal, dict):

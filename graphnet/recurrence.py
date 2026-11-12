@@ -12,6 +12,10 @@ change:
 
 With α = 0 the update is the frozen one. The damped form is the central-difference
 equivalent of mass-proportional damping m ü + m α u̇ = f with the centred velocity.
+
+Contact interfaces (closed cracks, closed delaminations, `graphnet.contact`) add the gradient of the
+unilateral penalty energy to the element messages and the energy itself to the strain energy; with no
+contact pairs the arrays are empty and the update is unchanged.
 """
 import numpy as np
 from numba import njit, prange
@@ -20,8 +24,30 @@ from graphwave.buffered_inference import graph_message as buffered_message
 
 
 @njit(cache=True)
+def contact_terms(position, message, ca, cb, cn, ck):
+    """Add ∂U_c/∂u of the unilateral contact energy to `message` in place; return U_c."""
+    energy = 0.
+    for i in range(len(ca)):
+        a = ca[i]; b = cb[i]; gap = 0.
+        for c in range(3): gap += (position[b, c] - position[a, c]) * cn[i, c]
+        if gap < 0.:
+            force = ck[i] * gap; energy += .5 * force * gap
+            for c in range(3):
+                message[b, c] += force * cn[i, c]; message[a, c] -= force * cn[i, c]
+    return energy
+
+
+@njit(cache=True)
 def forward(cells, derivative, inverse, volume, mass, loads, signals, free, alpha, damped,
             quadratic, cubic, state_weights, law, dt, subdivisions, frames):
+    """Short record without contact interfaces (the original signature)."""
+    return forward_with_contact(cells, derivative, inverse, volume, mass, loads, signals, free, alpha, damped, quadratic, cubic, state_weights, law, dt, subdivisions, frames,
+                                np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64), np.zeros((0, 3)), np.zeros(0))
+
+
+@njit(cache=True)
+def forward_with_contact(cells, derivative, inverse, volume, mass, loads, signals, free, alpha, damped,
+                         quadratic, cubic, state_weights, law, dt, subdivisions, frames, ca, cb, cn, ck):
     nodes = len(mass); sources = loads.shape[0]
     current = np.zeros((nodes, 3)); previous = np.zeros((nodes, 3)); last_external = np.zeros((nodes, 3)); last_velocity = np.zeros((nodes, 3))
     fields = np.zeros((frames, nodes, 3)); energy_log = np.zeros((frames, 5))
@@ -32,6 +58,7 @@ def forward(cells, derivative, inverse, volume, mass, loads, signals, free, alph
         message, potential, strain, jac = graph_message(current, cells, derivative, inverse, volume, quadratic, cubic, law)
         if not np.isfinite(potential) or strain > .001 or jac <= 0:
             raise ValueError('Graph recurrence violates strain/J/finite-energy guard.')
+        potential += contact_terms(current, message, ca, cb, cn, ck)
         max_strain = max(max_strain, strain); min_j = min(min_j, jac)
         external = np.zeros((nodes, 3))
         for k in range(sources): external += loads[k] * signals[k, step]
@@ -62,7 +89,7 @@ def forward(cells, derivative, inverse, volume, mass, loads, signals, free, alph
 def _segment(position, velocity, acceleration, previous_external, work, dissipated,
              cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
              law, dt, subdivisions, start_step, end_step, include_initial, signals,
-             prior_potential, prior_max_strain, prior_min_j):
+             prior_potential, prior_max_strain, prior_min_j, ca, cb, cn, ck):
     """Long record: the frozen symmetric three-stage composition, each stage a damped velocity-Verlet layer."""
     count = (end_step - start_step) // subdivisions + (1 if include_initial else 0)
     nodes = len(mass); sources = loads.shape[0]
@@ -84,6 +111,7 @@ def _segment(position, velocity, acceleration, previous_external, work, dissipat
                 # No raise here: an exception inside the parallel caller reaches Python as an opaque SystemError.
                 # Report the step instead; the caller raises a readable error and keeps the last complete chunk.
                 return fields, energies, position, velocity, acceleration, previous_external, work, dissipated, potential, max(max_strain, strain), min(min_j, jac), step
+            potential += contact_terms(next_position, message, ca, cb, cn, ck)
             max_strain, min_j = max(max_strain, strain), min(min_j, jac)
             external = np.zeros((nodes, 3))
             for k in range(sources): external += loads[k] * signals[k, step - start_step - 1, stage]
@@ -112,13 +140,13 @@ def _segment(position, velocity, acceleration, previous_external, work, dissipat
 @njit(cache=True, parallel=True)
 def three_segments(positions, velocities, accelerations, externals, works, dissipations, potentials, strains, jacobians,
                    cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
-                   dt, subdivisions, start_step, end_step, include_initial, signals):
+                   dt, subdivisions, start_step, end_step, include_initial, signals, ca, cb, cn, ck):
     count = (end_step - start_step) // subdivisions + (1 if include_initial else 0)
     fields = np.empty((3, count, len(mass), 3)); energies = np.empty((3, count, 5)); failed = np.full(3, -1, dtype=np.int64)
     for law in prange(3):
         row = _segment(positions[law], velocities[law], accelerations[law], externals[law], works[law], dissipations[law],
                        cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
-                       law, dt, subdivisions, start_step, end_step, include_initial, signals, potentials[law], strains[law], jacobians[law])
+                       law, dt, subdivisions, start_step, end_step, include_initial, signals, potentials[law], strains[law], jacobians[law], ca, cb, cn, ck)
         fields[law], energies[law] = row[0], row[1]
         positions[law], velocities[law], accelerations[law], externals[law] = row[2], row[3], row[4], row[5]
         works[law], dissipations[law], potentials[law], strains[law], jacobians[law] = row[6], row[7], row[8], row[9], row[10]

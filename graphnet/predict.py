@@ -5,7 +5,8 @@ from solid.schema import require
 from graphwave.inference import inverse_mapping
 from .inputs import build, signal_table, resolution
 from .model import energy_layer, speed_bound
-from .recurrence import forward
+from .recurrence import forward_with_contact
+from .contact import arrays as contact_arrays, stiffness as contact_stiffness
 
 LAWS = ('linear', 'stvk', 'murnaghan')
 FORBIDDEN = ('spectral3d.solver', 'spectral3d.curved_solver', 'spectral3d.implicit', 'solid.fem')
@@ -39,10 +40,11 @@ def predict(scene, mesh, model, laws=(0, 1, 2), callback=None):
     signals = signal_table(inputs, np.arange(steps + 1) * dt * 1e6)
     damped = inputs['alpha'] is not None; alpha = inputs['alpha'] if damped else np.zeros(len(mesh['mass']))
     inverse = inverse_mapping(mesh); fields = {}; rows = []; quadratic, cubic, layer = energy_layer(scene, model)
+    ca, cb, cn, _ = contact_arrays(mesh); ck, contact = contact_stiffness(mesh, scene, dt)
     for law in laws:
         started = time.monotonic()
-        field, energy, strain, jac = forward(mesh['elements'], weights[f'derivative_{degree}'], inverse, mesh['volume_weight'], mesh['mass'], inputs['loads'], signals,
-                                             inputs['free'], alpha, damped, quadratic, cubic, weights['state_weights'], law, dt, subdivisions, frames)
+        field, energy, strain, jac = forward_with_contact(mesh['elements'], weights[f'derivative_{degree}'], inverse, mesh['volume_weight'], mesh['mass'], inputs['loads'], signals,
+                                             inputs['free'], alpha, damped, quadratic, cubic, weights['state_weights'], law, dt, subdivisions, frames, ca, cb, cn, ck)
         stored = energy[:, 1] + energy[:, 2] + energy[:, 4]; scale = max(np.max(np.abs(energy[:, 3])), np.max(np.abs(stored)), 1e-30)
         balance = float(np.max(np.abs(stored - energy[:, 3])) / scale)
         columns = ['time_us', 'kinetic_j', 'strain_j', 'external_work_j'] + (['dissipated_j'] if damped else [])
@@ -51,7 +53,8 @@ def predict(scene, mesh, model, laws=(0, 1, 2), callback=None):
                      'max_strain': float(strain), 'min_J': float(jac), 'external_work_balance_relative': balance, 'energy_balance_within_1_percent': balance <= .01,
                      'dissipated_energy_j': float(energy[-1, 4]), 'energy_columns': columns, 'energy_samples': energy[:, :len(columns)].tolist(),
                      'signal_peaks': [float(np.max(np.abs(v))) for v in signals], 'loaded_area_mm2': inputs['area_m2'] * 1e6, 'resolution': resolution(scene, mesh),
-                     'neural_forward_only': True, 'numerical_correction': False, 'reference_responses_read': False, **layer, **inputs['summary']})
+                     'neural_forward_only': True, 'numerical_correction': False, 'reference_responses_read': False, **layer, **inputs['summary'],
+                     **({'contact': contact} if contact else {})})
         fields[LAWS[law]] = field
         if callback: callback(rows[-1])
     return {'fields': fields, 'diagnostics': rows, 'route': 'v2_input_layer', 'inputs': inputs}

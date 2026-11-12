@@ -114,7 +114,9 @@ export function previewMessages(p) {
   if (p.ok) rows.push({ kind: 'ok', text: '模型检查通过，可以计算。' });
   for (const e of p.errors || []) rows.push({ kind: 'error', text: e });
   if (p.engine) rows.push({ kind: p.engine.out_of_training_range.length ? 'warn' : 'info', text: `快速引擎 ${p.engine.label || p.engine.name}：留出测试 ${p.engine.test_passed}/${p.engine.test_cases} 通过${p.engine.out_of_training_range.length ? `；超出训练范围 ${p.engine.out_of_training_range.length} 项：${p.engine.out_of_training_range.join('；')}` : '；在训练范围内'}` });
-  if (p.mesh) rows.push({ kind: 'info', text: `${p.engine ? '粗网格' : '网格'}：${p.mesh.elements.toLocaleString()} 个单元，${p.mesh.nodes.toLocaleString()} 个节点，阶次 p = ${p.mesh.degree}` });
+  if (p.mesh) rows.push({ kind: 'info', text: `${p.engine ? '粗网格（模型自带）' : p.mesh.auto ? '自动网格' : '网格'}：${p.mesh.elements.toLocaleString()} 个单元，${p.mesh.nodes.toLocaleString()} 个节点，阶次 p = ${p.mesh.degree}`
+    + (p.mesh.auto && !p.engine ? `，单元 ${+p.mesh.auto.h_mm.toFixed(3)} mm（${p.mesh.auto.reason}）${p.mesh.auto.split_nodes ? `；缺陷面分开 ${p.mesh.auto.split_nodes} 个节点${p.mesh.auto.contact_pairs ? `，${p.mesh.auto.contact_pairs} 对接触` : ''}` : ''}` : '') });
+  if (p.mesh?.auto?.warning && !p.engine) rows.push({ kind: 'warn', text: p.mesh.auto.warning });
   if (p.record) rows.push({ kind: 'info', text: `记录：${p.record.samples.toLocaleString()} 个采样点，完整记录约 ${fmtBytes(p.record.uncompressed_bytes)}${p.record.free_bytes ? `，磁盘可用 ${fmtBytes(p.record.free_bytes)}` : ''}` });
   for (const r of p.resolution || []) {
     const n = r.nodes_per_2f_shear_wavelength;

@@ -11,6 +11,7 @@ export const RIBBON = [
     { label: '模型', items: [L('new', '新建', 'new', { menu: 'templates', tip: '从模板新建模型' }), L('open', '打开', 'open', { tip: '打开模型文件（Ctrl+O）' }), L('save', '保存', 'save', { tip: '保存模型文件（Ctrl+S）' })] },
     { label: '编辑', items: [S('undo', '撤销', 'undo', { tip: '撤销（Ctrl+Z）' })] },
     { label: '定义', items: [L('sel:geometry', '几何', 'geometry'), L('sel:material', '材料', 'material')] },
+    { label: '缺陷', items: [L('add:defect', '添加缺陷', 'crack', { menu: 'defect', tip: '一键添加裂纹、孔、分层、接触界面或缺口；也可在上方文字框描述' })] },
     { label: '物理场', items: [L('add:source', '激励源', 'source', { tip: '添加一个激励源' }), L('add:boundary', '边界条件', 'boundary', { menu: 'boundary', tip: '添加边界条件' }), L('add:receiver', '接收点', 'receiver', { tip: '添加一个接收点' })] },
     { label: '网格', items: [L('sel:mesh', '网格', 'mesh')] },
     { label: '研究', items: [L('run', '计算', 'compute', { primary: true, tip: '用物理 AI 网络计算当前模型（F8）' }), S('pause', '暂停', 'pause', { tip: '当前分块保存后暂停（5 ms 及以上的长记录）' }), S('resume', '继续', 'resume', { tip: '从检查点继续计算' }), S('sel:study', '研究设置', 'study')] },
@@ -18,7 +19,9 @@ export const RIBBON = [
   ] },
   { id: 'geometry', label: '几何', groups: [
     { label: '结构类型', items: [L('kind:plate', '平板', 'geometry'), L('kind:pipe', '圆管', 'geometry'), L('kind:hole', '带通孔板', 'geometry'), L('kind:notch', '带缺口板', 'geometry')] },
-    { label: '设置', items: [L('sel:geometry', '几何设置', 'geometry')] },
+    { label: '一键添加缺陷', items: [L('add-defect:crack', '裂纹', 'crack', { tip: '表面开口裂纹（可改为内部、闭合）' }), L('add-defect:hole', '孔', 'holeDefect', { tip: '贯穿板厚的通孔（可改为横孔）' }),
+      L('add-defect:delamination', '分层', 'delamination', { tip: '水平分层（可设为闭合）' }), L('add-defect:contact', '接触界面', 'contact', { tip: '受压传力、受拉张开的接触面' }), L('add-defect:notch', '缺口', 'notchDefect', { tip: '矩形槽' })] },
+    { label: '设置', items: [L('sel:geometry', '几何设置', 'geometry'), S('sel:defects', '缺陷列表', 'folder'), S('focus-command', '文字描述', 'command', { tip: '用文字描述修改模型（例如：在 100 mm 处添加裂纹）' })] },
     { label: '视图', items: [S('view:iso', '等轴视图', 'viewIso'), S('view:front', '正视 XZ', 'viewFront'), S('view:top', '俯视 XY', 'viewTop'), S('view:side', '侧视 YZ', 'viewSide'), S('toggle:thin', '放大薄方向', 'thin')] },
   ] },
   { id: 'material', label: '材料', groups: [
@@ -30,7 +33,7 @@ export const RIBBON = [
     { label: '接收', items: [L('add:receiver', '添加接收点', 'receiver'), S('sel:receivers', '接收点列表', 'receiver')] },
   ] },
   { id: 'mesh', label: '网格', groups: [
-    { label: '网格', items: [L('sel:mesh', '网格设置', 'mesh'), S('toggle:grid', '显示单元网格', 'grid')] },
+    { label: '网格（自动）', items: [L('sel:mesh', '网格信息', 'mesh', { tip: '网格由软件自动选择，这里查看所选尺寸与依据' }), S('toggle:grid', '显示单元网格', 'grid')] },
   ] },
   { id: 'study', label: '研究', groups: [
     { label: '计算', items: [L('run', '计算', 'compute', { primary: true }), S('pause', '暂停', 'pause'), S('resume', '继续', 'resume')] },
@@ -107,7 +110,7 @@ export function mountRibbon(root, app) {
     ev.stopPropagation();
     if (b.dataset.menu) {
       const rows = app.menu(b.dataset.menu);
-      return openPop(b, menuHtml(rows), pick => app.command(b.dataset.menu === 'boundary' ? `add-boundary:${pick}` : `template:${pick}`));
+      return openPop(b, menuHtml(rows), pick => app.command(b.dataset.menu === 'boundary' ? `add-boundary:${pick}` : b.dataset.menu === 'defect' ? `add-defect:${pick}` : `template:${pick}`));
     }
     closePop(); app.command(b.dataset.cmd);
   });

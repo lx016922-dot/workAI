@@ -102,6 +102,7 @@ export function drawScene(canvas, scene, view) {
     if (g.kind === 'hole') drawHole(ctx, project, g, min, size, facing);
     if (g.kind === 'notch') drawNotch(ctx, project, g, size, facing);
   }
+  if (g.kind === 'plate') (scene.defects || []).forEach((d, i) => drawDefect(ctx, project, d, size, facing, view.selected === `defect:${i}`, i, picks));
 
   // fibre direction of an anisotropic strain-energy material, drawn on the top face
   if (scene.material?.model === 'energy' && g.kind !== 'pipe' && facing('zmax')) drawFibres(ctx, project, min, size, scene.material.fiber_angle_deg || 0);
@@ -229,6 +230,43 @@ function drawNotch(ctx, project, g, size, facing) {
   const a = g.notch_x_mm - g.notch_width_mm / 2, b = g.notch_x_mm + g.notch_width_mm / 2, top = size[2], bottom = size[2] - g.notch_depth_mm;
   if (facing('zmax')) polygon(ctx, [[a, 0, top], [b, 0, top], [b, size[1], top], [a, size[1], top]].map(project), '#f7f9fa', '#5d7383', 1.2);
   for (const y of [0, size[1]]) if (facing(y ? 'ymax' : 'ymin')) polygon(ctx, [[a, y, top], [b, y, top], [b, y, bottom], [a, y, bottom]].map(project), '#f7f9fa', '#5d7383', 1.2);
+}
+
+const DEFECT_COLOR = '#c0392b', CONTACT_COLOR = '#d1461a';
+/** Cracks, delaminations and contact interfaces as planes, notches as grooves, holes as cylinders; adds a pick target per defect. */
+function drawDefect(ctx, project, d, size, facing, selected, index, picks) {
+  const [L, W, T] = size, stroke = selected ? COLORS.selected : (d.type === 'contact' || d.closed ? CONTACT_COLOR : DEFECT_COLOR), lw = selected ? 3 : 1.8;
+  const fill = d.type === 'contact' || d.closed ? 'rgba(209,70,26,.28)' : 'rgba(192,57,43,.32)';
+  let centre;
+  const plane = corners => { const q = corners.map(project); polygon(ctx, q, fill, stroke, lw); centre = q.reduce((a, p) => [a[0] + p[0] / q.length, a[1] + p[1] / q.length], [0, 0]); };
+  if (d.type === 'crack' || (d.type === 'contact' && d.orientation === 'vertical')) {
+    const z = d.type === 'contact' ? [0, T] : d.from === 'bottom' ? [0, d.depth_mm] : d.from === 'inside' ? [d.z_mm - d.depth_mm / 2, d.z_mm + d.depth_mm / 2] : [T - d.depth_mm, T];
+    const [y0, y1] = d.y_range_mm || [0, W];
+    if (d.closed || d.type === 'contact') ctx.setLineDash([4, 3]);
+    plane([[d.x_mm, y0, z[0]], [d.x_mm, y1, z[0]], [d.x_mm, y1, z[1]], [d.x_mm, y0, z[1]]]); ctx.setLineDash([]);
+  } else if (d.type === 'delamination' || d.type === 'contact') {
+    const z = T - d.depth_mm, [y0, y1] = d.y_range_mm || [0, W];
+    if (d.closed || d.type === 'contact') ctx.setLineDash([4, 3]);
+    plane([[d.x_start_mm, y0, z], [d.x_end_mm, y0, z], [d.x_end_mm, y1, z], [d.x_start_mm, y1, z]]); ctx.setLineDash([]);
+  } else if (d.type === 'notch') {
+    const a = d.x_mm - d.width_mm / 2, b = d.x_mm + d.width_mm / 2, [y0, y1] = d.y_range_mm || [0, W];
+    const [z0, z1] = (d.from || 'top') === 'top' ? [T - d.depth_mm, T] : [0, d.depth_mm], open = (d.from || 'top') === 'top' ? z1 : z0;
+    if (facing((d.from || 'top') === 'top' ? 'zmax' : 'zmin')) polygon(ctx, [[a, y0, open], [b, y0, open], [b, y1, open], [a, y1, open]].map(project), '#f7f9fa', stroke, lw);
+    for (const y of [y0, y1]) if (facing(y > 0 ? 'ymax' : 'ymin')) polygon(ctx, [[a, y, z0], [b, y, z0], [b, y, z1], [a, y, z1]].map(project), '#f7f9fa', stroke, lw);
+    plane([[a, y0, z0], [b, y0, z0], [b, y1, z0], [a, y1, z0]]);
+  } else {
+    const n = 40, r = d.radius_mm, axis = d.axis || 'z';
+    const ring = at => Array.from({ length: n }, (_, k) => { const c = Math.cos(2 * Math.PI * k / n) * r, s = Math.sin(2 * Math.PI * k / n) * r; return axis === 'z' ? [d.x_mm + c, d.y_mm + s, at] : [d.x_mm + c, at, d.z_mm + s]; });
+    const ends = axis === 'z' ? [['zmax', T], ['zmin', 0]] : [['ymax', W], ['ymin', 0]];
+    for (const [face, at] of ends) if (facing(face)) polygon(ctx, ring(at).map(project), '#f7f9fa', stroke, lw);
+    const a = ring(ends[0][1]).map(project), b = ring(ends[1][1]).map(project);
+    ctx.strokeStyle = stroke; ctx.lineWidth = 1; ctx.beginPath(); for (const k of [0, n / 4, n / 2, 3 * n / 4]) { ctx.moveTo(a[k][0], a[k][1]); ctx.lineTo(b[k][0], b[k][1]); } ctx.stroke();
+    centre = a.reduce((s, p) => [s[0] + p[0] / n, s[1] + p[1] / n], [0, 0]);
+  }
+  if (centre) {
+    picks.push({ id: `defect:${index}`, x: centre[0], y: centre[1], r: 14 });
+    ctx.fillStyle = selected ? '#8a6d00' : '#8e2b20'; ctx.font = '600 11px Inter, "Microsoft YaHei", sans-serif'; ctx.fillText(d.name || `${index + 1}`, centre[0] + 8, centre[1] - 10);
+  }
 }
 
 function drawPipe(ctx, P, g, view) {

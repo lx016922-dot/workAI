@@ -16,7 +16,8 @@ import numpy as np
 from solid.schema import require
 from physics.receivers import receiver_points
 from physics.runs import write_run_outputs
-from spectral3d.mesh import make_mesh, interpolation
+from spectral3d.mesh import interpolation
+from spectral3d.feature_mesh import make_mesh
 from .model import load, MODEL
 from .inputs import network_scene
 from .predict import predict, LAWS, FORBIDDEN

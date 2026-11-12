@@ -248,7 +248,7 @@ def handler(application):
             try:
                 self.local_request()
                 match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume)',self.path)
-                if self.path not in ('/api/jobs', '/api/preview', '/api/shutdown') and not match:
+                if self.path not in ('/api/jobs', '/api/preview', '/api/shutdown', '/api/interpret', '/api/defect') and not match:
                     raise FileNotFoundError()
                 if not secrets.compare_digest(self.headers.get('X-WorkAI-Token', ''), application.token):
                     raise PermissionError('请刷新应用页面后重试。')
@@ -270,6 +270,24 @@ def handler(application):
                     return self.reply(202,application.control(job,action))
                 if self.path == '/api/preview':
                     return self.reply(200, preview(body, application.data))
+                if self.path == '/api/interpret':
+                    # Text box: Chinese or English sentences → operations on the current scene (offline/nlp.py); nothing is applied here.
+                    if not isinstance(body, dict) or set(body) != {'text', 'scene'}:
+                        raise ValueError('需要 text 与 scene。')
+                    from .nlp import interpret
+                    return self.reply(200, interpret(body['text'], body['scene']))
+                if self.path == '/api/defect':
+                    # One-click defect: a default of the requested type placed clear of the existing ones (physics/defects.py).
+                    if not isinstance(body, dict) or set(body) != {'type', 'scene'}:
+                        raise ValueError('需要 type 与 scene。')
+                    from physics.defects import TYPES, default_defect, validate_defect
+                    from .nlp import describe
+                    if body['type'] not in TYPES or not isinstance(body['scene'], dict) or (body['scene'].get('geometry') or {}).get('kind') != 'plate':
+                        raise ValueError('缺陷只能加在平板上；类型需为裂纹、分层、接触界面、缺口或孔。')
+                    existing = list(body['scene'].get('defects') or [])
+                    defect = default_defect(body['type'], body['scene'], existing)
+                    validate_defect(defect, body['scene'], len(existing))
+                    return self.reply(200, {'defect': defect, 'summary': describe(defect)})
                 if self.path == '/api/shutdown':
                     # The desktop window asks the local server to stop: running work is paused at its checkpoint by close().
                     self.reply(202, {'message': '正在退出。'})

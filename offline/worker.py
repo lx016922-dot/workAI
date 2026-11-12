@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 import numpy as np
 from graphwave.predict import predict
-from spectral3d.mesh import make_mesh, boundary_data, interpolation
+from spectral3d.mesh import boundary_data, interpolation
+from spectral3d.feature_mesh import make_mesh
 from spectral3d.result import result_record, surface_triangles
 from .domain import MODEL, PARTS, V2, digest, model_info, validate_request
 from graphwave.long_rollout import rollout
@@ -90,7 +91,9 @@ def run(directory):
             weights = dict(saved)
         publish(phase='meshing', message='正在生成几何连接图')
         mesh = make_mesh(scene, request['degree'], scene['numerics']['h_mm'])
-        if len(mesh['points']) > 30000 or mesh['elements'].size > 100000 or len(mesh['points']) * 281 * 24 > 192 * 1024**2 or len(surface_triangles(mesh['elements'])) > 50000:
+        # Display budget: v2 records show a frame-subsampled animation (offline.recording.preview), the short v1 record all 281 frames.
+        nodes_limit, entries_limit = (60000, 200000) if network_v2 else (30000, 100000)
+        if len(mesh['points']) > nodes_limit or mesh['elements'].size > entries_limit or (not network_v2 and len(mesh['points']) * 281 * 24 > 192 * 1024**2) or len(surface_triangles(mesh['elements'])) > 50000:
             raise ValueError('网格超过离线显示预算，请增大网格尺寸。')
         extra = None
         if network_v2:

@@ -58,7 +58,9 @@ def traces(directory, part, points):
 
 def preview(directory):
     m = manifest(directory)
-    indices = np.unique(np.linspace(0,m['frame_count']-1,min(281,m['frame_count']),dtype=int))
+    # Animation frames: up to 281, fewer for large meshes so one response stays within the 192 MiB display budget.
+    shown = max(2, min(281, m['frame_count'], (192 * 1024**2) // (m['nodes'] * 3 * 8)))
+    indices = np.unique(np.linspace(0,m['frame_count']-1,shown,dtype=int))
     fields = np.empty((3,len(indices),m['nodes'],3))
     energy_scale = np.zeros(3); energy_error = np.zeros(3)
     for row, data in chunks(directory,m):
