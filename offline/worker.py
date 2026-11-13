@@ -18,7 +18,12 @@ from .recording import preview, display_preview
 def write_json(path, value):
     temp = path.with_suffix(path.suffix + '.tmp')
     temp.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + '\n', encoding='utf-8')
-    temp.replace(path)
+    for attempt in range(40):   # Windows refuses the replace while the application is reading the file: retry for a moment
+        try:
+            return temp.replace(path)
+        except PermissionError:
+            if attempt == 39: raise
+            time.sleep(.05)
 
 
 def export_results(directory, scene, mesh, fields, diagnostics, info, times=None, recording=None, extra=None):

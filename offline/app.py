@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 import zipfile
 from datetime import datetime, timezone
@@ -26,10 +27,21 @@ REPOSITORY = ROOT.parent
 APP = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
 
 
+def replace(temp, path):
+    """Atomic replace. On Windows it is refused while another process has the target open (the server reading a status
+    the worker is writing, or the reverse), so it is retried for a moment."""
+    for attempt in range(40):
+        try:
+            return temp.replace(path)
+        except PermissionError:
+            if attempt == 39: raise
+            time.sleep(.05)
+
+
 def save(path, value):
     temp = path.with_suffix('.tmp')
     temp.write_text(json.dumps(value, ensure_ascii=False, allow_nan=False), encoding='utf-8')
-    temp.replace(path)
+    replace(temp, path)
 
 
 class Application:
@@ -64,12 +76,30 @@ class Application:
         return p
 
     def status(self, job):
-        return json.loads((self.path(job) / 'status.json').read_text(encoding='utf-8'))
+        path = self.path(job) / 'status.json'
+        for attempt in range(40):   # Windows: the worker may be replacing the file at this instant
+            try:
+                return json.loads(path.read_text(encoding='utf-8'))
+            except PermissionError:
+                if attempt == 39: raise
+                time.sleep(.05)
+
+    def idle(self, wait_s=15):
+        """True when no worker is running. A worker publishes its final status before its process ends, so one that has
+        already finished is given a moment to exit instead of refusing the next computation."""
+        process = self.process
+        if process is None or process.poll() is not None: return True
+        try:
+            if self.status(self.current)['phase'] not in ('completed', 'failed', 'paused'): return False
+            process.wait(timeout=wait_s)
+        except (OSError, ValueError, KeyError, subprocess.TimeoutExpired):
+            return False
+        return True
 
     def submit(self, value):
         request = validate_request(value)
         with self.lock:
-            if self.closed or (self.process is not None and self.process.poll() is None):
+            if self.closed or not self.idle():
                 raise ValueError('已有任务正在运行，请等待完成。')
             job = 'local-' + secrets.token_hex(16)
             directory = self.jobs / job
@@ -109,7 +139,7 @@ class Application:
                     raise ValueError('历史短记录不支持检查点暂停。')
                 (directory/'pause.request').touch()
                 return {'job_id':job,'message':'当前分块保存后暂停。'}
-            if self.closed or (self.process and self.process.poll() is None):
+            if self.closed or not self.idle():
                 raise ValueError('已有任务正在运行。')
             status = self.status(job)
             if status['phase'] not in ('paused','failed') or not (directory/'record/recording.json').exists():

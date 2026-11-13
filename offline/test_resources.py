@@ -120,4 +120,29 @@ class Jobs(unittest.TestCase):
             self.assertEqual(len(traces(Path(tmp) / 'job' / 'record', 'full', [[5., 1., 1.]])['points']), 1)   # a full record still serves any point
 
 
+class Finishing(unittest.TestCase):
+    def test_a_worker_that_published_its_final_status_does_not_block_the_next_job(self):
+        from offline.app import Application, save
+
+        class Exiting:   # a worker process that ends when it is waited for
+            def __init__(self): self.done = False; self.waited = None
+            def poll(self): return 0 if self.done else None
+            def wait(self, timeout=None): self.waited = timeout; self.done = True; return 0
+
+        class Stuck(Exiting):
+            def wait(self, timeout=None):
+                import subprocess
+                raise subprocess.TimeoutExpired('worker', timeout)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            app = Application(Path(tmp)); self.assertTrue(app.idle())
+            job = 'local-' + '0' * 32; (app.jobs / job).mkdir(); app.current = job
+            status = lambda phase: save(app.jobs / job / 'status.json', {'job_id': job, 'phase': phase, 'started_at_utc': '2026-11-13T00:00:00+00:00'})
+            status('running'); app.process = Exiting(); self.assertFalse(app.idle()); self.assertIsNone(app.process.waited)   # really running: refuse at once
+            for phase in ('completed', 'failed', 'paused'):
+                status(phase); app.process = Exiting(); self.assertTrue(app.idle()); self.assertIsNotNone(app.process.waited)
+            status('completed'); app.process = Stuck(); self.assertFalse(app.idle(wait_s=.01))
+            with self.assertRaises(ValueError): app.submit({'scene': v2_plate(), 'degree': 3})
+
+
 if __name__ == '__main__': unittest.main()
