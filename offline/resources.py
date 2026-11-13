@@ -117,7 +117,7 @@ def save_throughput(data_directory, nodes, evaluations_per_control, seconds, rel
         pass
 
 
-def estimate(scene, mesh, time_stepping='auto', record='auto', data_directory=None, controls=('linear', 'stvk', 'murnaghan')):
+def estimate(scene, mesh, time_stepping='auto', record='auto', data_directory=None, controls=('linear', 'stvk', 'murnaghan'), layer=None):
     """Plan and cost of a network computation before it starts: record mode, layer, memory, disk and time.
 
     The layer uses ω_max ≈ 3.6 c / Δx instead of the measured value (the worker measures it), so the time is an estimate."""
@@ -139,7 +139,11 @@ def estimate(scene, mesh, time_stepping='auto', record='auto', data_directory=No
         from graphnet.contact import STABILITY
         from graphnet.timestep import frozen_plan
         interface = STABILITY / (frozen_plan(scene, mesh, composition, speed_bound(scene))['layer_step_us'] * 1e-6); omega = math.hypot(omega, interface)
-    layers = plan(scene, mesh, composition, speed_bound(scene), omega, time_stepping, interface_omega=interface)
+    if layer is not None:   # a given layer (the fast engine's model layer): stages × layers per sample
+        stages = len(layer['composition']); per_sample = layer['subdivisions']
+        layers = {'scheme': 'verlet2' if stages == 1 else 'composition4', 'time_order': layer.get('time_order', 2), 'layer_step_us': acquisition['sample_step_us'] / per_sample,
+                  'evaluations_per_control': (frames - 1) * per_sample * stages, 'reason': layer.get('reason', '给定的时间层')}
+    else: layers = plan(scene, mesh, composition, speed_bound(scene), omega, time_stepping, interface_omega=interface)
     # A display mesh is at most the browser budget; the surface of a small mesh is smaller still.
     display_nodes = min(BROWSER_NODES, nodes); shown = min(FRAMES, frames)
     disk = storage_bytes(frames, nodes, mode, display_nodes, shown, len(scene['receivers']), controls=count)

@@ -1,5 +1,6 @@
 """Editor preview: validation, source signals, mesh size and resolution for a scene. Never starts a computation."""
 import copy
+import json
 import math
 import shutil
 
@@ -118,7 +119,8 @@ def preview(body, data_directory=None):
         name = body.get('coarse_model', DEFAULT_MODEL); name = name if name in MODELS else DEFAULT_MODEL  # an unknown name is already in errors
         summary = model_summary(model_path(name)); degree = summary['degree']
         out['engine'] = dict(summary, out_of_training_range=out_of_range(scene or body['scene'], name) if (scene or body['scene']).get('schema') == V2 else [])
-        if scene is not None: scene = dict(scene, numerics=dict(scene['numerics'], h_mm=summary['h_mm']))
+        if scene is not None:   # the model's own grid and CFL
+            scene = dict(scene, numerics=dict(scene['numerics'], h_mm=summary['h_mm'], cfl=json.loads(model_path(name).read_text(encoding='utf-8'))['cfl']))
     if scene is not None:
         built = []
         try:
@@ -138,12 +140,16 @@ def preview(body, data_directory=None):
             size = samples * out['mesh']['nodes'] * 3 * 8 * len(CONTROL_SETS[request.get('controls', 'all')])
             free = shutil.disk_usage(data_directory).free if data_directory else None
             out['record'] = {'samples': samples, 'uncompressed_bytes': size, 'free_bytes': free, 'mode': 'full'}
-            if scene.get('schema') == V2 and body.get('engine') != 'coarse':
-                # Network engine: the record mode, the time layer and what the computation costs on this machine (offline/resources.py).
+            if scene.get('schema') == V2:
+                # The record mode, the time layer and what the computation costs on this machine (offline/resources.py); the fast engine
+                # runs on its model's own layer.
                 from .resources import estimate, memory_problem
                 try:
-                    chosen = CONTROL_SETS[request.get('controls', 'all')]
-                    cost = estimate(scene, built[0], request.get('time_stepping', 'auto'), request.get('record', 'auto'), data_directory, chosen)
+                    chosen = CONTROL_SETS[request.get('controls', 'all')]; layer = None
+                    if body.get('engine') == 'coarse':
+                        from coarsegraph.record import model_layer
+                        layer = model_layer(scene, built[0])
+                    cost = estimate(scene, built[0], request.get('time_stepping', 'auto'), request.get('record', 'auto'), data_directory, chosen, layer)
                     out['estimate'] = cost; out['record'].update(mode=cost['record'], uncompressed_bytes=samples * out['mesh']['nodes'] * 3 * 8 * len(chosen))
                     size = out['record']['uncompressed_bytes']
                     if cost['record'] == 'compact': out['record']['uncompressed_bytes'] = size = cost['disk_bytes']

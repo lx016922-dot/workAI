@@ -166,9 +166,10 @@ def validate_request(body):
     """A job request: {'scene', 'mesh': 'auto'} (the software chooses the mesh) or {'scene', 'degree'} with the scene's h_mm;
     optional 'engine' and 'coarse_model'. A stored request's 'mesh_report' is recomputed, never trusted.
 
-    Version-2 scenes on the network engine also take 'record' (auto: every node of every sample while that stays within
-    2 GiB, otherwise the compact record; full; compact) and 'time_stepping' (auto: `graphnet.timestep` chooses the layer;
-    frozen: the trained three-stage layer). Both default to auto. Version-2 scenes on either engine take 'controls':
+    Version-2 scenes also take 'record' (auto: every node of every sample while that stays within 2 GiB, otherwise the
+    compact record; full; compact) and, on the network engine, 'time_stepping' (auto: `graphnet.timestep` chooses the
+    layer; frozen: the trained three-stage layer; the fast engine runs on its model's own layer). Both default to auto.
+    Version-2 scenes on either engine take 'controls':
     all (linear, StVK and complete: five responses; the default), full_linear (complete and linear: three responses) or
     full (the complete response only)."""
     if not isinstance(body, dict) or 'scene' not in body:
@@ -186,8 +187,10 @@ def validate_request(body):
         raise ValueError('记录方式需为 auto（自动）、full（完整记录）或 compact（精简记录）。')
     if options.get('time_stepping', 'auto') not in TIME_STEPPING:
         raise ValueError('时间层需为 auto（自动）或 frozen（训练时的三级四阶时间层）。')
-    if set(options) - {'controls'} and not (body.get('engine', 'network') == 'network' and v2):
-        raise ValueError('记录方式和时间层设置只用于 v2 场景的冻结网络引擎。')
+    if 'record' in options and not v2:
+        raise ValueError('记录方式设置需要 v2 场景。')
+    if 'time_stepping' in options and not (body.get('engine', 'network') == 'network' and v2):
+        raise ValueError('时间层设置只用于 v2 场景的冻结网络引擎；快速引擎使用模型训练时的时间层。')
     return dict(_validate_request(body, len(CONTROL_SETS[options.get('controls', 'all')])), **options)
 
 

@@ -127,10 +127,10 @@ class Application:
         except OSError:
             self.fail(job, '无法启动计算进程。请检查软件包是否完整。')
             raise
-        # A checkpointed record (every v2 network computation) may run as long as the model needs: it reports the remaining
+        # A checkpointed record (every v2 computation, on either engine) may run as long as the model needs: it reports the remaining
         # time, can be paused and resumes from its last chunk. The other paths keep the 90-minute limit.
         request = json.loads((directory / 'request.json').read_text(encoding='utf-8'))
-        unlimited = request.get('engine', 'network') == 'network' and request['scene'].get('schema') == 'workai.hyperelastic.solid.v2'
+        unlimited = request['scene'].get('schema') == 'workai.hyperelastic.solid.v2'
         threading.Thread(target=self.monitor, args=(job, self.process, None if unlimited else 5400), daemon=True).start()
 
     def control(self, job, action):

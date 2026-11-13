@@ -40,7 +40,7 @@ files = {'graphwave': ['__init__.py', 'inference.py', 'predict.py', 'buffered_in
          'graphnet': ['__init__.py', 'model.py', 'inputs.py', 'recurrence.py', 'predict.py', 'rollout.py', 'contact.py', 'timestep.py', 'parallel.py'],
          'physics': ['__init__.py', 'scene.py', 'signals.py', 'loads.py', 'boundaries.py', 'materials.py', 'receivers.py', 'runs.py', 'defects.py'],
          # Fast engine: the learned coarse-graph operator (inference only) and its shipped model.
-         'coarsegraph': ['__init__.py', 'operator.py', 'simulate.py', 'kernel.py', 'run.py']}
+         'coarsegraph': ['__init__.py', 'operator.py', 'simulate.py', 'kernel.py', 'run.py', 'record.py']}
 for module, names in files.items():
     (target / module).mkdir()
     for name in names:

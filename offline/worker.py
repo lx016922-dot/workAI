@@ -81,29 +81,6 @@ def export_display(directory, scene, mesh, display, parts, diagnostics, info, ti
     write_json(directory / 'exports.json', exports)
 
 
-def run_coarse(directory, scene, info, publish, name, controls=LAWS):
-    """Fast engine: the learned coarse-graph operator on its own coarse grid (short records)."""
-    from .coarse_engine import run as coarse_run
-    publish(phase='running', engine='coarse', coarse_model=name, controls_completed=0, controls=list(controls), parts=list(parts_for(controls)),
-            message=f'粗网格算子：首次运行需要编译，随后计算 {len(controls)} 组控制')
-    def progress(d):
-        if not d['energy_balance_within_1_percent']:
-            raise ValueError('粗网格输出能量收支未通过 1% 检查。')
-        publish(controls_completed=controls.index(d['law']) + 1, nodes=d['nodes'], message=d['law'] + ' 控制完成')
-    mesh, fields, diagnostics, times, extra = coarse_run(scene, callback=progress, name=name, controls=controls)
-    if len(surface_triangles(mesh['elements'])) > 50000:
-        raise ValueError('网格超过离线显示预算。')
-    from spectral3d.loads import loaded_surface_faces, prepare_excitation
-    from physics.scene import summary
-    extra.update(loaded_faces=loaded_surface_faces(surface_triangles(mesh['elements']), prepare_excitation(mesh, scene)['loads']), excitation=summary(scene), input_layer='v2_multi_source')
-    forbidden = ['spectral3d.solver', 'spectral3d.curved_solver', 'spectral3d.implicit', 'solid.fem']
-    if any(name in sys.modules for name in forbidden):
-        raise RuntimeError('预测进程意外加载了数值求解模块。')
-    publish(phase='exporting', message='正在保存动画及五种响应')
-    export_results(directory, scene, mesh, fields, diagnostics, dict(info, weights_sha256=digest(MODEL / 'weights.npz')), times, None, extra, controls)
-    publish(phase='completed', message='粗网格算子计算完成', controls_completed=len(controls), numerical_correction=False)
-
-
 def run(directory):
     directory = Path(directory)
     start = time.monotonic()
@@ -114,9 +91,7 @@ def run(directory):
     try:
         request = validate_request(json.loads((directory / 'request.json').read_text(encoding='utf-8')))
         info = model_info()
-        scene = request['scene']; controls = CONTROL_SETS[request.get('controls', 'all')]
-        if request.get('engine') == 'coarse':
-            return run_coarse(directory, scene, info, publish, request['coarse_model'], controls)
+        scene = request['scene']; controls = CONTROL_SETS[request.get('controls', 'all')]; coarse = request.get('engine') == 'coarse'
         network_v2 = scene.get('schema') == V2
         is_long = network_v2 or scene['acquisition']['duration_us'] >= 5000
         if is_long and 'long_model' not in info:
@@ -124,8 +99,19 @@ def run(directory):
         weight_path = MODEL / (info['long_model']['weights_file'] if is_long else 'weights.npz')
         with np.load(weight_path, allow_pickle=False) as saved:
             weights = dict(saved)
-        publish(phase='meshing', message='正在生成几何连接图')
-        mesh = make_mesh(scene, request['degree'], scene['numerics']['h_mm'])
+        publish(phase='meshing', message='正在生成几何连接图', **({'engine': 'coarse', 'coarse_model': request['coarse_model']} if coarse else {}))
+        layer = request.get('time_stepping', 'auto'); coarse_extra = {}
+        if network_v2:
+            from graphnet.model import load as load_network
+        if coarse:
+            # Fast engine: the learned element operators on the model's own grid and time layer, through the same record path as the fine network.
+            from .coarse_engine import model_path, prepare
+            from coarsegraph.run import load_model
+            network = load_network(load_model(model_path(request['coarse_model']))[0]['degree'], long_record=True)
+            scene, mesh, network, layer, coarse_extra = prepare(scene, request['coarse_model'], network)
+        else:
+            mesh = make_mesh(scene, request['degree'], scene['numerics']['h_mm'])
+            if network_v2: network = load_network(request['degree'], long_record=True)
         extra = None; browser_full = True; record = 'full'
         if network_v2:
             # The machine limits the model, not the display: a large model keeps a compact record and is shown on a display mesh.
@@ -141,7 +127,7 @@ def run(directory):
             browser_full = (record == 'full' and len(mesh['points']) <= BROWSER_NODES and mesh['elements'].size <= BROWSER_ENTRIES and
                             len(surface_faces(mesh['elements'])) * 2 * int(mesh['degree']) ** 2 <= BROWSER_TRIANGLES)
             excitation = prepare_excitation(mesh, scene)
-            extra = {'excitation': summary(scene), 'input_layer': 'v2_multi_source', 'engine_scope': 'graph_network_v2_input_layer_record'}
+            extra = {'excitation': summary(scene), 'input_layer': 'v2_multi_source', 'engine_scope': 'graph_network_v2_input_layer_record', **coarse_extra}
             if browser_full: extra['loaded_faces'] = loaded_surface_faces(surface_triangles(mesh['elements']), excitation['loads'])
         else:
             if len(mesh['points']) > 30000 or mesh['elements'].size > 100000 or len(mesh['points']) * 281 * 24 > 192 * 1024**2 or len(surface_triangles(mesh['elements'])) > 50000:
@@ -152,7 +138,7 @@ def run(directory):
         publish(phase='running', nodes=len(mesh['points']), controls_completed=0,
                 duration_us=scene['acquisition']['duration_us'] if is_long else None, resumable=bool(is_long),
                 **({'record_mode': record} if network_v2 else {}), controls=list(controls), parts=list(parts_for(controls)),
-                message=f'首次运行需要编译网络，随后计算 {len(controls)} 组控制')
+                message=('粗网格算子：' if coarse else '') + f'首次运行需要编译网络，随后计算 {len(controls)} 组控制')
         def progress(d):
             if not d['energy_balance_within_1_percent']:
                 raise ValueError('网络输出能量收支未通过 1% 检查。')
@@ -175,15 +161,14 @@ def run(directory):
             identity = {'weights_sha256':digest(weight_path),'time_weights_sha256':digest(temporal_path),
                         'input_sha256':digest(directory/'request.json')}
             if network_v2:
-                from graphnet.model import load as load_network
                 from graphnet.rollout import rollout as network_rollout
-                network = load_network(request['degree'], long_record=True)
+                if coarse: identity['coarse_model_sha256'] = coarse_extra['coarse_model']['model_sha256']
                 if network['weights_sha256'] != identity['weights_sha256'] or network['time_weights_sha256'] != identity['time_weights_sha256']:
                     raise ValueError('v2 输入层读取的权重与软件包长记录模型不一致。')
                 # The layer spread over all threads keeps more arrays; when only one thread per control fits in memory, use that (same bits).
                 fits = memory_problem(len(mesh['points']), record, len(controls), spread=True) is None
                 finished = network_rollout(scene, mesh, network, directory / 'record', identity, callback=long_progress,
-                                           time_plan=request.get('time_stepping', 'auto'), record=record, controls=controls, spread=None if fits else False)
+                                           time_plan=layer, record=record, controls=controls, spread=None if fits else False)
                 if directory.parent.name == 'jobs':   # the application's data directory: remember this machine's rate for later estimates
                     from .resources import save_throughput
                     from graphnet.parallel import layer_time
@@ -198,6 +183,10 @@ def run(directory):
                 extra['loaded_faces'] = loaded_triangles(display, excitation['loads'])
             if not all(d['energy_balance_within_1_percent'] for d in diagnostics):
                 raise ValueError('长记录能量收支未通过 1% 检查；完整原始记录已保留供检查。')
+            if coarse:   # what the coarse model ran on, with every control's diagnostics
+                model = coarse_extra['coarse_model']
+                for d in diagnostics: d.update(h_mm=model['h_mm'], degree=model['degree'], elements=int(len(mesh['elements'])), stability_number=finished['time_plan']['stability_number'],
+                                               engine='coarse_graph_learned_operator', neural_forward_only=True, numerical_correction=False)
             info = dict(info, weights_sha256=digest(weight_path))
         else:
             fields, diagnostics = predict(scene, mesh, weights, callback=progress)
@@ -208,7 +197,7 @@ def run(directory):
         publish(phase='exporting', message='正在保存动画及五种响应')
         if browser_full: export_results(directory, scene, mesh, fields, diagnostics, info, times, recording, extra, controls)
         else: export_display(directory, scene, mesh, display, parts, diagnostics, info, times, recording, extra)
-        publish(phase='completed', message='本机预测完成', controls_completed=len(controls), remaining_s=0,
+        publish(phase='completed', message='粗网格算子计算完成' if coarse else '本机预测完成', controls_completed=len(controls), remaining_s=0,
                 weights_sha256=info['weights_sha256'], numerical_correction=False)
     except InterruptedError as error:
         publish(phase='paused',message=str(error))

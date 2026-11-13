@@ -36,8 +36,8 @@ function toast(message, kind = 'error') {
 const fail = error => toast(error?.message || String(error));
 /** The mesh is always chosen by the software (offline/automesh.py): requests carry mesh 'auto', never a size or degree. */
 function requestBody() {
-  return { scene: state.scene, mesh: 'auto', ...(state.controls !== 'all' ? { controls: state.controls } : {}), ...(state.engine === 'coarse' ? { engine: 'coarse', coarse_model: state.coarseModel }
-    : { ...(state.record !== 'auto' ? { record: state.record } : {}), ...(state.timeStepping !== 'auto' ? { time_stepping: state.timeStepping } : {}) }) };
+  return { scene: state.scene, mesh: 'auto', ...(state.controls !== 'all' ? { controls: state.controls } : {}), ...(state.record !== 'auto' ? { record: state.record } : {}),
+    ...(state.engine === 'coarse' ? { engine: 'coarse', coarse_model: state.coarseModel } : (state.timeStepping !== 'auto' ? { time_stepping: state.timeStepping } : {})) };
 }
 /** Engine, coarse model, record mode and time layer from a stored request, draft or imported file (unknown values fall back to the defaults). */
 function takeEngine(d) {
@@ -233,7 +233,7 @@ function renderEngineDerived() {
   box.innerHTML = `<table class="wb-table"><tr><th>模型</th><td>${escapeHtml(e.name)}（${e.degree} 阶，h ${e.h_mm} mm，${e.parameters} 个参数）</td></tr>
     <tr><th>留出测试</th><td>全部门槛通过 ${e.test_passed}/${e.test_cases}（同网格 GLL 基线 ${e.baseline_test_passed}/${e.test_cases}）；最差波形差 ${(100 * e.test_worst_waveform_l2).toFixed(2)}%，最差增量 2f ${(100 * e.test_worst_increment_a2).toFixed(1)}%</td></tr>
     ${(e.test_by_excitation || []).length ? `<tr><th>按激励形式</th><td>${e.test_by_excitation.map(r => `<span class="wb-res ${r.passed === r.cases ? 'ok' : r.passed ? 'warn' : 'bad'}" title="最差波形差 ${(100 * r.worst_waveform_l2).toFixed(2)}%，最差 2f ${(100 * r.worst_a2).toFixed(1)}%，最差增量 2f ${(100 * r.worst_increment_a2).toFixed(1)}%；GLL 基线 ${r.baseline_passed}/${r.cases}">${escapeHtml(r.label)} ${r.passed}/${r.cases}</span>`).join(' ')}</td></tr>` : ''}
-    <tr><th>训练范围</th><td>${e.out_of_training_range.length ? `<span class="wb-res warn">超出 ${e.out_of_training_range.length} 项：${escapeHtml(e.out_of_training_range.join('；'))}</span>` : '<span class="wb-res ok">在训练范围内</span>'}</td></tr></table>`;
+    <tr><th>训练范围</th><td>${e.out_of_training_range.length ? `<span class="wb-res warn">超出 ${e.out_of_training_range.length} 项：${escapeHtml(e.out_of_training_range.join('；'))}</span>` : '<span class="wb-res ok">在训练范围内</span>'}</td></tr></table>${estimateMarkup(state.preview?.estimate)}`;
 }
 function renderMaterialDerived() { const box = $('#material-derived'); if (box) box.innerHTML = materialDerivedMarkup(state.preview?.material); }
 function drawView() {

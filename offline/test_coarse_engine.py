@@ -30,11 +30,16 @@ class FastEngine(unittest.TestCase):
         with self.assertRaises(ValueError): validate_request({'scene': s, 'degree': 4, 'engine': 'solver'})
         from physics.materials import presets
         cfrp = copy.deepcopy(s); cfrp['material'] = presets()['cfrp_ud']['material']
-        for bad, word in [(cfrp, '铝'), (dict(s, geometry=dict(s['geometry'], kind='notch')), '平板'), (dict(s, acquisition={'duration_us': 300., 'sample_step_us': .05}), '采样点')]:
+        for bad, word in [(cfrp, '铝'), (dict(s, geometry=dict(s['geometry'], kind='notch')), '平板')]:
             with self.assertRaises(ValueError) as caught: validate_request({'scene': bad, 'degree': 4, 'engine': 'coarse'})
             self.assertIn(word, str(caught.exception))
+        # long records are computed in chunks like the fine network's; the record length is listed as outside the training range
+        long = dict(s, acquisition={'duration_us': 300., 'sample_step_us': .05}); self.assertEqual(validate_request({'scene': long, 'degree': 4, 'engine': 'coarse', 'record': 'compact'})['record'], 'compact')
+        self.assertTrue(any('记录 300' in item for item in out_of_range(long)))
+        with self.assertRaises(ValueError): validate_request({'scene': s, 'degree': 4, 'engine': 'coarse', 'time_stepping': 'frozen'})   # the model runs on its own layer
         p = preview({'scene': s, 'degree': 4, 'engine': 'coarse'}, '.')
         summary = model_summary(); self.assertTrue(p['ok'], p['errors'])
+        self.assertEqual((p['estimate']['scheme'], p['estimate']['record']), ('verlet2', 'full')); self.assertGreater(p['estimate']['seconds'], 0)
         self.assertEqual(p['mesh']['degree'], summary['degree']); self.assertEqual(p['mesh']['h_mm'], summary['h_mm'])
         self.assertEqual(len(p['engine']['out_of_training_range']), 1); self.assertIn('2 个激励源', p['engine']['out_of_training_range'][0])
         self.assertLess(p['mesh']['nodes'], preview({'scene': s, 'degree': 4}, '.')['mesh']['nodes'] / 4)
@@ -107,7 +112,10 @@ class FastEngine(unittest.TestCase):
             full = json.loads((job / 'full.json').read_text(encoding='utf-8'))
             self.assertEqual(full['engine'], 'workai_coarse_graph_offline'); self.assertEqual(full['coarse_model']['name'], name)
             self.assertEqual(full['controls'][0]['h_mm'], model_summary(REPO / 'coarsegraph/models' / name / 'model.json')['h_mm'])
-            self.assertEqual(len(full['times_us']), round(duration / request['scene']['acquisition']['sample_step_us']) + 1); self.assertTrue(all(c['energy_balance_within_1_percent'] for c in full['controls']))
+            frames = round(duration / request['scene']['acquisition']['sample_step_us']) + 1
+            self.assertEqual(full['recording']['frame_count'], frames); self.assertEqual(full['times_us'][-1], duration); self.assertTrue(all(c['energy_balance_within_1_percent'] for c in full['controls']))
+            self.assertEqual((status['resumable'], status['record_mode'], status['time_plan']['scheme']), (True, 'full', 'verlet2'))
+            manifest = json.loads((job / 'record' / 'recording.json').read_text(encoding='utf-8')); self.assertEqual(manifest['time_plan']['mode'], 'given'); self.assertLessEqual(manifest['time_plan']['stability_number'], 1.5)
             self.assertTrue(full['loaded_faces'])
 
 

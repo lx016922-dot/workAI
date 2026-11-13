@@ -174,7 +174,8 @@ test('large models: display results validate, compact records are told apart, es
   // solver settings: record mode and time layer for the network engine only
   const s = upgrade(v1), network = inspectorMarkup(s, 'engine', 4, { engine: 'network', record: 'compact', timeStepping: 'frozen' });
   assert.match(network, /data-action="record-mode"/); assert.match(network, /value="compact" selected/); assert.match(network, /data-action="time-layer"/); assert.match(network, /value="frozen" selected/);
-  assert.doesNotMatch(inspectorMarkup(s, 'engine', 4, { engine: 'coarse' }), /record-mode|time-layer/);
+  const fast = inspectorMarkup(s, 'engine', 4, { engine: 'coarse', record: 'compact' });   // the fast engine keeps records the same way and runs on its model's own layer
+  assert.match(fast, /data-action="record-mode"/); assert.match(fast, /value="compact" selected/); assert.doesNotMatch(fast, /time-layer/);
   assert.deepEqual([Object.keys(RECORD_MODES), Object.keys(TIME_LAYERS)], [['auto', 'full', 'compact'], ['auto', 'frozen']]);
 });
 

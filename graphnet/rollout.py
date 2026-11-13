@@ -8,7 +8,9 @@ are routed to the frozen rollout unchanged.
 Two things can be chosen per record (the defaults reproduce the frozen behaviour bit for bit):
 
 * `time_plan`: 'frozen' is the trained three-stage layer at CFL × spacing / 10000 m/s; 'auto' lets
-  `graphnet.timestep` pick the cheapest layer that meets its stability and phase-error conditions;
+  `graphnet.timestep` pick the cheapest layer that meets its stability and phase-error conditions; a mapping
+  {'composition': stage weights, 'subdivisions': layers per sample} is used as given (the learned coarse
+  operators run on the layer they were trained with, `coarsegraph.record`);
 * `spread`: how the layer uses the cores. False gives each control one thread (`recurrence.three_segments`); True
   spreads every control over all threads (`graphnet.parallel`); None (the default) takes the faster of the two for
   the machine. The two give the same bits, so this is a matter of speed only;
@@ -105,7 +107,12 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         from graphwave.long_rollout import rollout as frozen
         return frozen(scene, mesh, model['weights'], model['temporal'], directory, identity, callback=callback, stop_after_chunks=stop_after_chunks)
     from .timestep import plan as layer_plan, largest_frequency, MODES
-    require(time_plan in MODES and record in RECORDS, '记录设置无效：time_plan 为 auto 或 frozen，record 为 full 或 compact。')
+    given = time_plan if isinstance(time_plan, dict) else None
+    if given is not None:
+        stage_weights = [float(c) for c in given['composition']]; per_sample = given['subdivisions']
+        require(1 <= len(stage_weights) <= 3 and abs(sum(stage_weights) - 1) <= 1e-12 and type(per_sample) is int and per_sample >= 1, '给定的时间层无效：需要和为 1 的级权重与每个采样点的层数。')
+        time_plan = 'given'
+    require((given is not None or time_plan in MODES) and record in RECORDS, '记录设置无效：time_plan 为 auto、frozen 或给定的时间层，record 为 full 或 compact。')
     controls = tuple(controls)
     require(controls and set(controls) <= set(LAWS) and controls == tuple(name for name in LAWS if name in controls), '控制需为 linear、stvk、murnaghan 中的若干个，按此顺序且不重复。')
     laws = np.array([LAWS.index(name) for name in controls], dtype=np.int64); count = len(controls)
@@ -126,6 +133,7 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
     sources = source_hashes()
     fingerprint = hashlib.sha256(json.dumps({'identity': identity, 'sources': sources, 'scene': scene, 'degree': int(mesh['degree']), 'h_mm': float(mesh['h_mm']),
                                              **({} if (time_plan, record) == ('frozen', 'full') else {'time_plan': time_plan, 'record': record}),
+                                             **({} if given is None else {'layer': [stage_weights, per_sample]}),
                                              **({} if controls == LAWS else {'controls': list(controls)})}, sort_keys=True).encode()).hexdigest()
     # Interface stiffness: that of the trained layer spacing whatever the plan, so the interface is the same physical model
     # (its reflection and its clapping) and only the time layer differs.
@@ -142,9 +150,17 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         layers = manifest['time_plan']   # a resumed record keeps the layer it started with
     else:
         omega = None
-        if time_plan == 'auto':
+        if time_plan == 'auto' or given is not None:
             omega = largest_frequency(mesh, derivative, inverse, quadratic, cubic, inputs['free'], contact=(ca, cb, cn, ck))
-        layers = layer_plan(scene, mesh, trained, speed_bound(scene), omega, time_plan, interface_omega=contact['omega_dt_max'] / trained_step if contact else None)
+        if given is not None:
+            from .timestep import STABILITY_FRACTION, stability_limit
+            number = omega * sample * 1e-6 / per_sample; limit = stability_limit(stage_weights)
+            require(number <= limit * .95, f'给定的时间层在这个网格上不稳定（ω_max·Δt = {number:.2f}，极限 {limit:.2f}）。')
+            layers = {'mode': 'given', 'scheme': 'verlet2' if len(stage_weights) == 1 else 'composition', 'composition': stage_weights, 'subdivisions': per_sample, 'layer_step_us': sample / per_sample,
+                      'time_order': given.get('time_order', 2 if len(stage_weights) == 1 else 4), 'evaluations_per_control': (frames - 1) * per_sample * len(stage_weights),
+                      'stability_number': number, 'stability_limit': limit, 'omega_max_rad_s': omega, 'reason': given.get('reason', '给定的时间层')}
+        else:
+            layers = layer_plan(scene, mesh, trained, speed_bound(scene), omega, time_plan, interface_omega=contact['omega_dt_max'] / trained_step if contact else None)
     composition = np.asarray(layers['composition'], dtype=np.float64); stages = len(composition); subdivisions = int(layers['subdivisions'])
     sample_s = sample * 1e-6; dt = sample_s / subdivisions
     total_steps = (frames - 1) * subdivisions; require(total_steps <= 20000000, '长记录超过 2000 万层，请增大单元尺寸。')

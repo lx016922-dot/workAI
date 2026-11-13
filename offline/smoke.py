@@ -84,7 +84,7 @@ def main():
             fast_status = wait(fast_job, 900)
             fast_result = request('/api/jobs/' + fast_job + '/result?part=full')
             assert fast_result['engine'] == 'workai_coarse_graph_offline' and fast_result['coarse_model']['name'] == fast_models[0]
-            assert len(fast_result['times_us']) == 401 and all(c['energy_balance_within_1_percent'] for c in fast_result['controls'])
+            assert fast_result['recording']['frame_count'] == 401 and all(c['energy_balance_within_1_percent'] for c in fast_result['controls'])
             fast_field = np.frombuffer(gzip.decompress(request('/api/jobs/' + fast_job + '/field?part=full')), dtype='<f8')
             assert np.isfinite(fast_field).all() and np.max(abs(fast_field)) > 1e-12
             # Defects, automatic mesh, text box and one-click defects (1.1): preview, then a short job with a closed crack.

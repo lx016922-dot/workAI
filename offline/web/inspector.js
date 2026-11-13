@@ -128,8 +128,8 @@ function engineForm(engine = 'network', coarseModel = DEFAULT_COARSE_MODEL, reco
   return section('计算引擎', `<label class="wb-field wide"><span>引擎</span><select data-action="engine">${Object.entries(ENGINES).map(([k, v]) => `<option value="${k}" ${k === engine ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       ${engine === 'coarse' && Object.keys(COARSE_MODELS).length > 1 ? `<label class="wb-field wide"><span>粗网格模型</span><select data-action="coarse-model">${Object.entries(COARSE_MODELS).map(([k, v]) => `<option value="${k}" ${k === coarseModel ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
       <label class="wb-field wide"><span>计算的响应</span>${pick('control-set', CONTROL_SETS, controls)}</label>
-      ${engine === 'coarse' ? '' : `<label class="wb-field wide"><span>记录方式</span>${pick('record-mode', RECORD_MODES, record)}</label>
-      <label class="wb-field wide"><span>时间层</span>${pick('time-layer', TIME_LAYERS, timeStepping)}</label>`}
+      <label class="wb-field wide"><span>记录方式</span>${pick('record-mode', RECORD_MODES, record)}</label>
+      ${engine === 'coarse' ? '' : `<label class="wb-field wide"><span>时间层</span>${pick('time-layer', TIME_LAYERS, timeStepping)}</label>`}
       <div class="wb-field wide" id="engine-derived"></div>`,
     engine === 'coarse' ? '粗网格算子是同一个网络换上学到的单元算子（求导滤波、刚度与质量积分），在模型自带的粗网格上计算，比细网格冻结网络快数倍到一个数量级。快速模型（h 3 mm）最省；精确模型（h 2 mm）节点约 1.5 倍，顶面、端面和双贴片的留出测试全部通过，需要二次谐波时选它。它们是研究模型，只在 48 × 2 mm 半宽铝板、板厚 1.6–2.4 mm、0.2–0.4 MHz、30 μs 记录上训练和测试过；超出范围要逐例核对。网格设置中的 h 与 p 只用于检查模型本身，计算用模型自带的网格。'
       : '求解器是冻结图网络（物理 AI）：学到的求导、能量和状态更新逐时前向传播，不调用有限元求解器，也不做预测后的数值校正。精度由节点间距决定，见“消息”窗口中的 2f 分辨率；新模型要用细网格参考逐例核对。模型大小只受本机内存、磁盘和时间限制：大模型自动保存精简记录，动画用抽稀的表面网格。时间层“自动”按实测的稳定极限和相位误差上界（0.01 rad）为短记录选二阶单级、为长记录选三级四阶；要逐位重现旧结果请选“训练时的时间层”。“计算的响应”决定算几组本构控制：只要完整响应或只要总的非线性增量时不必三组都算，可省时间、内存和磁盘。计算自动用上全部 CPU 核：核数多于控制数时把每组控制分摊到所有核上，结果与单核逐位相同。');

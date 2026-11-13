@@ -22,8 +22,6 @@ MODELS = {'p4-h3-harmonic': '快速 · h 3 mm', 'p4-h2-multisource': '精确 · 
 DEFAULT_MODEL = 'p4-h3-harmonic'
 MODEL = MODELS_DIRECTORY / DEFAULT_MODEL / 'model.json'
 LAWS = ('linear', 'stvk', 'murnaghan')
-MAX_FRAMES = 4001
-FIELD_BUDGET_BYTES = 768 * 1024 ** 2
 # Training range of the shipped model (coarsegraph/specs): 48 × 2 mm half-width aluminium plates, symmetry at y = 2 mm.
 TRAINING_RANGE = [('geometry.length_mm', '板长', 48, 48, 'mm'), ('geometry.width_mm', '半宽', 2, 2, 'mm'), ('geometry.thickness_mm', '板厚', 1.6, 2.4, 'mm'),
                   ('acquisition.duration_us', '记录', 0, 30, 'μs')]
@@ -116,36 +114,20 @@ def check(scene, name=DEFAULT_MODEL):
     require(not scene.get('defects'), '快速引擎只在无缺陷的平板上训练过；含裂纹、分层、接触界面、缺口或孔的模型请用冻结网络。')
     require(not is_custom(scene.get('material')), '快速引擎的算子只用训练所用的铝训练过；其他材料请用冻结网络。')
     model = json.loads(model_path(name).read_text(encoding='utf-8'))
-    frames = round(scene['acquisition']['duration_us'] / scene['acquisition']['sample_step_us']) + 1
-    require(frames <= MAX_FRAMES, f'快速引擎一次最多 {MAX_FRAMES} 个采样点（短记录）；长记录请用冻结网络。')
     return model
 
 
-def run(scene, callback=None, name=DEFAULT_MODEL, controls=LAWS):
-    """mesh, fields and diagnostics of the computed controls (in the order of `controls`), times and record extras."""
-    from coarsegraph.run import load_model
-    from coarsegraph.simulate import Coarse
-    from graphnet.model import load
-    check(scene, name); model, (D, q, m) = load_model(model_path(name)); network = load(3)
-    require(network['material_check']['pass'], '冻结能量网络与训练材料不一致。')
-    c = Coarse(scene, model['degree'], model['h_mm'], model['cfl']); D, volume, mass = c.operators(D, q, m)
-    require(c.frames * len(mass) * 3 * 8 * len(controls) <= FIELD_BUDGET_BYTES, '粗网格完整位移场超过内存预算，请缩短记录。')
-    stability = c.stability(D, volume, mass, network['weights']); require(stability <= 1.5, f'该场景在粗网格上的时间步不稳定（{stability:.2f}）。')
-    fields, rows = [], []
-    for law in (LAWS.index(control) for control in controls):
-        started = time.monotonic()
-        field, energy, strain, jac = c.fields(D, volume, mass, law, network['weights'])
-        stored = energy[:, 1] + energy[:, 2] + energy[:, 4]; balance = float(np.max(np.abs(stored - energy[:, 3])) / max(np.max(np.abs(energy[:, 3])), 1e-30))
-        columns = ['time_us', 'kinetic_j', 'strain_j', 'external_work_j'] + (['dissipated_j'] if c.damped else [])
-        rows.append({'law': LAWS[law], 'elapsed_s': time.monotonic() - started, 'internal_steps': c.steps, 'internal_step_us': c.dt * 1e6, 'layer_step_us': c.dt * 1e6, 'recurrent_layers': c.steps,
-                     'nodes': len(mass), 'elements': len(c.mesh['elements']), 'degree': model['degree'], 'h_mm': model['h_mm'], 'stability_number': stability,
-                     'max_strain': float(strain), 'min_J': float(jac), 'external_work_balance_relative': balance, 'energy_balance_within_1_percent': balance <= .01,
-                     'energy_columns': columns, 'energy_samples': energy[:, :len(columns)].tolist(), 'neural_forward_only': True, 'numerical_correction': False,
-                     'engine': 'coarse_graph_learned_operator'})
-        fields.append(field)
-        if callback: callback(rows[-1])
-    summary = model_summary(model_path(name))
+def prepare(scene, name, network):
+    """What the worker's record path needs to run a coarse model: (scene on the coarse grid, mesh carrying the learned element
+    weights, network carrying the learned derivative filter, the model's time layer, record extras).
+
+    `network` from graphnet.model.load(model degree, long_record=True). The record itself is computed by `graphnet.rollout`
+    (`coarsegraph.record`), so the fast engine has what the fine network has: records of any length written in chunks and
+    resumable, compact records for large models, selectable controls, every core."""
+    from coarsegraph.record import setup
+    check(scene, name); require(network['material_check']['pass'], '冻结能量网络与训练材料不一致。')
+    coarse, mesh, learned, layer, model = setup(scene, model_path(name), network); summary = model_summary(model_path(name))
     extra = {'engine': 'workai_coarse_graph_offline', 'engine_scope': 'learned_coarse_graph_operator_short_record',
              'coarse_model': dict(summary, out_of_training_range=out_of_range(scene, name),
                                   accuracy_note='学习的粗网格算子：精度是模型记录的留出测试结果，不是其他场景的误差界；超出训练范围的场景需逐例核对。')}
-    return c.mesh, fields, rows, c.times_us, extra
+    return coarse, mesh, learned, layer, extra
