@@ -20,8 +20,8 @@ The training records were 30 μs long and the wave filled them, so the gates use
 down a long plate is quiet for most of a long record, and a Hann-weighted 2f amplitude over the whole of it is
 mostly leakage of the fundamental. The gates are therefore taken on the arrival window of each receiver group
 (`arrival_window`: where the fine reference exceeds 2 % of its peak, padded by two periods); the whole-record
-values are stored next to them. The receiver waveforms of every run are stored too (`*.npz`), so the metrics can
-be recomputed without running anything.
+values are stored next to them. The receiver waveforms of every run are stored too (`*.npz`, single precision), so
+the metrics can be recomputed without running anything.
 """
 import argparse
 import copy
@@ -152,7 +152,7 @@ def run(output, only=None):
         if target.exists(): continue
         waveforms = {}
         with tempfile.TemporaryDirectory() as scratch: result = run_case(name, purpose, raw, scratch, waveforms=waveforms)
-        np.savez_compressed(output / f'{name}.npz', **waveforms)
+        np.savez_compressed(output / f'{name}.npz', **{k: v if k == 'times_us' else v.astype(np.float32) for k, v in waveforms.items()})   # single precision: 1e-7 of the peak
         target.write_text(json.dumps(result, ensure_ascii=False, indent=1, allow_nan=False) + '\n', encoding='utf-8')
         print(summary_line(result), flush=True)
 
