@@ -4,7 +4,10 @@ Plate 48 × 48 × 1 mm, hole radius 4 mm at the centre, symmetry on both y faces
 S0 wave), uniform axial end traction (0.25 MHz, 2-cycle Hann, ka = 1.16). The mesh exceeds the worker's 30 000-node
 display budget, so the record is computed by calling the same network rollout the worker calls (graphnet.rollout with
 the validated scene and the long-record model) and read with the same offline.recording.traces.
-Usage: hole.py run hole|plate
+Usage: hole.py run hole|plate|ogrid
+  hole   the hole plate of the frozen curved mesh (spectral3d.curved_mesh), the run reported in the README;
+  ogrid  the same hole as a defect on a plain plate: the O-grid patch of spectral3d.feature_mesh (software 1.1);
+  plate  no hole, for the incident wave.
 """
 import copy, json, os, sys, tempfile, time
 from pathlib import Path
@@ -26,7 +29,8 @@ def receivers():
 
 def scene(kind):
     s = copy.deepcopy(BASE); s['name'] = f'hole scattering {kind}'; s['receiver_lines'] = []
-    s['geometry'].update(kind=kind, length_mm=L, width_mm=W, thickness_mm=T, hole_radius_mm=A, hole_x_mm=X0, hole_y_mm=Y0)
+    s['geometry'].update(kind='plate' if kind == 'ogrid' else kind, length_mm=L, width_mm=W, thickness_mm=T, hole_radius_mm=A, hole_x_mm=X0, hole_y_mm=Y0)
+    if kind == 'ogrid': s['defects'] = [{'type': 'hole', 'axis': 'z', 'x_mm': X0, 'y_mm': Y0, 'radius_mm': A}]
     s['source'] = {'face': 'xmin', 'center_mm': [0., W / 2, T / 2], 'radius_mm': 0., 'direction': [1., 0., 0.], 'amplitude_mpa': 1., 'frequency_mhz': F,
                    'cycles': 2., 'delay_us': 0., 'phase_deg': 0., 'signal': {'type': 'tone_burst', 'window': 'hann'}}
     s['boundaries'] = [{'type': 'symmetry', 'face': 'ymin'}, {'type': 'symmetry', 'face': 'ymax'}]
@@ -38,7 +42,7 @@ def scene(kind):
 def run(kind):
     """The worker's network path without its display budget: validate_request → make_mesh → graphnet.rollout."""
     from offline.domain import validate_request
-    from spectral3d.mesh import make_mesh
+    from spectral3d.feature_mesh import make_mesh   # the frozen spectral3d.mesh for scenes without defects
     from graphnet.model import load
     from graphnet.rollout import rollout
     job = JOBS / f'H-{kind}'; record = job / 'record'

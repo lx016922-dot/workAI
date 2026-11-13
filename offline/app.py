@@ -84,22 +84,26 @@ class Application:
                 if attempt == 39: raise
                 time.sleep(.05)
 
-    def idle(self, wait_s=15):
-        """True when no worker is running. A worker publishes its final status before its process ends, so one that has
-        already finished is given a moment to exit instead of refusing the next computation."""
-        process = self.process
-        if process is None or process.poll() is not None: return True
+    def settle(self):
+        """Give a worker that has already published its final status time to exit (closing files, unloading), so a job
+        started right after one finished is not refused as "already running"."""
+        process, job = self.process, self.current
+        if process is None or job is None or process.poll() is not None: return
         try:
-            if self.status(self.current)['phase'] not in ('completed', 'failed', 'paused'): return False
-            process.wait(timeout=wait_s)
-        except (OSError, ValueError, KeyError, subprocess.TimeoutExpired):
-            return False
-        return True
+            phase = self.status(job).get('phase')
+        except (OSError, ValueError):
+            return
+        if phase in ('completed', 'failed', 'paused'):
+            try:
+                process.wait(timeout=60)
+            except subprocess.TimeoutExpired:
+                pass
 
     def submit(self, value):
         request = validate_request(value)
+        self.settle()
         with self.lock:
-            if self.closed or not self.idle():
+            if self.closed or (self.process is not None and self.process.poll() is None):
                 raise ValueError('已有任务正在运行，请等待完成。')
             job = 'local-' + secrets.token_hex(16)
             directory = self.jobs / job
@@ -139,7 +143,7 @@ class Application:
                     raise ValueError('历史短记录不支持检查点暂停。')
                 (directory/'pause.request').touch()
                 return {'job_id':job,'message':'当前分块保存后暂停。'}
-            if self.closed or not self.idle():
+            if self.closed or (self.process and self.process.poll() is None):
                 raise ValueError('已有任务正在运行。')
             status = self.status(job)
             if status['phase'] not in ('paused','failed') or not (directory/'record/recording.json').exists():

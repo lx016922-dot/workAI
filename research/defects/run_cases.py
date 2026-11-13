@@ -25,9 +25,18 @@ def run(names):
     OUT.mkdir(exist_ok=True)
     for name in names:
         request = validate_request(json.loads((CASES / f'{name}.json').read_text(encoding='utf-8')))
-        started = time.monotonic(); r = simulate(request['scene'], degree=request['degree'], laws='scene'); d = r['computed']['diagnostics']
+        started = time.monotonic()
+        try:
+            r = simulate(request['scene'], degree=request['degree'], laws='scene')
+        except ValueError as error:
+            # This in-memory path keeps every frame (≤ 512 MiB); the software itself streams v2 jobs to disk and has no
+            # such limit. A large mesh (D7) is therefore sampled at 0.1 μs here, which the spectral ratios do not notice.
+            if '场存储' not in str(error): raise
+            request['scene']['acquisition']['sample_step_us'] = .1
+            r = simulate(request['scene'], degree=request['degree'], laws='scene')
+        d = r['computed']['diagnostics']
         np.savez_compressed(OUT / f'{name}.npz', times_us=r['computed']['times_us'], probes_m=r['computed']['probes_m'], names=np.array([x['name'] for x in r['receivers']]))
-        info = {'case': name, 'nodes': len(r['mesh']['points']), 'h_mm': request['scene']['numerics']['h_mm'], 'steps': d['internal_steps'], 'seconds': time.monotonic() - started,
+        info = {'case': name, 'sample_step_us': request['scene']['acquisition']['sample_step_us'], 'nodes': len(r['mesh']['points']), 'h_mm': request['scene']['numerics']['h_mm'], 'steps': d['internal_steps'], 'seconds': time.monotonic() - started,
                 'energy_balance': d['external_work_balance_relative'], 'contact': d.get('contact'), 'mesh': request['mesh_report']}
         (OUT / f'{name}.json').write_text(json.dumps(info, ensure_ascii=False, indent=1, default=float) + '\n', encoding='utf-8')
         print(json.dumps({k: info[k] for k in ('case', 'nodes', 'steps', 'seconds', 'energy_balance')}), flush=True)
@@ -44,11 +53,11 @@ def analyse():
     rows = {}
     for case, d in data.items():
         if case == 'D0-intact': continue
-        row = {}
+        row = {}; step = round((d['times_us'][1] - d['times_us'][0]) / dt)   # D7 is sampled at 0.1 μs (see run)
         for i, name in enumerate(names):
             comp = 2 if name.startswith('top') else 0
-            base, here = ref['probes_m'][:, i, comp], d['probes_m'][:, i, comp]
-            s0, s1, sd = spectrum(base, dt, f), spectrum(here, dt, f), spectrum(here - base, dt, f)
+            base, here = ref['probes_m'][::step, i, comp], d['probes_m'][:, i, comp]
+            s0, s1, sd = spectrum(base, dt * step, f), spectrum(here, dt * step, f), spectrum(here - base, dt * step, f)
             row[name] = {'f_ratio_to_intact': s1(f) / s0(f), 'scattered_f_ratio': sd(f) / s0(f),
                          'harmonic_2f_to_f': s1(2 * f) / s1(f), 'harmonic_3f_to_f': s1(3 * f) / s1(f), 'intact_2f_to_f': s0(2 * f) / s0(f)}
         rows[case] = row

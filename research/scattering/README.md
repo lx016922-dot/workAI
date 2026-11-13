@@ -73,6 +73,8 @@
 
 ![通孔散射](figures/fig3-hole.png)
 
+软件 1.1 的缺陷孔（平板上的 O 型网格，`spectral3d/feature_mesh.py`）在同一算例上的误差与上表几乎逐位相同（散射场 0.09–0.57%），节点数 39 200。运行方法和逐点结果见 [research/defects](../defects/README.md) 第 2 节与 `results/hole-ogrid.json`。
+
 ## 2. 矩形缺口：网络与二维谱元对照
 
 **算例。** 铝板长 110 mm、厚 2 mm，顶面有贯穿宽度方向的矩形缺口，缺口中心在 x = 60 mm。

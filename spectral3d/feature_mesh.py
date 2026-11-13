@@ -7,6 +7,8 @@ construction as the frozen `spectral3d.mesh` notch plate, with more cut lines). 
   the elements on the + side of the plane get the copies, so the two faces move independently. Nodes on a
   front that lies inside the material stay shared (the crack closes at its tip); nodes on an edge that lies
   on an outer face or a symmetry plane are duplicated too (the crack opens there);
+* a front that lies inside the material (crack tip, delamination edge) gets grid lines at ± h/4 on both sides,
+  across the front and across the split plane, so the singular field there sits in small elements;
 * a void box (notch) removes the elements inside it;
 * a hole replaces the elements of a square patch around it with a curved O-grid: radial lines from every
   grid node on the patch boundary to the circle, graded towards the hole. The boundary nodes are the grid
@@ -22,6 +24,7 @@ from .mesh import gll, make_mesh as frozen_make_mesh
 
 AXES = 'xyz'
 CUT_GAP_MM = .08
+FRONT_FRACTION = .25   # refinement cut lines at ± this fraction of h around a front inside the material
 
 
 def has_defects(scene):
@@ -105,6 +108,29 @@ def _edge_index(edge, value_mm):
     return i
 
 
+def _front_cuts(splits, cuts, size_mm, delta):
+    """Grid lines at ± delta around every split front that lies inside the material (a crack tip, a delamination edge),
+    across the front in the split plane and across the plane itself, so the elements touching the front are about
+    delta wide. The field there is singular (r^1/2 displacement), and with the defect's own cut lines alone the front
+    sits in an element as large as the defect layer; research/defects/plane_strain.py measures the effect against an
+    independent finite-element reference. A line closer than delta / 2 to an existing one is left out, so no sliver
+    elements appear."""
+    fronts = []
+    for s in splits:
+        for q in range(3):
+            if q == s['axis']: continue
+            lo, hi = s['ranges_mm'][q]
+            if lo > 1e-9: fronts.append((q, lo, s))
+            if hi < size_mm[q] - 1e-9: fronts.append((q, hi, s))
+    for q, value, s in fronts:
+        for axis, centre in ((q, value), (s['axis'], s['position_mm'])):
+            for v in (centre - delta, centre + delta):
+                v = round(float(v), 9)
+                if not 0 < v < size_mm[axis]: continue
+                if min(abs(v - c) for c in cuts[axis]) < max(delta / 2, CUT_GAP_MM): continue
+                cuts[axis][v] = '缺陷前沿加密'
+
+
 def featured_mesh(scene, degree, h_mm):
     from physics.defects import validate_defects, primitives, plate_size
     require(scene['geometry']['kind'] == 'plate', '缺陷目前只能加在平板上。')
@@ -124,6 +150,7 @@ def featured_mesh(scene, degree, h_mm):
         for axis, (a, b) in enumerate(hole['block_mm']):
             add(axis, a, label); add(axis, b, label)
             if axis != hole['axis'] and math.ceil((b - a) / h_mm) < 2: add(axis, (a + b) / 2, label)
+    _front_cuts(prims['splits'], cuts, size_mm, FRONT_FRACTION * h_mm)
     values = []
     for axis in range(3):
         row = sorted(cuts[axis])
