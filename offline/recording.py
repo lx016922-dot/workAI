@@ -32,15 +32,25 @@ def chunks(directory, m):
         raise ValueError('记录缺少采样点。')
 
 
+LAWS = ('linear', 'stvk', 'murnaghan')
+
+
+def controls_of(m):
+    """Constitutive controls a record holds (records made before the controls became selectable hold all three)."""
+    return tuple(m.get('controls', LAWS))
+
+
+def available(m, part):
+    """Raise unless the record's controls give this response."""
+    from .domain import RECIPES, parts_for
+    if part not in RECIPES: raise ValueError('响应类型无效。')
+    if part not in parts_for(controls_of(m)) and not (part == 'nonlinear' and controls_of(m) == LAWS):
+        raise ValueError('这次计算没有算这种响应所需的控制。请在“求解器配置”里把“计算的响应”改为“全部”后重新计算。')
+
+
 def response(data, part):
-    if part == 'full': return data['murnaghan']
-    if part in ('linear', 'stvk'): return data[part]
-    if part == 'material': return data['murnaghan'] - data['stvk']
-    if part == 'geometric': return data['stvk'] - data['linear']
-    raise ValueError('响应类型无效。')
-
-
-LAW = {'linear': 0, 'stvk': 1, 'murnaghan': 2}
+    from .domain import response as combine
+    return combine(data, part)
 
 
 def is_compact(m):
@@ -58,12 +68,10 @@ def _receiver_traces(directory, m, part, points):
             raise ValueError('这次计算保存的是精简记录：只有接收点保存了每个采样点的完整波形。请把该点加为接收点后重新计算，'
                              '或在“求解器配置”里把记录方式改为“完整记录”。已保存的接收点：' + '、'.join(r['name'] for r in m['receivers']))
         rows.append(hit[0])
-    values = np.empty((m['frame_count'], len(points), 3))
+    values = np.empty((m['frame_count'], len(points), 3)); controls = controls_of(m)
     for row, data in chunks(directory, m):
         probes = data['probes'][:, rows]   # samples × receivers × controls × xyz
-        field = {'full': lambda: probes[:, :, 2], 'linear': lambda: probes[:, :, 0], 'stvk': lambda: probes[:, :, 1],
-                 'material': lambda: probes[:, :, 2] - probes[:, :, 1], 'geometric': lambda: probes[:, :, 1] - probes[:, :, 0]}[part]()
-        values[row['first_frame']:row['first_frame'] + row['frame_count']] = field
+        values[row['first_frame']:row['first_frame'] + row['frame_count']] = response({name: probes[:, :, i] for i, name in enumerate(controls)}, part)
     return {'times_us': (np.arange(m['frame_count']) * m['sample_step_us']).tolist(), 'recording_fingerprint': m['fingerprint'],
             'points': [{'location': {'point_mm': p, 'ids': [], 'weights': [], 'receiver': m['receivers'][r]['name']}, 'xyz_m': values[:, i].tolist()}
                        for i, (p, r) in enumerate(zip(points, rows))]}
@@ -72,8 +80,7 @@ def _receiver_traces(directory, m, part, points):
 def traces(directory, part, points):
     if not isinstance(points, list) or not 1 <= len(points) <= 8:
         raise ValueError('每次提取需要 1–8 个实体内点位。')
-    m = manifest(directory)
-    if part not in ('full', 'linear', 'stvk', 'material', 'geometric'): raise ValueError('响应类型无效。')
+    m = manifest(directory); available(m, part)
     if is_compact(m): return _receiver_traces(directory, m, part, points)
     with np.load(Path(directory) / 'mesh.npz', allow_pickle=False) as data:
         mesh = dict(data)
@@ -92,10 +99,10 @@ def traces(directory, part, points):
 
 class _Energy:
     """Largest energy-balance error of each control over the chunks of a record."""
-    def __init__(self): self.scale = np.zeros(3); self.error = np.zeros(3)
+    def __init__(self, m): self.controls = controls_of(m); self.scale = np.zeros(len(self.controls)); self.error = np.zeros(len(self.controls))
 
     def add(self, energies):
-        for law in range(3):
+        for law in range(len(self.controls)):
             energy = energies[law]
             # v2 records carry a fifth column with the energy taken out by absorbing layers.
             total = energy[:,1]+energy[:,2]+(energy[:,4] if energy.shape[1] > 4 else 0.)
@@ -107,20 +114,20 @@ class _Energy:
             time_order=m['time_order'], calculation_dtype='float64', output_dtype=output_dtype,
             external_work_balance_relative=float(self.error[i]/max(self.scale[i],1e-30)),
             energy_balance_within_1_percent=bool(self.error[i]<=.01*max(self.scale[i],1e-30)),
-            max_strain=m['max_strain'][i],min_J=m['min_J'][i],nodes=m['nodes']) for i,name in enumerate(('linear','stvk','murnaghan'))]
+            max_strain=m['max_strain'][i],min_J=m['min_J'][i],nodes=m['nodes']) for i,name in enumerate(self.controls)]
 
 
 def preview(directory):
-    """Animation of a complete record on the computation mesh: (manifest, times, fields per control, diagnostics)."""
-    m = manifest(directory)
+    """Animation of a complete record on the computation mesh: (manifest, times, fields per computed control, diagnostics)."""
+    m = manifest(directory); controls = controls_of(m)
     # Animation frames: up to 281, fewer for large meshes so one response stays within the 192 MiB display budget.
     shown = max(2, min(281, m['frame_count'], (192 * 1024**2) // (m['nodes'] * 3 * 8)))
     indices = np.unique(np.linspace(0,m['frame_count']-1,shown,dtype=int))
-    fields = np.empty((3,len(indices),m['nodes'],3)); energy = _Energy()
+    fields = np.empty((len(controls),len(indices),m['nodes'],3)); energy = _Energy(m)
     for row, data in chunks(directory,m):
         selected = np.flatnonzero((indices>=row['first_frame']) & (indices<row['first_frame']+row['frame_count']))
         local = indices[selected]-row['first_frame']
-        for law,name in enumerate(('linear','stvk','murnaghan')): fields[law,selected] = data[name][local]
+        for law,name in enumerate(controls): fields[law,selected] = data[name][local]
         energy.add(data['energies'])
     return m,indices*m['sample_step_us'],fields,energy.diagnostics(m)
 
@@ -131,7 +138,8 @@ def display_preview(directory):
     The parts are formed in float64 before they are stored as float32, so the nonlinear increments keep their own
     precision (a difference of two float32 fields would not)."""
     from spectral3d.display import display_mesh, frames_shown
-    directory = Path(directory); m = manifest(directory); energy = _Energy()
+    from .domain import parts_for
+    directory = Path(directory); m = manifest(directory); energy = _Energy(m); controls = controls_of(m); wanted = parts_for(controls)
     if is_compact(m):
         if digest(directory / m['display']['file']) != m['display']['sha256']: raise ValueError('显示网格校验失败。')
         with np.load(directory / m['display']['file'], allow_pickle=False) as data: display = {'nodes': data['nodes'], 'triangles': data['triangles']}
@@ -139,19 +147,19 @@ def display_preview(directory):
         indices = np.asarray(m['display']['frames']); pieces = []
         for row, data in chunks(directory, m):
             pieces.append(data['display']); energy.add(data['energies'])
-        stored = np.concatenate(pieces, axis=1)
-        if stored.shape[1] != len(indices): raise ValueError('精简记录缺少动画帧。')
-        parts = {'linear': stored[0], 'geometric': stored[1], 'material': stored[2],
-                 'stvk': (stored[0].astype(np.float64) + stored[1]).astype(np.float32), 'full': (stored[0].astype(np.float64) + stored[1] + stored[2]).astype(np.float32)}
+        stored = dict(zip(m['display'].get('parts', ('linear', 'geometric', 'material')), np.concatenate(pieces, axis=1)))
+        if any(len(v) != len(indices) for v in stored.values()): raise ValueError('精简记录缺少动画帧。')
+        # Responses that are not stored are sums of stored ones: StVK = linear + geometric, complete = linear + the increments.
+        sums = {'stvk': ('linear', 'geometric'), 'full': ('linear', 'nonlinear') if 'nonlinear' in stored else ('linear', 'geometric', 'material')}
+        parts = {name: stored[name] if name in stored else sum(stored[k].astype(np.float64) for k in sums[name]).astype(np.float32) for name in wanted}
     else:
         with np.load(directory / 'mesh.npz', allow_pickle=False) as data: mesh = dict(data)
         display = display_mesh(mesh); nodes = display['nodes']; indices = frames_shown(m['frame_count'], len(nodes), 4)
-        parts = {name: np.empty((len(indices), len(nodes), 3), dtype=np.float32) for name in ('linear', 'stvk', 'full', 'geometric', 'material')}
+        parts = {name: np.empty((len(indices), len(nodes), 3), dtype=np.float32) for name in wanted}
         for row, data in chunks(directory, m):
             selected = np.flatnonzero((indices >= row['first_frame']) & (indices < row['first_frame'] + row['frame_count']))
             if len(selected):
-                local = indices[selected] - row['first_frame']
-                linear, stvk, full = (data[name][local][:, nodes] for name in ('linear', 'stvk', 'murnaghan'))
-                for name, value in (('linear', linear), ('stvk', stvk), ('full', full), ('geometric', stvk - linear), ('material', full - stvk)): parts[name][selected] = value
+                local = indices[selected] - row['first_frame']; values = {name: data[name][local][:, nodes] for name in controls}
+                for name in wanted: parts[name][selected] = response(values, name)
             energy.add(data['energies'])
     return m, indices * m['sample_step_us'], parts, energy.diagnostics(m, 'float32'), display

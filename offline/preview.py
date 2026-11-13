@@ -134,17 +134,20 @@ def preview(body, data_directory=None):
         acq = scene['acquisition']; samples = int(round(acq['duration_us'] / acq['sample_step_us'])) + 1
         out['warnings'] += long_record_warnings(acq['duration_us'], out['signals'], out['resolution'])
         if out['mesh']:
-            size = samples * out['mesh']['nodes'] * 3 * 8 * CONTROLS
+            from .domain import CONTROL_SETS
+            size = samples * out['mesh']['nodes'] * 3 * 8 * len(CONTROL_SETS[request.get('controls', 'all')])
             free = shutil.disk_usage(data_directory).free if data_directory else None
             out['record'] = {'samples': samples, 'uncompressed_bytes': size, 'free_bytes': free, 'mode': 'full'}
             if scene.get('schema') == V2 and body.get('engine') != 'coarse':
                 # Network engine: the record mode, the time layer and what the computation costs on this machine (offline/resources.py).
                 from .resources import estimate, memory_problem
                 try:
-                    cost = estimate(scene, built[0], request.get('time_stepping', 'auto'), request.get('record', 'auto'), data_directory)
-                    out['estimate'] = cost; out['record'].update(mode=cost['record'])
+                    chosen = CONTROL_SETS[request.get('controls', 'all')]
+                    cost = estimate(scene, built[0], request.get('time_stepping', 'auto'), request.get('record', 'auto'), data_directory, chosen)
+                    out['estimate'] = cost; out['record'].update(mode=cost['record'], uncompressed_bytes=samples * out['mesh']['nodes'] * 3 * 8 * len(chosen))
+                    size = out['record']['uncompressed_bytes']
                     if cost['record'] == 'compact': out['record']['uncompressed_bytes'] = size = cost['disk_bytes']
-                    problem = memory_problem(out['mesh']['nodes'], cost['record'])
+                    problem = memory_problem(out['mesh']['nodes'], cost['record'], len(chosen))
                     if problem: out['ok'] = False; out['errors'].append(f'模型太大：{problem}。请增大单元尺寸、缩小模型或使用对称面。')
                 except (ValueError, KeyError, TypeError) as error:
                     out['warnings'].append(f'无法估计计算量：{error}')

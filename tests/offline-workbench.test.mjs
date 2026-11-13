@@ -177,3 +177,28 @@ test('large models: display results validate, compact records are told apart, es
   assert.doesNotMatch(inspectorMarkup(s, 'engine', 4, { engine: 'coarse' }), /record-mode|time-layer/);
   assert.deepEqual([Object.keys(RECORD_MODES), Object.keys(TIME_LAYERS)], [['auto', 'full', 'compact'], ['auto', 'frozen']]);
 });
+
+test('selectable controls: the setting, the responses a job offers and the notes', async () => {
+  const { inspectorMarkup, CONTROL_SETS } = await import('../offline/web/inspector.js');
+  const { responseLabels, controlsNote, solidResultMarkup } = await import('../offline/web/solid-viewer.js');
+  const { estimateMarkup } = await import('../offline/web/shell.js');
+  assert.deepEqual(Object.keys(CONTROL_SETS), ['all', 'full_linear', 'full']);
+  const s = upgrade(v1);
+  for (const engine of ['network', 'coarse']) {   // both engines compute the selected controls
+    const form = inspectorMarkup(s, 'engine', 4, { engine, controls: 'full_linear' });
+    assert.match(form, /data-action="control-set"/); assert.match(form, /value="full_linear" selected/);
+  }
+  assert.match(inspectorMarkup(s, 'engine', 4, { engine: 'network' }), /value="all" selected/);
+  assert.equal(responseLabels.nonlinear, '非线性增量（完整 − 线性）');
+  const rows = laws => ({ controls: laws.map(law => ({ law })) });
+  assert.match(controlsNote(rows(['linear', 'stvk', 'murnaghan'])), /材料增量 = 完整材料 − StVK/); assert.match(controlsNote({}), /三个冻结网络分支/);   // older results list no controls
+  assert.match(controlsNote(rows(['linear', 'murnaghan'])), /非线性增量 = 完整 − 线性/); assert.match(controlsNote(rows(['murnaghan'])), /只计算了完整/);
+  const result = { scene: { name: '板', geometry: { kind: 'plate' }, source: { frequency_mhz: .3 }, acquisition: { sample_step_us: .05 }, receivers: [{ name: 'P1' }] }, response_part: 'nonlinear', times_us: [0, 1], nodes_mm: [[0, 0, 0]],
+    spectral: { elements: [[0]] }, controls: [{ law: 'linear' }, { law: 'murnaghan' }], diagnostics: { output_dtype: 'float64', internal_step_us: .005, external_work_balance_relative: 1e-5, max_strain: 1e-5, min_J: .99999 } };
+  const markup = solidResultMarkup(result);
+  assert.match(markup, /非线性增量（完整 − 线性）/); assert.match(markup, /几何与材料增量之和/); assert.match(markup, /位移差不是单独的物理状态/);
+  const estimate = { record: 'full', scheme: 'verlet2', layer_step_us: .005, evaluations_per_control: 6000, frozen_evaluations_per_control: 23400, seconds: 30, rate_measured: true, memory_bytes: 2 ** 29, disk_bytes: 2 ** 28 };
+  assert.match(estimateMarkup({ ...estimate, controls: ['murnaghan'], cpu_relative_to_all: .54 }), /1 组（完整）[^<]*54%/);
+  assert.match(estimateMarkup({ ...estimate, controls: ['linear', 'murnaghan'], cpu_relative_to_all: .76 }), /2 组（线性、完整）[^<]*76%/);
+  assert.doesNotMatch(estimateMarkup({ ...estimate, controls: ['linear', 'stvk', 'murnaghan'], cpu_relative_to_all: 1 }), /CPU 用量/);
+});

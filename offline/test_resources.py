@@ -43,6 +43,30 @@ class Requests(unittest.TestCase):
         v1 = json.loads((Path(__file__).parent / 'example-request.json').read_text(encoding='utf-8'))
         with self.assertRaises(ValueError): validate_request({'scene': v1['scene'], 'degree': v1['degree'], 'record': 'compact'})
 
+    def test_selectable_controls(self):
+        from offline.domain import CONTROL_SETS, PARTS, parts_for, response
+        self.assertEqual(parts_for(CONTROL_SETS['all']), PARTS); self.assertEqual(parts_for(CONTROL_SETS['full_linear']), ('full', 'linear', 'nonlinear')); self.assertEqual(parts_for(CONTROL_SETS['full']), ('full',))
+        values = {'linear': 1., 'stvk': 1.5, 'murnaghan': 4.}
+        self.assertEqual([response(values, p) for p in ('full', 'linear', 'stvk', 'geometric', 'material', 'nonlinear')], [4., 1., 1.5, .5, 2.5, 3.])
+        self.assertNotIn('controls', validate_request({'scene': v2_plate(), 'degree': 3}))
+        for engine in ({}, {'engine': 'coarse'}):
+            self.assertEqual(validate_request({'scene': strip(48., 2.) if engine else v2_plate(), 'degree': 4, 'controls': 'full', **engine})['controls'], 'full')
+        v1 = json.loads((Path(__file__).parent / 'example-request.json').read_text(encoding='utf-8'))
+        for bad in ({'scene': v2_plate(), 'degree': 3, 'controls': 'linear'}, {'scene': v1['scene'], 'degree': v1['degree'], 'controls': 'full'}):
+            with self.assertRaises(ValueError): validate_request(bad)
+        # fewer controls: less memory, a smaller record, less CPU; on one thread less time, with a thread per control the complete control sets it
+        self.assertLess(resources.memory_bytes(10 ** 6, 'compact', 60000, 1), resources.memory_bytes(10 ** 6, 'compact', 60000, 3) - 500 * 1024 ** 2)
+        self.assertEqual(resources.record_mode('auto', 601, 229293, 1), 'compact'); self.assertEqual(resources.record_mode('auto', 601, 100000, 1), 'full'); self.assertEqual(resources.record_mode('auto', 601, 100000, 3), 'compact')
+        all3, pair, one = (CONTROL_SETS[k] for k in ('all', 'full_linear', 'full'))
+        self.assertEqual([resources.relative_time(c, 4) for c in (all3, pair, one)], [1., 1., 1.])
+        self.assertAlmostEqual(resources.relative_time(all3, 1), 2.05); self.assertAlmostEqual(resources.relative_time(pair, 1), 1.5); self.assertEqual(resources.relative_time(one, 1), 1.)
+        self.assertAlmostEqual(resources.relative_time(all3, 2), 1.025)
+        a, b, c = (preview({'scene': v2_plate(), 'degree': 3, **extra}, '.') for extra in ({}, {'controls': 'full_linear'}, {'controls': 'full'}))
+        self.assertEqual([len(p['estimate']['controls']) for p in (a, b, c)], [3, 2, 1])
+        self.assertEqual(b['record']['uncompressed_bytes'] * 3, a['record']['uncompressed_bytes'] * 2); self.assertEqual(c['record']['uncompressed_bytes'] * 3, a['record']['uncompressed_bytes'])
+        self.assertLess(c['estimate']['cpu_relative_to_all'], b['estimate']['cpu_relative_to_all']); self.assertEqual(a['estimate']['cpu_relative_to_all'], 1.)
+        self.assertLess(c['estimate']['disk_bytes'], b['estimate']['disk_bytes']); self.assertLess(b['estimate']['disk_bytes'], a['estimate']['disk_bytes'])
+
     def test_record_mode_and_memory_limit(self):
         self.assertEqual(resources.record_mode('auto', 601, 13689), 'full'); self.assertEqual(resources.record_mode('auto', 601, 229293), 'compact')
         self.assertEqual(resources.record_mode('full', 601, 229293), 'full'); self.assertEqual(resources.record_mode('compact', 601, 100), 'compact')
@@ -110,6 +134,38 @@ class Jobs(unittest.TestCase):
             with self.assertRaises(ValueError) as refused: traces(Path(tmp) / 'compact' / 'record', 'full', [[5., 1., 1.]])
             self.assertIn('精简记录', str(refused.exception)); self.assertIn(scene['receivers'][0]['name'], str(refused.exception))
             self.assertLess(sum(f.stat().st_size for f in (Path(tmp) / 'compact').rglob('*.npz')), sum(f.stat().st_size for f in (Path(tmp) / 'full').rglob('*.npz')) / 2)
+
+    def test_jobs_with_fewer_controls_give_the_same_responses(self):
+        scene = v2_plate(); read = lambda d, part, dtype: np.frombuffer(gzip.decompress((d / f'{part}.bin.gz').read_bytes()), dtype=dtype)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); run_job(root / 'all', validate_request({'scene': scene, 'degree': 3}))
+            pair = run_job(root / 'pair', validate_request({'scene': scene, 'degree': 3, 'controls': 'full_linear'}))
+            one = run_job(root / 'one', validate_request({'scene': scene, 'degree': 3, 'controls': 'full', 'record': 'compact'}))
+            self.assertEqual((pair['controls'], pair['parts'], pair['controls_completed']), (['linear', 'murnaghan'], ['full', 'linear', 'nonlinear'], 2))
+            self.assertEqual((one['controls'], one['parts'], one['record_mode']), (['murnaghan'], ['full'], 'compact'))
+            self.assertEqual(set(json.loads((root / 'pair' / 'exports.json').read_text())), {'full', 'linear', 'nonlinear'}); self.assertEqual(set(json.loads((root / 'one' / 'exports.json').read_text())), {'full'})
+            self.assertFalse((root / 'pair' / 'stvk.json').exists())
+            for part in ('full', 'linear'): self.assertTrue(np.array_equal(read(root / 'pair', part, '<f8'), read(root / 'all', part, '<f8')), part)
+            self.assertTrue(np.array_equal(read(root / 'pair', 'nonlinear', '<f8'), read(root / 'all', 'full', '<f8') - read(root / 'all', 'linear', '<f8')))
+            record = json.loads((root / 'pair' / 'nonlinear.json').read_text(encoding='utf-8'))
+            self.assertEqual((record['response_part'], [c['law'] for c in record['controls']], record['diagnostics']['law']), ('nonlinear', ['linear', 'murnaghan'], 'murnaghan'))
+            self.assertEqual(json.loads((root / 'pair' / 'linear.json').read_text(encoding='utf-8'))['diagnostics']['law'], 'linear')
+            points = [r['point_mm'] for r in scene['receivers']]; wave = lambda d, part: np.array(traces(root / d / 'record', part, points)['points'][0]['xyz_m'])
+            self.assertTrue(np.array_equal(wave('pair', 'full'), wave('all', 'full'))); self.assertTrue(np.array_equal(wave('one', 'full'), wave('all', 'full')))
+            self.assertLess(np.max(np.abs(wave('pair', 'nonlinear') - (wave('all', 'geometric') + wave('all', 'material')))), 1e-12 * np.max(np.abs(wave('all', 'full'))))
+            for directory, part in (('pair', 'material'), ('pair', 'stvk'), ('one', 'linear'), ('one', 'nonlinear')):
+                with self.assertRaises(ValueError) as refused: traces(root / directory / 'record', part, points)
+                self.assertIn('控制', str(refused.exception))
+            size = lambda d: sum(f.stat().st_size for f in (root / d / 'record' / 'fields').glob('*.npz'))
+            self.assertAlmostEqual(size('pair') / size('all'), 2 / 3, delta=.02)
+
+    def test_the_fast_engine_computes_the_selected_controls(self):
+        scene = strip(48., 2.)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); one = run_job(root / 'one', validate_request({'scene': scene, 'degree': 4, 'engine': 'coarse', 'controls': 'full'}))
+            run_job(root / 'all', validate_request({'scene': scene, 'degree': 4, 'engine': 'coarse'}))
+            self.assertEqual((one['phase'], one['controls'], one['parts']), ('completed', ['murnaghan'], ['full'])); self.assertEqual(set(json.loads((root / 'one' / 'exports.json').read_text())), {'full'})
+            self.assertEqual((root / 'one' / 'full.bin.gz').read_bytes(), (root / 'all' / 'full.bin.gz').read_bytes())
 
     def test_a_full_record_too_large_for_the_browser_is_shown_on_the_display_mesh(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(resources, 'BROWSER_NODES', 100):

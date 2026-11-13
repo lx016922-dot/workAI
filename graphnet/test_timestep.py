@@ -104,6 +104,32 @@ class Records(unittest.TestCase):
             with self.assertRaises(ValueError): rollout(scene, mesh, model, root / 'whole', identity, time_plan='frozen', record='compact')
             with self.assertRaises(ValueError): rollout(scene, mesh, model, root / 'other', identity, record='partial')
 
+    def test_selected_controls_equal_the_same_controls_of_a_run_with_all_three(self):
+        from graphnet.rollout import display_parts
+        self.assertEqual([p[0] for p in display_parts(('linear', 'stvk', 'murnaghan'))], ['linear', 'geometric', 'material'])
+        self.assertEqual(display_parts(('linear', 'murnaghan')), (('linear', 'linear', None), ('nonlinear', 'murnaghan', 'linear')))
+        self.assertEqual(display_parts(('murnaghan',)), (('full', 'murnaghan', None),))
+        model, scene, mesh = setup(excited(plate()))
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); identity = {'test': 'controls'}
+            rollout(scene, mesh, model, root / 'all', identity); a = read_record(root / 'all')
+            for name, controls, rows in (('pair', ('linear', 'murnaghan'), [0, 2]), ('full', ('murnaghan',), [2])):
+                m = rollout(scene, mesh, model, root / name, identity, controls=controls); b = read_record(root / name)
+                self.assertEqual(m['controls'], list(controls)); self.assertEqual(len(m['max_strain']), len(controls)); self.assertNotIn('stvk', b)
+                for control in controls: self.assertTrue(np.array_equal(b[control], a[control]), (name, control))
+                self.assertTrue(np.array_equal(b['probes'], a['probes'][:, :, rows])); self.assertTrue(np.array_equal(b['energies'], a['energies'][rows]))
+                size = lambda d: sum(f.stat().st_size for f in (root / d).rglob('*.npz') if f.name != 'mesh.npz')
+                self.assertAlmostEqual(size(name) / size('all'), len(controls) / 3, delta=.02)
+                # the compact record of the same controls: receivers bit-identical, display holds the response and its increment
+                c = rollout(scene, mesh, model, root / (name + '-compact'), identity, controls=controls, record='compact'); d = read_record(root / (name + '-compact'))
+                self.assertTrue(np.array_equal(d['probes'], b['probes'])); frames = c['display']['frames']; nodes = np.load(root / (name + '-compact') / 'display.npz')['nodes']
+                self.assertEqual(c['display']['parts'], ['linear', 'nonlinear'] if len(controls) == 2 else ['full'])
+                expected = [a['linear'], a['murnaghan'] - a['linear']] if len(controls) == 2 else [a['murnaghan']]
+                for stored, exact in zip(d['display'], expected): self.assertTrue(np.array_equal(stored, exact[frames][:, nodes].astype(np.float32)))
+            with self.assertRaises(ValueError): rollout(scene, mesh, model, root / 'all', identity, controls=('murnaghan',))   # another setting: not the saved record
+            for bad in ((), ('murnaghan', 'linear'), ('linear', 'linear'), ('other',)):
+                with self.assertRaises(ValueError): rollout(scene, mesh, model, root / 'bad', identity, controls=bad)
+
     def test_one_stage_layer_on_a_narrow_band_record_agrees_with_the_frozen_layer(self):
         narrow = excited(plate()); narrow['source'].update(cycles=5.); narrow['sources'][0].update(cycles=5.); narrow['acquisition'] = {'duration_us': 30., 'sample_step_us': .05}
         model, scene, mesh = setup(narrow)

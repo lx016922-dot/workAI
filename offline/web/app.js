@@ -6,7 +6,7 @@ import { solidPathMarkup, mountSolidPath } from './solid-path-viewer.js';
 import { treeNodes, upgrade, workbenchTemplates, addSource, removeSource, addBoundary, removeBoundary, addReceiver, removeReceiver, sourcesOf, V2, BOUNDARY_LABELS, FACES, KIND_LABELS,
   DEFECT_LABELS, DEFECT_ICONS, addDefect, removeDefect, defectName } from './scene-model.js';
 import { drawScene, pick } from './model-view.js';
-import { inspectorMarkup, bindInspector, escapeHtml, COARSE_MODELS, DEFAULT_COARSE_MODEL, RECORD_MODES, TIME_LAYERS } from './inspector.js';
+import { inspectorMarkup, bindInspector, escapeHtml, COARSE_MODELS, DEFAULT_COARSE_MODEL, RECORD_MODES, TIME_LAYERS, CONTROL_SETS } from './inspector.js';
 import { signalsMarkup } from './signal-view.js';
 import { materialDerivedMarkup } from './material-form.js';
 import { mountRibbon } from './ribbon.js';
@@ -19,7 +19,7 @@ const VIEWS = { iso: [-.62, .52], front: [0, 0], top: [0, 1.5699], side: [-Math.
 const DRAFT = 'workai.workbench.draft.v1';
 const ENGINE_LABELS = { network: '物理 AI · 冻结网络', coarse: '物理 AI · 粗网格算子' };
 const host = window.chrome?.webview || null;   // present inside the WorkAI desktop window (WebView2)
-const state = { scene: null, degree: 4, engine: 'network', coarseModel: DEFAULT_COARSE_MODEL, record: 'auto', timeStepping: 'auto', selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
+const state = { scene: null, degree: 4, engine: 'network', coarseModel: DEFAULT_COARSE_MODEL, record: 'auto', timeStepping: 'auto', controls: 'all', selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
   view: { yaw: VIEWS.iso[0], pitch: VIEWS.iso[1], zoom: 1, exaggerate: true, grid: true, preset: 'iso' }, history: [], templates: {}, token: '', picks: [], submitting: false,
   expanded: new Set(['scene', 'component', 'physics', 'sources', 'boundaries', 'receivers', 'study', 'results']), info: null, phases: {}, lastPreviewKey: '' };
 let previewTimer = 0, previewStamp = 0, poll = 0, generation = 0, viewer = null, pathViewer = null, ribbon = null, log = null;
@@ -36,13 +36,13 @@ function toast(message, kind = 'error') {
 const fail = error => toast(error?.message || String(error));
 /** The mesh is always chosen by the software (offline/automesh.py): requests carry mesh 'auto', never a size or degree. */
 function requestBody() {
-  return { scene: state.scene, mesh: 'auto', ...(state.engine === 'coarse' ? { engine: 'coarse', coarse_model: state.coarseModel }
+  return { scene: state.scene, mesh: 'auto', ...(state.controls !== 'all' ? { controls: state.controls } : {}), ...(state.engine === 'coarse' ? { engine: 'coarse', coarse_model: state.coarseModel }
     : { ...(state.record !== 'auto' ? { record: state.record } : {}), ...(state.timeStepping !== 'auto' ? { time_stepping: state.timeStepping } : {}) }) };
 }
 /** Engine, coarse model, record mode and time layer from a stored request, draft or imported file (unknown values fall back to the defaults). */
 function takeEngine(d) {
   state.engine = d?.engine === 'coarse' ? 'coarse' : 'network'; state.coarseModel = COARSE_MODELS[d?.coarse_model] ? d.coarse_model : DEFAULT_COARSE_MODEL;
-  state.record = RECORD_MODES[d?.record] ? d.record : 'auto'; state.timeStepping = TIME_LAYERS[d?.time_stepping] ? d.time_stepping : 'auto';
+  state.record = RECORD_MODES[d?.record] ? d.record : 'auto'; state.timeStepping = TIME_LAYERS[d?.time_stepping] ? d.time_stepping : 'auto'; state.controls = CONTROL_SETS[d?.controls] ? d.controls : 'all';
 }
 function storeDraft() { try { localStorage.setItem(DRAFT, JSON.stringify(requestBody())); } catch { /* storage unavailable */ } }
 function readDraft() { try { const d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); return d?.scene?.schema === V2 ? d : null; } catch { return null; } }
@@ -207,7 +207,7 @@ function renderInspector() {
   const iconName = kind === 'boundary' ? state.scene.boundaries[index]?.type || 'boundary' : kind === 'defect' ? DEFECT_ICONS[state.scene.defects?.[index]?.type] : NODE_ICONS[kind];
   $('#inspector-head').innerHTML = `${icon(iconName)}<b>${escapeHtml(nodeLabel(state.selection))}</b>`;
   if (kind === 'job') { renderJobInspector(state.selection.slice(4)); return; }
-  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, 4, { materials: state.materials, engine: state.engine, coarseModel: state.coarseModel, meshAuto: state.preview?.mesh?.auto, record: state.record, timeStepping: state.timeStepping });
+  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, 4, { materials: state.materials, engine: state.engine, coarseModel: state.coarseModel, meshAuto: state.preview?.mesh?.auto, record: state.record, timeStepping: state.timeStepping, controls: state.controls });
   renderMaterialDerived(); renderEngineDerived();
   let before = snapshot();
   bindInspector($('#inspector'), state.scene, state, kind => {
@@ -329,12 +329,15 @@ async function openJob(id, restore = false) {
   if (!id) { $('#result-head').innerHTML = '<p class="wb-empty">在模型开发器的“结果”下选择一条计算记录，或点击功能区的“计算”计算当前模型。</p>'; return; }
   try {
     const s = await api('/api/jobs/' + id); if (stamp !== generation) return;
-    const done = ['completed', 'failed', 'paused'].includes(s.phase), progress = s.duration_us ? 100 * (s.completed_time_us || 0) / s.duration_us : 100 * (s.controls_completed || 0) / 3;
+    const done = ['completed', 'failed', 'paused'].includes(s.phase), progress = s.duration_us ? 100 * (s.completed_time_us || 0) / s.duration_us : 100 * (s.controls_completed || 0) / (s.controls?.length || 3);
+    // A job computes the controls its request asked for: offer only the responses it has, and fall back to the complete one.
+    const parts = Array.isArray(s.parts) && s.parts.length ? s.parts : ['full', 'linear', 'stvk', 'geometric', 'material'];
+    if (!parts.includes(state.part)) state.part = 'full';
     $('#result-head').innerHTML = `<div class="wb-result-title"><h2>${escapeHtml(s.name || id)}</h2><span class="wb-phase ${s.phase}">${PHASES[s.phase] || escapeHtml(s.phase)}</span>${s.engine === 'coarse' ? `<span class="wb-tag">粗网格算子${s.coarse_model ? ' · ' + escapeHtml(s.coarse_model) : ''}</span>` : ''}
       ${s.record_mode === 'compact' ? '<span class="wb-tag">精简记录</span>' : ''}<span class="muted">${Math.round(s.elapsed_s || 0)} 秒${!done && s.remaining_s > 0 ? ` · 预计还需 ${fmtDuration(s.remaining_s)}` : ''}${s.message ? ' · ' + escapeHtml(s.message) : ''}</span></div>
       ${s.time_plan?.scheme ? `<p class="muted small-text">时间层：${s.time_plan.scheme === 'verlet2' ? '二阶单级' : '三级四阶'}，Δt ${(+s.time_plan.layer_step_us * 1000).toFixed(2)} ns；每组控制 ${(+s.time_plan.evaluations_per_control).toLocaleString()} 次单元消息${s.time_plan.frozen_evaluations_per_control > s.time_plan.evaluations_per_control ? `（训练时的时间层需 ${(+s.time_plan.frozen_evaluations_per_control).toLocaleString()} 次）` : ''}。</p>` : ''}
       ${done ? '' : `<progress max="100" value="${progress.toFixed(1)}"></progress>`}
-      <div class="wb-result-tools">${s.phase === 'completed' ? `<label class="wb-field inline"><span>响应</span><select id="part">${Object.entries(responseLabels).map(([k, v]) => `<option value="${k}" ${k === state.part ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
+      <div class="wb-result-tools">${s.phase === 'completed' ? `<label class="wb-field inline"><span>响应</span><select id="part">${parts.map(k => `<option value="${k}" ${k === state.part ? 'selected' : ''}>${responseLabels[k] || k}</option>`).join('')}</select></label>
         <a class="wb-button" href="/api/jobs/${id}/export">${icon('export')}下载全部结果 ZIP</a>` : ''}
         <button type="button" class="wb-button" id="reuse">${icon('open')}载入该计算的模型</button>
         ${(s.resumable ?? s.duration_us >= 5000) && !done ? `<button type="button" class="wb-button" id="pause-job">${icon('pause')}保存后暂停</button>` : ''}${s.phase === 'paused' ? `<button type="button" class="wb-button primary" id="resume-job">${icon('resume')}继续计算</button>` : ''}</div>`;

@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs, unquote
-from .domain import ROOT, PARTS, digest, model_info, templates, validate_request
+from .domain import ROOT, ALL_PARTS, digest, model_info, templates, validate_request
 from .recording import traces, manifest
 from .preview import preview
 
@@ -237,7 +237,7 @@ def handler(application):
                     if status['phase'] != 'completed':
                         return self.reply(409, {'error': '任务尚未完成。'})
                     if kind == 'export':
-                        names = ['request.json','status.json','exports.json'] + [p+ext for p in PARTS for ext in ('.json','.bin.gz')]
+                        names = ['request.json','status.json','exports.json'] + [p+ext for p in json.loads((directory/'exports.json').read_text(encoding='utf-8')) if p in ALL_PARTS for ext in ('.json','.bin.gz')]
                         if (directory/'record/recording.json').exists():
                             m = manifest(directory/'record')
                             names += ['record/recording.json','record/mesh.npz'] + (['record/'+m['display']['file']] if 'display' in m else [])
@@ -258,9 +258,11 @@ def handler(application):
                                 archive.write(path,name)
                         return
                     part = parse_qs(url.query).get('part', ['full'])[0]
-                    if part not in PARTS:
+                    if part not in ALL_PARTS:
                         raise ValueError('响应类型无效。')
                     exports = json.loads((directory / 'exports.json').read_text(encoding='utf-8'))
+                    if part not in exports:
+                        raise ValueError('这次计算没有算这种响应所需的控制。')
                     path = directory / (part + ('.json' if kind == 'result' else '.bin.gz'))
                     if digest(path) != exports[part][kind + '_sha256']:
                         raise ValueError('结果文件校验失败。')
@@ -301,7 +303,7 @@ def handler(application):
                     if action == 'traces':
                         if application.status(job)['phase'] != 'completed':
                             raise ValueError('任务尚未完成。')
-                        if not isinstance(body,dict) or set(body) != {'part','points'} or body['part'] not in PARTS:
+                        if not isinstance(body,dict) or set(body) != {'part','points'} or body['part'] not in ALL_PARTS:
                             raise ValueError('提取参数无效。')
                         with application.trace_lock:
                             return self.reply(200,traces(application.path(job)/'record',body['part'],body['points']))

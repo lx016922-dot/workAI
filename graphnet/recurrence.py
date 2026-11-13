@@ -146,13 +146,15 @@ def _segment(position, velocity, acceleration, previous_external, work, dissipat
 @njit(cache=True, parallel=True)
 def three_segments(positions, velocities, accelerations, externals, works, dissipations, potentials, strains, jacobians,
                    cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
-                   dt, subdivisions, start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, subset):
-    count = (end_step - start_step) // subdivisions + (1 if include_initial else 0)
-    fields = np.empty((3, count, len(keep) if subset else len(mass), 3)); energies = np.empty((3, count, 5)); failed = np.full(3, -1, dtype=np.int64)
-    for law in prange(3):
+                   dt, subdivisions, start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, subset, laws):
+    """One thread per control. `laws` lists the constitutive controls to run (0 linear, 1 StVK, 2 complete); the state
+    arrays, fields and energies have one row per listed control, in that order."""
+    count = (end_step - start_step) // subdivisions + (1 if include_initial else 0); controls = len(laws)
+    fields = np.empty((controls, count, len(keep) if subset else len(mass), 3)); energies = np.empty((controls, count, 5)); failed = np.full(controls, -1, dtype=np.int64)
+    for law in prange(controls):
         row = _segment(positions[law], velocities[law], accelerations[law], externals[law], works[law], dissipations[law],
                        cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
-                       law, dt, subdivisions, start_step, end_step, include_initial, signals, potentials[law], strains[law], jacobians[law], ca, cb, cn, ck, keep, subset)
+                       laws[law], dt, subdivisions, start_step, end_step, include_initial, signals, potentials[law], strains[law], jacobians[law], ca, cb, cn, ck, keep, subset)
         fields[law], energies[law] = row[0], row[1]
         positions[law], velocities[law], accelerations[law], externals[law] = row[2], row[3], row[4], row[5]
         works[law], dissipations[law], potentials[law], strains[law], jacobians[law] = row[6], row[7], row[8], row[9], row[10]

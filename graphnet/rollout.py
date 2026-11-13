@@ -9,10 +9,13 @@ Two things can be chosen per record (the defaults reproduce the frozen behaviour
 
 * `time_plan`: 'frozen' is the trained three-stage layer at CFL × spacing / 10000 m/s; 'auto' lets
   `graphnet.timestep` pick the cheapest layer that meets its stability and phase-error conditions;
+* `controls`: the constitutive controls to compute, any of linear, stvk and murnaghan (the complete response).
+  All three give the five responses (complete, linear, StVK, geometric increment, material increment); linear and
+  murnaghan give the complete and linear responses and their difference; murnaghan alone gives the complete response;
 * `record`: 'full' stores every node at every sample (float64); 'compact' stores what a large model can
   afford: the receivers at every sample (float64, bit-identical to the full record), the display mesh
-  (`spectral3d.display`) at the animation frames as float32 linear response, geometric increment and material
-  increment, and a few full float64 snapshots.
+  (`spectral3d.display`) at the animation frames as float32 (`display_parts`: the linear response and the
+  increments when the controls allow them), and a few full float64 snapshots.
 """
 import hashlib
 import json
@@ -63,6 +66,8 @@ def source_hashes():
 
 
 RECORDS = ('full', 'compact')
+LAWS = ('linear', 'stvk', 'murnaghan')
+LAW_LABELS = {'linear': '线性', 'stvk': 'StVK', 'murnaghan': '完整'}
 SNAPSHOTS = 4
 WORK_PER_CHUNK = 6e8     # node × element-message evaluations between checkpoints (a few minutes on a desktop CPU)
 
@@ -72,22 +77,35 @@ def snapshot_frames(frames, count=SNAPSHOTS):
     return np.unique(np.linspace(0, frames - 1, count + 1, dtype=int)[1:]) if count else np.zeros(0, dtype=int)
 
 
-def storage_bytes(frames, nodes, record, display_nodes=0, shown=0, receivers=0, snapshots=SNAPSHOTS):
+def display_parts(controls):
+    """What a compact record stores on the display mesh for these controls: (name, minuend, subtrahend or None).
+
+    Increments are formed in float64 before they are stored as float32."""
+    has = set(controls)
+    if has == set(LAWS): return (('linear', 'linear', None), ('geometric', 'stvk', 'linear'), ('material', 'murnaghan', 'stvk'))
+    if has == {'linear', 'murnaghan'}: return (('linear', 'linear', None), ('nonlinear', 'murnaghan', 'linear'))
+    return tuple(('full' if name == 'murnaghan' else name, name, None) for name in controls)
+
+
+def storage_bytes(frames, nodes, record, display_nodes=0, shown=0, receivers=0, snapshots=SNAPSHOTS, controls=3):
     """Upper bound of the record on disk, checkpoints included."""
-    checkpoints = 2 * nodes * 3 * 3 * 8 * 4
-    if record == 'full': return frames * nodes * 3 * 8 * 3 + checkpoints
-    return frames * (receivers * 72 + 120) + shown * display_nodes * 3 * 4 * 3 + snapshots * nodes * 72 + checkpoints
+    checkpoints = 2 * nodes * controls * 3 * 8 * 4
+    if record == 'full': return frames * nodes * 3 * 8 * controls + checkpoints
+    return frames * (receivers * 24 * controls + 40 * controls) + shown * display_nodes * 3 * 4 * controls + snapshots * nodes * 24 * controls + checkpoints
 
 
-def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_chunks=None, time_plan='frozen', record='full', display=None):
-    """`model` from graphnet.model.load(..., long_record=True). See the module text for `time_plan` and `record`."""
+def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_chunks=None, time_plan='frozen', record='full', display=None, controls=LAWS):
+    """`model` from graphnet.model.load(..., long_record=True). See the module text for `time_plan`, `record` and `controls`."""
     if not is_v2(scene):
         from graphwave.long_rollout import rollout as frozen
         return frozen(scene, mesh, model['weights'], model['temporal'], directory, identity, callback=callback, stop_after_chunks=stop_after_chunks)
     from .timestep import plan as layer_plan, largest_frequency, MODES
     require(time_plan in MODES and record in RECORDS, '记录设置无效：time_plan 为 auto 或 frozen，record 为 full 或 compact。')
+    controls = tuple(controls)
+    require(controls and set(controls) <= set(LAWS) and controls == tuple(name for name in LAWS if name in controls), '控制需为 linear、stvk、murnaghan 中的若干个，按此顺序且不重复。')
+    laws = np.array([LAWS.index(name) for name in controls], dtype=np.int64); count = len(controls)
     directory = Path(directory); (directory / 'fields').mkdir(parents=True, exist_ok=True); (directory / 'states').mkdir(parents=True, exist_ok=True)
-    set_num_threads(min(3, get_num_threads())); start = time.monotonic()
+    set_num_threads(min(count, get_num_threads())); start = time.monotonic()
     weights = model['weights']; duration, sample = scene['acquisition']['duration_us'], scene['acquisition']['sample_step_us']
     frames = round(duration / sample) + 1; nodes = len(mesh['points']); compact = record == 'compact'
     require(2 <= frames <= 200001 and abs((frames - 1) * sample - duration) <= 1e-8, '长记录需要整数个采样间隔，最多 200001 个采样点。')
@@ -98,7 +116,8 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
     inverse = inverse_mapping(mesh); receivers = [interpolation(mesh, r['point_mm']) for r in scene['receivers']]
     sources = source_hashes()
     fingerprint = hashlib.sha256(json.dumps({'identity': identity, 'sources': sources, 'scene': scene, 'degree': int(mesh['degree']), 'h_mm': float(mesh['h_mm']),
-                                             **({} if (time_plan, record) == ('frozen', 'full') else {'time_plan': time_plan, 'record': record})}, sort_keys=True).encode()).hexdigest()
+                                             **({} if (time_plan, record) == ('frozen', 'full') else {'time_plan': time_plan, 'record': record}),
+                                             **({} if controls == LAWS else {'controls': list(controls)})}, sort_keys=True).encode()).hexdigest()
     manifest_path = directory / 'recording.json'; manifest = None
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -116,7 +135,7 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
     sample_s = sample * 1e-6; dt = sample_s / subdivisions
     total_steps = (frames - 1) * subdivisions; require(total_steps <= 20000000, '长记录超过 2000 万层，请增大单元尺寸。')
     ca, cb, cn, _ = contact_arrays(mesh); ck, contact = contact_stiffness(mesh, scene, dt)
-    work_frames = int(WORK_PER_CHUNK // (nodes * subdivisions * stages))
+    work_frames = int(WORK_PER_CHUNK // (nodes * subdivisions * stages)); shown_parts = display_parts(controls)
     if compact:
         if display is None:
             from spectral3d.display import display_mesh
@@ -125,30 +144,30 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         shown = frames_shown(frames, len(display['nodes']), 4); kept = snapshot_frames(frames); shown_set = set(shown.tolist()); kept_set = set(kept.tolist())
         keep = np.unique(np.concatenate([ids for ids, _ in receivers])).astype(np.int64) if receivers else np.zeros(0, dtype=np.int64)
         local = [(np.searchsorted(keep, ids), w) for ids, w in receivers]
-        chunk_frames = max(2, min(256, 20000 // subdivisions, work_frames, (256 * 1024 ** 2) // (len(display['nodes']) * 36)))
+        chunk_frames = max(2, min(256, 20000 // subdivisions, work_frames, (256 * 1024 ** 2) // (len(display['nodes']) * 12 * len(shown_parts))))
     else:
         keep = np.zeros(0, dtype=np.int64); local = receivers
-        chunk_frames = max(2, min(256, 20000 // subdivisions, work_frames, (512 * 1024 ** 2) // (nodes * 72)))   # one chunk (3 laws) ≤ 512 MiB
+        chunk_frames = max(2, min(256, 20000 // subdivisions, work_frames, (512 * 1024 ** 2) // (nodes * 24 * count)))   # one chunk (all controls) ≤ 512 MiB
     if manifest is not None:
         with np.load(checkpoint_path, allow_pickle=False) as saved: state = {name: saved[name] for name in STATE}
         next_frame = manifest['completed_frames']; elapsed_before = manifest['elapsed_s']
     else:
-        estimate = storage_bytes(frames, nodes, record, len(display['nodes']) if compact else 0, len(shown) if compact else 0, len(receivers))
+        estimate = storage_bytes(frames, nodes, record, len(display['nodes']) if compact else 0, len(shown) if compact else 0, len(receivers), controls=count)
         require(shutil.disk_usage(directory).free >= estimate + 512 * 1024 ** 2, f'预计{"精简" if compact else "完整长"}记录需要约 {estimate / 1024 ** 3:.2f} GiB 空间，请选择空间充足的数据目录。')
-        save_arrays(directory / 'mesh.npz', **mesh); shape = (3, len(mesh['mass']), 3)
-        state = {name: np.zeros(shape) for name in STATE[:4]}; state.update(works=np.zeros(3), dissipations=np.zeros(3), potentials=np.zeros(3), strains=np.zeros(3), jacobians=np.ones(3))
+        save_arrays(directory / 'mesh.npz', **mesh); shape = (count, len(mesh['mass']), 3)
+        state = {name: np.zeros(shape) for name in STATE[:4]}; state.update(works=np.zeros(count), dissipations=np.zeros(count), potentials=np.zeros(count), strains=np.zeros(count), jacobians=np.ones(count))
         next_frame, elapsed_before = 0, 0.
         manifest = {'schema': 'workai.graphnet.long_record.v1', 'phase': 'running', 'duration_us': duration, 'sample_step_us': sample, 'frame_count': frames, 'nodes': len(mesh['mass']),
                     'degree': int(mesh['degree']), 'layer_step_us': dt * 1e6, 'time_order': layers['time_order'], 'composition': composition.tolist(), 'fingerprint': fingerprint, 'identity': identity,
                     'execution_source_sha256': sources, 'mesh_sha256': digest(directory / 'mesh.npz'), 'input_layer': 'v2_multi_source', 'excitation': inputs['summary'],
                     'energy_columns': ['time_us', 'kinetic_j', 'strain_j', 'external_work_j', 'dissipated_j'], 'chunks': [], 'completed_frames': 0, 'elapsed_s': 0.,
                     'raw_storage_upper_bound_bytes': estimate, 'numerical_correction': False, 'neural_forward_only': True, **layer,
-                    'time_plan': layers, 'record_mode': record, **({'contact': contact} if contact else {})}
+                    'time_plan': layers, 'record_mode': record, 'controls': list(controls), **({'contact': contact} if contact else {})}
         if compact:
             save_arrays(directory / 'display.npz', nodes=display['nodes'], triangles=display['triangles'])
             manifest['display'] = {'file': 'display.npz', 'sha256': digest(directory / 'display.npz'), 'nodes': int(len(display['nodes'])), 'triangles': int(len(display['triangles'])),
                                    'stride': display['stride'], 'cell_mm': display['cell_mm'], 'surface_faces': display['surface_faces'], 'frames': shown.tolist(), 'dtype': 'float32',
-                                   'layout': 'part(linear, geometric, material),frame,display node,xyz'}
+                                   'parts': [name for name, _, _ in shown_parts], 'layout': 'part,frame,display node,xyz'}
             manifest['snapshot_frames'] = kept.tolist()
             manifest['receivers'] = [{'name': r['name'], 'point_mm': list(r['point_mm'])} for r in scene['receivers']]
     def advance(first, last, include_initial):
@@ -158,10 +177,10 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         signals = signal_table(inputs, stage_times)
         fields, energies, failed = three_segments(*(state[name] for name in STATE), mesh['elements'], derivative, inverse, mesh['volume_weight'], mesh['mass'],
                                                   inputs['loads'], inputs['free'], alpha, damped, quadratic, cubic, composition, dt, subdivisions,
-                                                  start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, compact)
+                                                  start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, compact, laws)
         if (failed >= 0).any():
-            laws = '、'.join(name for name, step in zip(('线性', 'StVK', '完整'), failed) if step >= 0)
-            raise ValueError(f'{GUARD_MESSAGE}（{laws}控制，约 {int(failed.max()) * dt * 1e6:.2f} μs，最大应变 {float(np.max(state["strains"])):.2e}；'
+            tripped = '、'.join(LAW_LABELS[name] for name, step in zip(controls, failed) if step >= 0)
+            raise ValueError(f'{GUARD_MESSAGE}（{tripped}控制，约 {int(failed.max()) * dt * 1e6:.2f} μs，最大应变 {float(np.max(state["strains"])):.2e}；'
                              f'已保存到 {next_frame * sample:g} μs 的完整记录）')
         return fields, energies
     chunks_this_run = 0
@@ -171,11 +190,11 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
             # Stop at every animation and snapshot sample inside the chunk and read it from the state; only the receiver nodes are returned per sample.
             marks = sorted({int(f) for f in np.concatenate([shown, kept]) if next_frame <= f <= last_frame} | {last_frame})
             shown_here = [f for f in marks if f in shown_set]; kept_here = [f for f in marks if f in kept_set]
-            shots = np.empty((3, len(shown_here), len(display['nodes']), 3), dtype=np.float32); snaps = np.empty((3, len(kept_here), nodes, 3))
+            shots = np.empty((len(shown_parts), len(shown_here), len(display['nodes']), 3), dtype=np.float32); snaps = np.empty((count, len(kept_here), nodes, 3))
             def take(frame):
                 if frame in shown_here:
-                    linear, stvk, full = state['positions'][:, display['nodes']]   # increments are formed in float64, then stored as float32
-                    at = shown_here.index(frame); shots[0, at] = linear; shots[1, at] = stvk - linear; shots[2, at] = full - stvk
+                    values = dict(zip(controls, state['positions'][:, display['nodes']])); at = shown_here.index(frame)   # increments are formed in float64, then stored as float32
+                    for slot, (_, a, b) in enumerate(shown_parts): shots[slot, at] = values[a] if b is None else values[a] - values[b]
                 if frame in kept_here: snaps[:, kept_here.index(frame)] = state['positions']
             pieces = []; cursor = next_frame
             if cursor == 0 and marks[0] == 0: take(0); marks = marks[1:]
@@ -184,10 +203,10 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
             fields = np.concatenate([f for f, _ in pieces], axis=1); energies = np.concatenate([e for _, e in pieces], axis=1)
         else:
             fields, energies = advance(next_frame, last_frame, next_frame == 0)
-        probes = np.stack([np.stack([np.einsum('n,tnc->tc', w, f[:, ids]) for ids, w in local], 1) for f in fields], 2) if receivers else np.zeros((fields.shape[1], 0, 3, 3))
+        probes = np.stack([np.stack([np.einsum('n,tnc->tc', w, f[:, ids]) for ids, w in local], 1) for f in fields], 2) if receivers else np.zeros((fields.shape[1], 0, count, 3))
         path = directory / 'fields' / f'{next_frame:06d}.npz'
         if compact: save_arrays(path, probes=probes, energies=energies, display=shots, display_frames=np.asarray(shown_here, dtype=np.int64), snapshots=snaps, snapshot_frames=np.asarray(kept_here, dtype=np.int64))
-        else: save_arrays(path, linear=fields[0], stvk=fields[1], murnaghan=fields[2], probes=probes, energies=energies)
+        else: save_arrays(path, probes=probes, energies=energies, **{name: fields[i] for i, name in enumerate(controls)})
         row = {'file': str(path.relative_to(directory)).replace(os.sep, '/'), 'first_frame': next_frame, 'frame_count': last_frame - next_frame + 1, 'sha256': digest(path), 'bytes': path.stat().st_size}
         checkpoint_path = directory / 'states' / f'{last_frame:06d}.npz'; save_arrays(checkpoint_path, **state)
         manifest['chunks'].append(row); next_frame = last_frame + 1
@@ -204,11 +223,11 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
 
 
 def read_record(directory):
-    """Concatenate a finished record: times, fields per law (frames × nodes × 3), probes (frames × receivers × 3 × laws), energies (laws × frames × 5)."""
+    """Concatenate a finished record: times, fields per computed control (frames × nodes × 3), probes (frames × receivers × controls × 3), energies (controls × frames × 5)."""
     directory = Path(directory); manifest = json.loads((directory / 'recording.json').read_text(encoding='utf-8'))
     require(manifest['phase'] == 'completed', '长记录尚未完成。')
     compact = manifest.get('record_mode') == 'compact'
-    parts = {'probes': [], 'energies': [], 'display': [], 'snapshots': []} if compact else {'linear': [], 'stvk': [], 'murnaghan': [], 'probes': [], 'energies': []}
+    parts = {'probes': [], 'energies': [], 'display': [], 'snapshots': []} if compact else {**{name: [] for name in manifest.get('controls', LAWS)}, 'probes': [], 'energies': []}
     for row in manifest['chunks']:
         require(digest(directory / row['file']) == row['sha256'], f'记录块校验失败：{row["file"]}')
         with np.load(directory / row['file'], allow_pickle=False) as z:

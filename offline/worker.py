@@ -10,7 +10,7 @@ from graphwave.predict import predict
 from spectral3d.mesh import boundary_data, interpolation
 from spectral3d.feature_mesh import make_mesh
 from spectral3d.result import result_record, surface_triangles
-from .domain import MODEL, PARTS, V2, digest, model_info, validate_request
+from .domain import CONTROL_SETS, LAWS, MODEL, V2, digest, model_info, parts_for, response, validate_request
 from graphwave.long_rollout import rollout
 from .recording import preview, display_preview
 
@@ -26,14 +26,20 @@ def write_json(path, value):
             time.sleep(.05)
 
 
-def export_results(directory, scene, mesh, fields, diagnostics, info, times=None, recording=None, extra=None):
+def control_row(diagnostics, controls, part):
+    """Diagnostics shown with a response: its own control for the linear and StVK responses, the complete control otherwise."""
+    name = part if part in ('linear', 'stvk') else 'murnaghan'
+    return diagnostics[controls.index(name if name in controls else controls[-1])]
+
+
+def export_results(directory, scene, mesh, fields, diagnostics, info, times=None, recording=None, extra=None, controls=LAWS):
+    """`fields` and `diagnostics` hold one entry per computed control, in the order of `controls`."""
     if times is None:
         times = np.arange(fields[0].shape[0]) * scene['acquisition']['sample_step_us']
-    exports = {}
-    for part in PARTS:
-        field = {'full': lambda: fields[2], 'linear': lambda: fields[0], 'stvk': lambda: fields[1],
-                 'geometric': lambda: fields[1] - fields[0], 'material': lambda: fields[2] - fields[1]}[part]()
-        d = dict(diagnostics[{'linear': 0, 'stvk': 1}.get(part, 2)])
+    exports = {}; values = dict(zip(controls, fields))
+    for part in parts_for(controls):
+        field = response(values, part)
+        d = dict(control_row(diagnostics, controls, part))
         d.update(output_dtype='float64', internal_step_us=d['layer_step_us'])
         record, packed = result_record(directory.name, scene, mesh, {'fields_m': field, 'times_us': times, 'diagnostics': d})
         record.update(schema='workai.offline.graphwave.result.v1', engine='workai_graphwave_offline',
@@ -55,9 +61,9 @@ def export_results(directory, scene, mesh, fields, diagnostics, info, times=None
 def export_display(directory, scene, mesh, display, parts, diagnostics, info, times, recording, extra):
     """The five responses on the display mesh (large models and compact records): float32 animation frames, receivers from the record."""
     from spectral3d.result import display_record
-    exports = {}; compact = recording.get('record_mode') == 'compact'
-    for part in PARTS:
-        d = dict(diagnostics[{'linear': 0, 'stvk': 1}.get(part, 2)])
+    exports = {}; compact = recording.get('record_mode') == 'compact'; controls = tuple(recording.get('controls', LAWS))
+    for part in parts_for(controls):
+        d = dict(control_row(diagnostics, controls, part))
         d.update(output_dtype='float32', internal_step_us=d['layer_step_us'])
         record, packed = display_record(directory.name, scene, mesh, display, parts[part], times, d, extra['loaded_faces'])
         record.update(schema='workai.offline.graphwave.result.v1', engine='workai_graphwave_offline', engine_scope='continued_graph_network_long_record', response_part=part,
@@ -75,15 +81,16 @@ def export_display(directory, scene, mesh, display, parts, diagnostics, info, ti
     write_json(directory / 'exports.json', exports)
 
 
-def run_coarse(directory, scene, info, publish, name):
+def run_coarse(directory, scene, info, publish, name, controls=LAWS):
     """Fast engine: the learned coarse-graph operator on its own coarse grid (short records)."""
     from .coarse_engine import run as coarse_run
-    publish(phase='running', engine='coarse', coarse_model=name, controls_completed=0, message='粗网格算子：首次运行需要编译，随后计算三组控制')
+    publish(phase='running', engine='coarse', coarse_model=name, controls_completed=0, controls=list(controls), parts=list(parts_for(controls)),
+            message=f'粗网格算子：首次运行需要编译，随后计算 {len(controls)} 组控制')
     def progress(d):
         if not d['energy_balance_within_1_percent']:
             raise ValueError('粗网格输出能量收支未通过 1% 检查。')
-        publish(controls_completed=['linear', 'stvk', 'murnaghan'].index(d['law']) + 1, nodes=d['nodes'], message=d['law'] + ' 控制完成')
-    mesh, fields, diagnostics, times, extra = coarse_run(scene, callback=progress, name=name)
+        publish(controls_completed=controls.index(d['law']) + 1, nodes=d['nodes'], message=d['law'] + ' 控制完成')
+    mesh, fields, diagnostics, times, extra = coarse_run(scene, callback=progress, name=name, controls=controls)
     if len(surface_triangles(mesh['elements'])) > 50000:
         raise ValueError('网格超过离线显示预算。')
     from spectral3d.loads import loaded_surface_faces, prepare_excitation
@@ -93,8 +100,8 @@ def run_coarse(directory, scene, info, publish, name):
     if any(name in sys.modules for name in forbidden):
         raise RuntimeError('预测进程意外加载了数值求解模块。')
     publish(phase='exporting', message='正在保存动画及五种响应')
-    export_results(directory, scene, mesh, fields, diagnostics, dict(info, weights_sha256=digest(MODEL / 'weights.npz')), times, None, extra)
-    publish(phase='completed', message='粗网格算子计算完成', controls_completed=3, numerical_correction=False)
+    export_results(directory, scene, mesh, fields, diagnostics, dict(info, weights_sha256=digest(MODEL / 'weights.npz')), times, None, extra, controls)
+    publish(phase='completed', message='粗网格算子计算完成', controls_completed=len(controls), numerical_correction=False)
 
 
 def run(directory):
@@ -107,9 +114,9 @@ def run(directory):
     try:
         request = validate_request(json.loads((directory / 'request.json').read_text(encoding='utf-8')))
         info = model_info()
-        scene = request['scene']
+        scene = request['scene']; controls = CONTROL_SETS[request.get('controls', 'all')]
         if request.get('engine') == 'coarse':
-            return run_coarse(directory, scene, info, publish, request['coarse_model'])
+            return run_coarse(directory, scene, info, publish, request['coarse_model'], controls)
         network_v2 = scene.get('schema') == V2
         is_long = network_v2 or scene['acquisition']['duration_us'] >= 5000
         if is_long and 'long_model' not in info:
@@ -127,8 +134,8 @@ def run(directory):
             from physics.scene import summary
             from .resources import BROWSER_ENTRIES, BROWSER_NODES, BROWSER_TRIANGLES, memory_problem, record_mode
             frames = round(scene['acquisition']['duration_us'] / scene['acquisition']['sample_step_us']) + 1
-            record = record_mode(request.get('record', 'auto'), frames, len(mesh['points']))
-            problem = memory_problem(len(mesh['points']), record)
+            record = record_mode(request.get('record', 'auto'), frames, len(mesh['points']), len(controls))
+            problem = memory_problem(len(mesh['points']), record, len(controls))
             if problem:
                 raise ValueError(f'模型太大：{problem}。请增大单元尺寸、缩小模型或使用对称面。')
             browser_full = (record == 'full' and len(mesh['points']) <= BROWSER_NODES and mesh['elements'].size <= BROWSER_ENTRIES and
@@ -144,8 +151,8 @@ def run(directory):
             interpolation(mesh, rx['point_mm'])
         publish(phase='running', nodes=len(mesh['points']), controls_completed=0,
                 duration_us=scene['acquisition']['duration_us'] if is_long else None, resumable=bool(is_long),
-                **({'record_mode': record} if network_v2 else {}),
-                message='首次运行需要编译网络，随后计算三组控制')
+                **({'record_mode': record} if network_v2 else {}), controls=list(controls), parts=list(parts_for(controls)),
+                message=f'首次运行需要编译网络，随后计算 {len(controls)} 组控制')
         def progress(d):
             if not d['energy_balance_within_1_percent']:
                 raise ValueError('网络输出能量收支未通过 1% 检查。')
@@ -173,10 +180,10 @@ def run(directory):
                 if network['weights_sha256'] != identity['weights_sha256'] or network['time_weights_sha256'] != identity['time_weights_sha256']:
                     raise ValueError('v2 输入层读取的权重与软件包长记录模型不一致。')
                 finished = network_rollout(scene, mesh, network, directory / 'record', identity, callback=long_progress,
-                                           time_plan=request.get('time_stepping', 'auto'), record=record)
+                                           time_plan=request.get('time_stepping', 'auto'), record=record, controls=controls)
                 if directory.parent.name == 'jobs':   # the application's data directory: remember this machine's rate for later estimates
                     from .resources import save_throughput
-                    save_throughput(directory.parent.parent, len(mesh['points']), finished['time_plan']['evaluations_per_control'], finished['elapsed_s'])
+                    save_throughput(directory.parent.parent, len(mesh['points']), finished['time_plan']['evaluations_per_control'], finished['elapsed_s'], controls)
             else:
                 rollout(scene, mesh, weights, temporal, directory / 'record', identity, callback=long_progress)
             if browser_full: recording,times,fields,diagnostics = preview(directory/'record')
@@ -194,9 +201,9 @@ def run(directory):
         if any(name in sys.modules for name in forbidden):
             raise RuntimeError('预测进程意外加载了数值求解模块。')
         publish(phase='exporting', message='正在保存动画及五种响应')
-        if browser_full: export_results(directory, scene, mesh, fields, diagnostics, info, times, recording, extra)
+        if browser_full: export_results(directory, scene, mesh, fields, diagnostics, info, times, recording, extra, controls)
         else: export_display(directory, scene, mesh, display, parts, diagnostics, info, times, recording, extra)
-        publish(phase='completed', message='本机预测完成', controls_completed=3, remaining_s=0,
+        publish(phase='completed', message='本机预测完成', controls_completed=len(controls), remaining_s=0,
                 weights_sha256=info['weights_sha256'], numerical_correction=False)
     except InterruptedError as error:
         publish(phase='paused',message=str(error))

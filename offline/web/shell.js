@@ -119,6 +119,7 @@ export function estimateMarkup(e) {
   if (!e) return '';
   const saved = e.frozen_evaluations_per_control > e.evaluations_per_control ? `，是训练时时间层的 1/${(e.frozen_evaluations_per_control / e.evaluations_per_control).toFixed(1)}` : '';
   return `<table class="wb-table"><tr><th>记录</th><td>${e.record === 'compact' ? '精简记录：接收点保存全部采样点（float64），动画用抽稀的表面网格，另存 4 个完整快照' : '完整记录：全部节点、全部采样点（float64）'}，约 ${fmtBytes(e.disk_bytes)}</td></tr>
+    ${e.controls ? `<tr><th>控制</th><td>${e.controls.length} 组（${e.controls.map(c => ({ linear: '线性', stvk: 'StVK', murnaghan: '完整' })[c] || c).join('、')}）${e.controls.length < 3 ? `，CPU 用量约为三组全算的 ${Math.round(100 * e.cpu_relative_to_all)}%` : ''}</td></tr>` : ''}
     <tr><th>时间层</th><td>${e.scheme === 'verlet2' ? '二阶单级' : '三级四阶'}，Δt ≈ ${(e.layer_step_us * 1000).toFixed(2)} ns；每组控制约 ${e.evaluations_per_control.toLocaleString()} 次单元消息${saved}</td></tr>
     <tr><th>预计耗时</th><td>${fmtDuration(e.seconds)}（${e.rate_measured ? '按本机上次计算的速度' : '按典型台式机速度，首次计算后改用本机实测'}）</td></tr>
     <tr><th>预计内存</th><td>${fmtBytes(e.memory_bytes)}${e.physical_memory_bytes ? ` / 本机 ${fmtBytes(e.physical_memory_bytes)}` : ''}</td></tr></table>`;

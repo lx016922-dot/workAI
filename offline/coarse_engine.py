@@ -121,18 +121,18 @@ def check(scene, name=DEFAULT_MODEL):
     return model
 
 
-def run(scene, callback=None, name=DEFAULT_MODEL):
-    """mesh, fields (linear, stvk, full), per-law diagnostics, times and record extras."""
+def run(scene, callback=None, name=DEFAULT_MODEL, controls=LAWS):
+    """mesh, fields and diagnostics of the computed controls (in the order of `controls`), times and record extras."""
     from coarsegraph.run import load_model
     from coarsegraph.simulate import Coarse
     from graphnet.model import load
     check(scene, name); model, (D, q, m) = load_model(model_path(name)); network = load(3)
     require(network['material_check']['pass'], '冻结能量网络与训练材料不一致。')
     c = Coarse(scene, model['degree'], model['h_mm'], model['cfl']); D, volume, mass = c.operators(D, q, m)
-    require(c.frames * len(mass) * 3 * 8 * 3 <= FIELD_BUDGET_BYTES, '粗网格完整位移场超过内存预算，请缩短记录。')
+    require(c.frames * len(mass) * 3 * 8 * len(controls) <= FIELD_BUDGET_BYTES, '粗网格完整位移场超过内存预算，请缩短记录。')
     stability = c.stability(D, volume, mass, network['weights']); require(stability <= 1.5, f'该场景在粗网格上的时间步不稳定（{stability:.2f}）。')
     fields, rows = [], []
-    for law in range(3):
+    for law in (LAWS.index(control) for control in controls):
         started = time.monotonic()
         field, energy, strain, jac = c.fields(D, volume, mass, law, network['weights'])
         stored = energy[:, 1] + energy[:, 2] + energy[:, 4]; balance = float(np.max(np.abs(stored - energy[:, 3])) / max(np.max(np.abs(energy[:, 3])), 1e-30))

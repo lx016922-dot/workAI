@@ -1,11 +1,18 @@
 import { pointSeries, analyzeTimeWindow } from './solid-data.js';
 
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-export const responseLabels={full:'完整位移',linear:'线性位移',stvk:'StVK 位移',geometric:'几何非线性增量',material:'材料非线性增量'};
+export const responseLabels={full:'完整位移',linear:'线性位移',stvk:'StVK 位移',geometric:'几何非线性增量',material:'材料非线性增量',nonlinear:'非线性增量（完整 − 线性）'};
+/** What a result's computed controls give (offline/domain.py parts_for): how the shown response relates to them. */
+export function controlsNote(r){
+  const laws=(r.controls||[]).map(c=>c.law);
+  if(laws.length===1)return '这次只计算了完整（Murnaghan）控制，没有线性和 StVK 对照；要分离非线性增量，请在“求解器配置”中选择“完整 + 线性”或“全部”。';
+  if(laws.length===2)return '完整与线性两个冻结网络分支使用相同网格与激励；非线性增量 = 完整 − 线性（几何与材料增量之和）。要把它分成几何增量和材料增量，请在“求解器配置”中选择“全部”。';
+  return '三个冻结网络分支使用相同网格与激励；材料增量 = 完整材料 − StVK，几何增量 = StVK − 线性。';
+}
 export function solidResultMarkup(r) {
   const d=r.diagnostics;
-  const spectral=true, difference=['geometric','material'].includes(r.response_part), compact=r.recording?.record_mode==='compact', shown=r.display;
-  return `<div class="notice">图网络离线预测 · ${esc(r.scene.name)} · ${esc(responseLabels[r.response_part]||'完整位移')}。三个冻结网络分支使用相同网格与激励；材料增量 = 完整材料 − StVK，几何增量 = StVK − 线性。新增工况与任意点位的精度需独立核验。</div>
+  const spectral=true, difference=['geometric','material','nonlinear'].includes(r.response_part), compact=r.recording?.record_mode==='compact', shown=r.display;
+  return `<div class="notice">图网络离线预测 · ${esc(r.scene.name)} · ${esc(responseLabels[r.response_part]||'完整位移')}。${controlsNote(r)}新增工况与任意点位的精度需独立核验。</div>
   <div class="solid-layout"><section class="panel"><div class="panel-heading"><h2>三维位移场动画</h2><span class="pill">本机计算</span></div><div class="panel-body">
   <canvas id="solid-canvas" class="solid-canvas" aria-label="三维铝结构位移场动画"></canvas>
   <div class="solid-animation"><button class="button secondary small" id="solid-play">播放</button><input id="solid-frame" aria-label="动画时间帧" type="range" min="0" max="${r.times_us.length-1}" value="0"><span id="solid-time"></span></div>

@@ -9,7 +9,7 @@ The rule follows what this software has measured (research/long-record-accuracy,
 * defects need no extra rule: the defect mesher puts grid lines through every defect edge, so crack tips,
   delamination fronts, notch corners and hole patches are always exact element boundaries;
 * budget: the machine, not the display. A model may use up to 80 % of the physical memory (`offline.resources`:
-  about 1.3 kB per node) and the mesher's own size limit; the result animation draws a reduced display mesh and a
+  about 2 kB per node with all three constitutive controls) and the mesher's own size limit; the result animation draws a reduced display mesh and a
   large model keeps a compact record, so neither limits the mesh. A model too large for the target is coarsened step
   by step (and the report says so); one too large even at the coarsest admissible size is refused with advice.
 """
@@ -50,10 +50,10 @@ def resolution(scene, h_mm, degree=DEGREE):
     return shear_speed(scene) / (band_top_mhz(scene) * 1e6) / (h_mm / degree * 1e-3)
 
 
-def over_budget(nodes):
-    """None, or why a mesh with this many nodes cannot run on this machine."""
+def over_budget(nodes, controls=3):
+    """None, or why a mesh with this many nodes cannot run on this machine with this many constitutive controls."""
     from .resources import memory_problem
-    return memory_problem(nodes)
+    return memory_problem(nodes, controls=controls)
 
 
 def _size_error(error):
@@ -61,7 +61,7 @@ def _size_error(error):
     return 'budget' in str(error) or '上限' in str(error)
 
 
-def choose(raw, validate, degree=DEGREE):
+def choose(raw, validate, degree=DEGREE, controls=3):
     """(validated scene, report). `validate(raw, degree)` is the request validator for a scene with numerics.h_mm set."""
     import copy
     from spectral3d.feature_mesh import make_mesh
@@ -78,13 +78,13 @@ def choose(raw, validate, degree=DEGREE):
         trial = copy.deepcopy(raw); trial.setdefault('numerics', {})['h_mm'] = math.floor(h * 1e4) / 1e4   # round down: never coarser than chosen
         scene = validate(trial, degree)
         if scene['geometry']['kind'] in ('plate', 'notch') and not has_defects(scene):   # the size is known before the mesh is built
-            problem = over_budget(plate_node_count(scene, degree, scene['numerics']['h_mm'])[0])
+            problem = over_budget(plate_node_count(scene, degree, scene['numerics']['h_mm'])[0], controls)
             if problem: continue
         try: mesh = make_mesh(scene, degree, scene['numerics']['h_mm'])
         except ValueError as error:
             if not _size_error(error): raise
             problem = '超过网格生成上限的节点数（管和带孔板几何为 10 万，含缺陷的平板为 100 万）'; continue
-        problem = over_budget(len(mesh['points']))
+        problem = over_budget(len(mesh['points']), controls)
         if not problem:
             if i: limited = 'budget'
             break

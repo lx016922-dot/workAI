@@ -1,7 +1,7 @@
 import { analyzeTimeWindow } from './solid-data.js';
 import { analyzePointPath, parsePointPath, pointPathCsv } from './solid-path.js';
 
-const pathResponseNames = { full: '完整位移', linear: '线性位移', stvk: 'StVK 位移', geometric: '几何非线性增量', material: '材料非线性增量' };
+const pathResponseNames = { full: '完整位移', linear: '线性位移', stvk: 'StVK 位移', geometric: '几何非线性增量', material: '材料非线性增量', nonlinear: '非线性增量（完整 − 线性）' };
 const pathInputIds = ['solid-path-mode', 'solid-path-count', 'solid-path-points', 'solid-path-delay',
   ...['start', 'end'].flatMap(end => [0, 1, 2].map(axis => `solid-path-${end}-${axis}`))];
 
