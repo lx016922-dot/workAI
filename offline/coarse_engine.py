@@ -127,7 +127,10 @@ def check(scene, name=DEFAULT_MODEL):
     from physics.materials import is_custom
     require(isinstance(scene, dict) and scene.get('schema') == 'workai.hyperelastic.solid.v2', '快速引擎只接受 v2 场景。')
     require((scene.get('geometry') or {}).get('kind') == 'plate', '快速引擎只在平板上训练过；孔、缺口和管请用冻结网络。')
-    require(not scene.get('defects'), '快速引擎只在无缺陷的平板上训练过；含裂纹、分层、接触界面、缺口或孔的模型请用冻结网络。')
+    # research/coarse-range: of 9 defect cases the accurate model passes every gate in 3 (side-drilled hole twice, notch once); the mesh
+    # and the layer spacing next to a defect are set by the defect, so the coarse grid is only 1–5 times faster there.
+    require(not scene.get('defects'), '含缺陷的模型请用冻结网络：粗网格算子在缺陷算例的核验中只有部分通过（反射波的非线性增量 2f 超过 5%），'
+            '而且缺陷附近的网格和时间步由缺陷尺寸决定，粗网格只快 1–5 倍。')
     require(not is_custom(scene.get('material')), '快速引擎的算子只用训练所用的铝训练过；其他材料请用冻结网络。')
     model = json.loads(model_path(name).read_text(encoding='utf-8'))
     return model

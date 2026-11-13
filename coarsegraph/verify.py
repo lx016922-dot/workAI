@@ -95,7 +95,7 @@ def cases():
     out['defect-notch-f0.2-t1.6'] = ('defect', plate(100., 2., 1.6, .2, 60., groups=around, defects=[{'type': 'notch', 'x_mm': 50., 'width_mm': 1., 'depth_mm': .6}]))
     out['defect-notch-f0.4-t2.4'] = ('defect', plate(100., 2., 2.4, .4, 60., groups=around, defects=[{'type': 'notch', 'x_mm': 50., 'width_mm': 1., 'depth_mm': .9}]))
     out['defect-side-hole-f0.4-t2.4'] = ('defect', plate(100., 2., 2.4, .4, 60., groups=around, defects=[{'type': 'hole', 'axis': 'y', 'x_mm': 50., 'z_mm': 1.2, 'radius_mm': .4}]))
-    out['defect-through-hole-f0.3-t1.6'] = ('defect', plate(100., 8., 1.6, .3, 60., groups=around, edge_y=1., symmetry=False, defects=[{'type': 'hole', 'axis': 'z', 'x_mm': 50., 'y_mm': 4., 'radius_mm': 1.}]))
+    out['defect-through-hole-f0.3-t1.6'] = ('defect', plate(100., 8., 1.6, .3, 60., groups=around, points=5, edge_y=1., symmetry=False, defects=[{'type': 'hole', 'axis': 'z', 'x_mm': 50., 'y_mm': 4., 'radius_mm': 1.}]))
     return out
 
 
