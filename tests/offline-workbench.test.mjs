@@ -202,3 +202,12 @@ test('selectable controls: the setting, the responses a job offers and the notes
   assert.match(estimateMarkup({ ...estimate, controls: ['linear', 'murnaghan'], cpu_relative_to_all: .76 }), /2 组（线性、完整）[^<]*76%/);
   assert.doesNotMatch(estimateMarkup({ ...estimate, controls: ['linear', 'stvk', 'murnaghan'], cpu_relative_to_all: 1 }), /CPU 用量/);
 });
+
+test('the cost table says how the cores are used', async () => {
+  const { estimateMarkup } = await import('../offline/web/shell.js');
+  const estimate = { record: 'full', scheme: 'verlet2', layer_step_us: .005, evaluations_per_control: 6000, frozen_evaluations_per_control: 23400, seconds: 30, rate_measured: true, memory_bytes: 2 ** 29, disk_bytes: 2 ** 28,
+    controls: ['linear', 'stvk', 'murnaghan'], cpu_relative_to_all: 1 };
+  assert.match(estimateMarkup({ ...estimate, threads: 4, spread: true }), /4 个线程，各组控制分摊到全部线程/);
+  assert.match(estimateMarkup({ ...estimate, threads: 2, spread: false }), /2 个线程，每组控制一个线程/);
+  assert.doesNotMatch(estimateMarkup(estimate), /个线程/);   // older previews carry no thread information
+});

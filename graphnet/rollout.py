@@ -9,6 +9,9 @@ Two things can be chosen per record (the defaults reproduce the frozen behaviour
 
 * `time_plan`: 'frozen' is the trained three-stage layer at CFL × spacing / 10000 m/s; 'auto' lets
   `graphnet.timestep` pick the cheapest layer that meets its stability and phase-error conditions;
+* `spread`: how the layer uses the cores. False gives each control one thread (`recurrence.three_segments`); True
+  spreads every control over all threads (`graphnet.parallel`); None (the default) takes the faster of the two for
+  the machine. The two give the same bits, so this is a matter of speed only;
 * `controls`: the constitutive controls to compute, any of linear, stvk and murnaghan (the complete response).
   All three give the five responses (complete, linear, StVK, geometric increment, material increment); linear and
   murnaghan give the complete and linear responses and their difference; murnaghan alone gives the complete response;
@@ -25,7 +28,7 @@ import shutil
 import time
 from pathlib import Path
 import numpy as np
-from numba import get_num_threads, set_num_threads
+from numba import config as numba_config, set_num_threads
 from solid.schema import require
 from physics.scene import is_v2
 from spectral3d.mesh import interpolation
@@ -94,8 +97,10 @@ def storage_bytes(frames, nodes, record, display_nodes=0, shown=0, receivers=0, 
     return frames * (receivers * 24 * controls + 40 * controls) + shown * display_nodes * 3 * 4 * controls + snapshots * nodes * 24 * controls + checkpoints
 
 
-def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_chunks=None, time_plan='frozen', record='full', display=None, controls=LAWS):
-    """`model` from graphnet.model.load(..., long_record=True). See the module text for `time_plan`, `record` and `controls`."""
+def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_chunks=None, time_plan='frozen', record='full', display=None, controls=LAWS,
+            spread=None, threads=None):
+    """`model` from graphnet.model.load(..., long_record=True). See the module text for `time_plan`, `record`, `controls` and `spread`;
+    `threads` limits the threads used (default: all that numba was started with)."""
     if not is_v2(scene):
         from graphwave.long_rollout import rollout as frozen
         return frozen(scene, mesh, model['weights'], model['temporal'], directory, identity, callback=callback, stop_after_chunks=stop_after_chunks)
@@ -105,7 +110,11 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
     require(controls and set(controls) <= set(LAWS) and controls == tuple(name for name in LAWS if name in controls), '控制需为 linear、stvk、murnaghan 中的若干个，按此顺序且不重复。')
     laws = np.array([LAWS.index(name) for name in controls], dtype=np.int64); count = len(controls)
     directory = Path(directory); (directory / 'fields').mkdir(parents=True, exist_ok=True); (directory / 'states').mkdir(parents=True, exist_ok=True)
-    set_num_threads(min(count, get_num_threads())); start = time.monotonic()
+    from .parallel import ARRAYS, choose, parallel_segments, prepare
+    available = max(1, min(int(threads or numba_config.NUMBA_NUM_THREADS), numba_config.NUMBA_NUM_THREADS))
+    if spread is None: spread, used = choose(controls, available, len(mesh['points']))
+    else: spread = bool(spread); used = available if spread else max(1, min(count, available))
+    set_num_threads(used); start = time.monotonic()
     weights = model['weights']; duration, sample = scene['acquisition']['duration_us'], scene['acquisition']['sample_step_us']
     frames = round(duration / sample) + 1; nodes = len(mesh['points']); compact = record == 'compact'
     require(2 <= frames <= 200001 and abs((frames - 1) * sample - duration) <= 1e-8, '长记录需要整数个采样间隔，最多 200001 个采样点。')
@@ -170,14 +179,18 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
                                    'parts': [name for name, _, _ in shown_parts], 'layout': 'part,frame,display node,xyz'}
             manifest['snapshot_frames'] = kept.tolist()
             manifest['receivers'] = [{'name': r['name'], 'point_mm': list(r['point_mm'])} for r in scene['receivers']]
+    manifest.update(layer_threads=used, layer_spread=spread)   # how this run uses the cores (a resumed run may differ: the bits do not)
+    workspace = prepare(mesh, inputs['loads'], alpha, laws, used) if spread else None
     def advance(first, last, include_initial):
         """Samples first..last (first − 1 is the saved state): fields on the kept nodes or the whole mesh, and energies."""
         start_step = max(0, first - 1) * subdivisions; end_step = last * subdivisions
         stage_times = (np.arange(start_step, end_step)[:, None] + np.cumsum(composition)[None]) * dt * 1e6
         signals = signal_table(inputs, stage_times)
-        fields, energies, failed = three_segments(*(state[name] for name in STATE), mesh['elements'], derivative, inverse, mesh['volume_weight'], mesh['mass'],
-                                                  inputs['loads'], inputs['free'], alpha, damped, quadratic, cubic, composition, dt, subdivisions,
-                                                  start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, compact, laws)
+        arguments = (*(state[name] for name in STATE), mesh['elements'], derivative, inverse, mesh['volume_weight'], mesh['mass'],
+                     inputs['loads'], inputs['free'], alpha, damped, quadratic, cubic, composition, dt, subdivisions,
+                     start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, compact, laws)
+        if spread: fields, energies, failed = parallel_segments(*arguments, *(workspace[name] for name in ARRAYS))
+        else: fields, energies, failed = three_segments(*arguments)
         if (failed >= 0).any():
             tripped = '、'.join(LAW_LABELS[name] for name, step in zip(controls, failed) if step >= 0)
             raise ValueError(f'{GUARD_MESSAGE}（{tripped}控制，约 {int(failed.max()) * dt * 1e6:.2f} μs，最大应变 {float(np.max(state["strains"])):.2e}；'

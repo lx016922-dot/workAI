@@ -168,6 +168,7 @@ def run(directory):
                 plan = m.get('time_plan') or {}
                 publish(completed_time_us=m['completed_time_us'],duration_us=m['duration_us'], remaining_s=(time.monotonic() - resumed) * left / max(done, 1),
                         **({'time_plan': {k: plan.get(k) for k in ('scheme', 'time_order', 'layer_step_us', 'evaluations_per_control', 'frozen_evaluations_per_control', 'reason')}} if plan else {}),
+                        **({'threads': m['layer_threads'], 'spread': m['layer_spread']} if 'layer_threads' in m else {}),
                         message=f"已保存 {m['completed_time_us']/1000:.3f} / {m['duration_us']/1000:g} ms {'精简' if m.get('record_mode') == 'compact' else '完整'}记录")
                 if (directory / 'pause.request').exists() and m['phase'] != 'completed':
                     raise InterruptedError('已保存检查点，可继续计算。')
@@ -179,11 +180,15 @@ def run(directory):
                 network = load_network(request['degree'], long_record=True)
                 if network['weights_sha256'] != identity['weights_sha256'] or network['time_weights_sha256'] != identity['time_weights_sha256']:
                     raise ValueError('v2 输入层读取的权重与软件包长记录模型不一致。')
+                # The layer spread over all threads keeps more arrays; when only one thread per control fits in memory, use that (same bits).
+                fits = memory_problem(len(mesh['points']), record, len(controls), spread=True) is None
                 finished = network_rollout(scene, mesh, network, directory / 'record', identity, callback=long_progress,
-                                           time_plan=request.get('time_stepping', 'auto'), record=record, controls=controls)
+                                           time_plan=request.get('time_stepping', 'auto'), record=record, controls=controls, spread=None if fits else False)
                 if directory.parent.name == 'jobs':   # the application's data directory: remember this machine's rate for later estimates
                     from .resources import save_throughput
-                    save_throughput(directory.parent.parent, len(mesh['points']), finished['time_plan']['evaluations_per_control'], finished['elapsed_s'], controls)
+                    from graphnet.parallel import layer_time
+                    save_throughput(directory.parent.parent, len(mesh['points']), finished['time_plan']['evaluations_per_control'], finished['elapsed_s'],
+                                    layer_time(controls, finished['layer_threads'], finished['layer_spread']))
             else:
                 rollout(scene, mesh, weights, temporal, directory / 'record', identity, callback=long_progress)
             if browser_full: recording,times,fields,diagnostics = preview(directory/'record')

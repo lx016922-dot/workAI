@@ -56,13 +56,15 @@ class Requests(unittest.TestCase):
             with self.assertRaises(ValueError): validate_request(bad)
         # fewer controls: less memory, a smaller record, less CPU; on one thread less time, with a thread per control the complete control sets it
         self.assertLess(resources.memory_bytes(10 ** 6, 'compact', 60000, 1), resources.memory_bytes(10 ** 6, 'compact', 60000, 3) - 500 * 1024 ** 2)
+        self.assertGreater(resources.memory_bytes(10 ** 6, 'compact', 60000, 3, spread=True), resources.memory_bytes(10 ** 6, 'compact', 60000, 3) + 800 * 1024 ** 2)   # the spread layer keeps more per control
         self.assertEqual(resources.record_mode('auto', 601, 229293, 1), 'compact'); self.assertEqual(resources.record_mode('auto', 601, 100000, 1), 'full'); self.assertEqual(resources.record_mode('auto', 601, 100000, 3), 'compact')
         all3, pair, one = (CONTROL_SETS[k] for k in ('all', 'full_linear', 'full'))
-        self.assertEqual([resources.relative_time(c, 4) for c in (all3, pair, one)], [1., 1., 1.])
+        # with one thread the time follows the CPU work; with more the layer is spread over them when that is faster (graphnet/parallel.py)
         self.assertAlmostEqual(resources.relative_time(all3, 1), 2.05); self.assertAlmostEqual(resources.relative_time(pair, 1), 1.5); self.assertEqual(resources.relative_time(one, 1), 1.)
-        self.assertAlmostEqual(resources.relative_time(all3, 2), 1.025)
+        self.assertAlmostEqual(resources.relative_time(all3, 2), 1.025); self.assertEqual(resources.layer_use(all3, 2), (False, 2, 1.025))
+        self.assertEqual(resources.layer_use(one, 4)[:2], (True, 4)); self.assertAlmostEqual(resources.relative_time(one, 4), .3); self.assertAlmostEqual(resources.relative_time(all3, 4), .615)
         a, b, c = (preview({'scene': v2_plate(), 'degree': 3, **extra}, '.') for extra in ({}, {'controls': 'full_linear'}, {'controls': 'full'}))
-        self.assertEqual([len(p['estimate']['controls']) for p in (a, b, c)], [3, 2, 1])
+        self.assertEqual([len(p['estimate']['controls']) for p in (a, b, c)], [3, 2, 1]); self.assertEqual(resources.layer_use(('murnaghan',), nodes=c['mesh']['nodes'])[:2], (c['estimate']['spread'], c['estimate']['threads']))
         self.assertEqual(b['record']['uncompressed_bytes'] * 3, a['record']['uncompressed_bytes'] * 2); self.assertEqual(c['record']['uncompressed_bytes'] * 3, a['record']['uncompressed_bytes'])
         self.assertLess(c['estimate']['cpu_relative_to_all'], b['estimate']['cpu_relative_to_all']); self.assertEqual(a['estimate']['cpu_relative_to_all'], 1.)
         self.assertLess(c['estimate']['disk_bytes'], b['estimate']['disk_bytes']); self.assertLess(b['estimate']['disk_bytes'], a['estimate']['disk_bytes'])
@@ -78,6 +80,7 @@ class Requests(unittest.TestCase):
             self.assertEqual(resources.throughput(tmp), (resources.DEFAULT_RATE, False))
             resources.save_throughput(tmp, 1000, 100, 1.); self.assertEqual(resources.throughput(tmp)[1], False)   # too small to measure a rate
             resources.save_throughput(tmp, 200000, 6000, 400.); self.assertEqual(resources.throughput(tmp), (3e6, True))
+            resources.save_throughput(tmp, 200000, 6000, 120., relative=.3); self.assertEqual(resources.throughput(tmp), (3e6, True))   # the complete control spread over four threads
 
 
 class LargeModels(unittest.TestCase):
@@ -158,6 +161,17 @@ class Jobs(unittest.TestCase):
                 self.assertIn('控制', str(refused.exception))
             size = lambda d: sum(f.stat().st_size for f in (root / d / 'record' / 'fields').glob('*.npz'))
             self.assertAlmostEqual(size('pair') / size('all'), 2 / 3, delta=.02)
+
+    def test_the_layer_falls_back_to_one_thread_per_control_when_spreading_does_not_fit(self):
+        from numba import config
+        scene = v2_plate(); request = validate_request({'scene': scene, 'degree': 3, 'controls': 'full'}); nodes = 1750
+        per, spread = (resources.memory_bytes(nodes, 'full', controls=1, spread=s) for s in (False, True)); self.assertGreater(spread, per)
+        with tempfile.TemporaryDirectory() as tmp:
+            free = run_job(Path(tmp) / 'free', request); self.assertEqual(free['spread'], config.NUMBA_NUM_THREADS >= 2); self.assertEqual(free['threads'], config.NUMBA_NUM_THREADS)
+            with mock.patch.object(resources, 'physical_memory', return_value=int((per + spread) / 2 / resources.MEMORY_FRACTION)):
+                tight = run_job(Path(tmp) / 'tight', request); self.assertEqual((tight['phase'], tight['spread'], tight['threads']), ('completed', False, 1))
+                shown = preview({'scene': scene, 'degree': 3, 'controls': 'full'}, '.')['estimate']; self.assertEqual((shown['spread'], shown['threads']), (False, 1))
+            self.assertEqual((Path(tmp) / 'free' / 'full.bin.gz').read_bytes(), (Path(tmp) / 'tight' / 'full.bin.gz').read_bytes())   # the same bits either way
 
     def test_the_fast_engine_computes_the_selected_controls(self):
         scene = strip(48., 2.)

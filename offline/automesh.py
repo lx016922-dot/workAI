@@ -9,7 +9,7 @@ The rule follows what this software has measured (research/long-record-accuracy,
 * defects need no extra rule: the defect mesher puts grid lines through every defect edge, so crack tips,
   delamination fronts, notch corners and hole patches are always exact element boundaries;
 * budget: the machine, not the display. A model may use up to 80 % of the physical memory (`offline.resources`:
-  about 2 kB per node with all three constitutive controls) and the mesher's own size limit; the result animation draws a reduced display mesh and a
+  about 1.7 kB per node with all three constitutive controls, one thread each) and the mesher's own size limit; the result animation draws a reduced display mesh and a
   large model keeps a compact record, so neither limits the mesh. A model too large for the target is coarsened step
   by step (and the report says so); one too large even at the coarsest admissible size is refused with advice.
 """
