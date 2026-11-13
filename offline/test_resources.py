@@ -38,7 +38,7 @@ class Requests(unittest.TestCase):
         self.assertNotIn('record', validate_request({'scene': v2_plate(), 'degree': 3}))
         result = validate_request({'scene': v2_plate(), 'degree': 3, 'record': 'compact', 'time_stepping': 'frozen'})
         self.assertEqual((result['record'], result['time_stepping']), ('compact', 'frozen')); self.assertEqual(validate_request(copy.deepcopy(result)), result)
-        for bad in ({'record': 'tiny'}, {'time_stepping': 'fast'}, {'record': 'full', 'engine': 'coarse'}, {'other': 1}):
+        for bad in ({'record': 'tiny'}, {'time_stepping': 'fast'}, {'time_stepping': 'frozen', 'engine': 'coarse'}, {'other': 1}):   # the fast engine has its model's own layer
             with self.assertRaises(ValueError): validate_request({'scene': v2_plate(), 'degree': 3, **bad})
         v1 = json.loads((Path(__file__).parent / 'example-request.json').read_text(encoding='utf-8'))
         with self.assertRaises(ValueError): validate_request({'scene': v1['scene'], 'degree': v1['degree'], 'record': 'compact'})
