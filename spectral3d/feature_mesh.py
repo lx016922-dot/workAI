@@ -28,10 +28,68 @@ def has_defects(scene):
     return bool(scene.get('defects'))
 
 
+# The frozen mesher stops at 100 000 nodes (its reference budget). Larger defect-free plates use `large_plate_mesh`,
+# the same construction written with arrays; what a machine can actually run is decided by `offline.resources`.
+FROZEN_NODES, FROZEN_ENTRIES = 100000, 2000000
+LARGE_NODES = 8000000
+DEFECT_NODES = 1000000
+
+
+def plate_node_count(scene, degree, h_mm):
+    """Nodes of the defect-free plate / notch grid before the notch void is removed (exact for a plate)."""
+    g = scene['geometry']; limits = [[0, g['length_mm']], [0, g['width_mm']], [0, g['thickness_mm']]]
+    if g['kind'] == 'notch':
+        limits[0] = [0, g['notch_x_mm'] - g['notch_width_mm'] / 2, g['notch_x_mm'] + g['notch_width_mm'] / 2, g['length_mm']]
+        limits[2] = [0, g['thickness_mm'] - g['notch_depth_mm'], g['thickness_mm']]
+    counts = [sum(math.ceil((b - a) / h_mm) for a, b in zip(cuts[:-1], cuts[1:])) for cuts in limits]
+    return int(np.prod([c * degree + 1 for c in counts])), int(np.prod(counts)) * (degree + 1) ** 3
+
+
 def make_mesh(scene, degree=3, h_mm=1.6):
-    """The frozen mesh for scenes without defects; the featured mesh otherwise."""
-    if not has_defects(scene): return frozen_make_mesh(scene, degree, h_mm)
-    return featured_mesh(scene, degree, h_mm)
+    """The frozen mesh for scenes without defects (its array form beyond the frozen size); the featured mesh otherwise."""
+    if has_defects(scene): return featured_mesh(scene, degree, h_mm)
+    if scene['geometry']['kind'] in ('plate', 'notch') and np.isfinite(h_mm) and h_mm > 0:
+        nodes, entries = plate_node_count(scene, degree, h_mm)
+        if nodes > FROZEN_NODES or entries > FROZEN_ENTRIES: return large_plate_mesh(scene, degree, h_mm)
+    return frozen_make_mesh(scene, degree, h_mm)
+
+
+def large_plate_mesh(scene, degree, h_mm):
+    """`spectral3d.mesh.make_mesh` for plates and through-width notches, without its size limit and element loop.
+
+    Same grid lines, node numbering, element order and arithmetic, so the result is identical to the frozen mesh
+    wherever both exist (tested)."""
+    g = scene['geometry']; kind = g['kind']
+    require(kind in ('plate', 'notch'), '大规模网格目前只支持平板和贯穿缺口。')
+    x, w, d, bary = gll(degree); p = degree
+    limits = [[0, g['length_mm']], [0, g['width_mm']], [0, g['thickness_mm']]]
+    if kind == 'notch':
+        a = g['notch_x_mm'] - g['notch_width_mm'] / 2; b = g['notch_x_mm'] + g['notch_width_mm'] / 2; z = g['thickness_mm'] - g['notch_depth_mm']
+        require(0 < a < b < g['length_mm'] and 0 < z < g['thickness_mm'], 'Invalid notch.')
+        limits[0] = [0, a, b, g['length_mm']]; limits[2] = [0, z, g['thickness_mm']]
+    nodes, _ = plate_node_count(scene, degree, h_mm)
+    require(nodes <= LARGE_NODES, f'网格有 {nodes} 个节点，超过单次计算的上限 {LARGE_NODES}；请增大单元尺寸或缩小模型。')
+    edges, axes = zip(*[_edges(cuts, h_mm, x) for cuts in limits])
+    shape = tuple(len(axis) for axis in axes); counts = [len(edge) - 1 for edge in edges]
+    I, J, K = (v.ravel() for v in np.meshgrid(*(np.arange(c) for c in counts), indexing='ij'))
+    origin = np.stack([edges[0][I], edges[1][J], edges[2][K]], axis=1)
+    size = np.stack([edges[0][I + 1], edges[1][J + 1], edges[2][K + 1]], axis=1) - origin
+    if kind == 'notch':
+        centre = (origin + size / 2) * 1000; inside = (a < centre[:, 0]) & (centre[:, 0] < b) & (centre[:, 2] > z)
+        I, J, K, origin, size = I[~inside], J[~inside], K[~inside], origin[~inside], size[~inside]
+    local = np.arange(p + 1)
+    elements = (((I[:, None, None, None] * p + local[None, :, None, None]) * shape[1] + (J[:, None, None, None] * p + local[None, None, :, None])) * shape[2]
+                + (K[:, None, None, None] * p + local[None, None, None, :]))
+    points = np.stack(np.meshgrid(*axes, indexing='ij'), axis=-1).reshape(-1, 3)
+    if kind == 'notch':
+        used = np.unique(elements); remap = np.full(len(points), -1, dtype=np.int32); remap[used] = np.arange(len(used)); points = points[used]; elements = remap[elements]
+    elements = np.ascontiguousarray(elements, dtype=np.int32)
+    weights = np.einsum('i,j,k->ijk', w, w, w); volume_weight = np.prod(size, axis=1)[:, None, None, None] / 8 * weights
+    mass = np.bincount(elements.ravel(), weights=(volume_weight * scene['material']['rho_kg_m3']).ravel(), minlength=len(points))
+    require(not np.any(mass <= 0), 'Nonpositive mass.')
+    return {'points': points, 'elements': elements, 'origin': origin, 'size': size, 'degree': degree,
+            'gll': x, 'weights_1d': w, 'derivative': d, 'barycentric': bary, 'volume_weight': volume_weight,
+            'mass': mass, 'min_node_spacing': float(min(np.min(np.diff(axis)) for axis in axes)), 'h_mm': h_mm}
 
 
 def _edges(cuts_mm, h_mm, x):
@@ -131,11 +189,10 @@ def featured_mesh(scene, degree, h_mm):
     contact = {'contact_a': remap[np.asarray(pairs_a, dtype=np.int64)].astype(np.int64) if pairs_a else np.zeros(0, dtype=np.int64),
                'contact_b': remap[np.asarray(pairs_b, dtype=np.int64)].astype(np.int64) if pairs_b else np.zeros(0, dtype=np.int64),
                'contact_normal': np.asarray(normals, dtype=np.float64).reshape(-1, 3), 'contact_area': np.asarray(areas, dtype=np.float64)}
-    require(len(points) <= 100000 and elements.size <= 2000000, '含缺陷网格超过参考内存预算。')
+    require(len(points) <= DEFECT_NODES, f'含缺陷网格有 {len(points)} 个节点，超过上限 {DEFECT_NODES}；请增大单元尺寸或缩小模型。')
     rho = scene['material']['rho_kg_m3']
     if prims['holes']:
-        from .curved_mesh import prepare
-        mesh = prepare(points, elements, degree, rho, h_mm)
+        mesh = prepare_curved(points, elements, degree, rho, h_mm)
     else:
         sizes = np.array(sizes); weights = np.einsum('i,j,k->ijk', w, w, w)
         volume_weight = np.prod(sizes, axis=1)[:, None, None, None] / 8 * weights
@@ -147,6 +204,22 @@ def featured_mesh(scene, degree, h_mm):
     mesh.update(contact)
     mesh['split_nodes'] = np.array([r['nodes_split'] for r in split_rows], dtype=np.int64)
     return mesh
+
+
+def prepare_curved(points, elements, degree, rho, h_mm):
+    """`spectral3d.curved_mesh.prepare` (isoparametric geometry of a mesh with curved elements) without its 100 000-node limit.
+
+    The same operations in the same order, so the result is identical to the frozen function wherever both exist (tested)."""
+    x, w, d, bary = gll(degree); points = np.asarray(points); elements = np.asarray(elements, dtype=np.int32); local = points[elements]
+    jac = np.stack([np.einsum('ia,eajkc->eijkc', d, local), np.einsum('ja,eiakc->eijkc', d, local), np.einsum('ka,eijac->eijkc', d, local)], axis=-1)
+    determinant = np.linalg.det(jac)
+    require(not np.any(determinant <= 1e-20), 'Nonpositive or degenerate curved Jacobian.')
+    inverse = np.linalg.inv(jac); volume = determinant * np.einsum('i,j,k->ijk', w, w, w); mass = np.zeros(len(points)); np.add.at(mass, elements.ravel(), (rho * volume).ravel())
+    spacing = float(np.linalg.svd(jac, compute_uv=False)[..., -1].min() * np.diff(x).min())
+    require(spacing >= 1e-7, 'Curved mesh quality exceeds the reference budget.')
+    return {'points': points, 'elements': elements, 'degree': degree, 'gll': x, 'weights_1d': w, 'derivative': d, 'barycentric': bary, 'volume_weight': volume, 'mass': mass,
+            'jacobian': jac, 'inverse_jacobian': inverse, 'min_node_spacing': spacing, 'h_mm': h_mm, 'mapping_kind': 'isoparametric',
+            'bounds_min': local.min(axis=(1, 2, 3)), 'bounds_max': local.max(axis=(1, 2, 3))}
 
 
 def _ogrid(hole, edges, axes, index, points, elements, cells, origins, sizes, x, p, h_mm):

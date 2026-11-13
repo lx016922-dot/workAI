@@ -111,7 +111,7 @@ export function mountSolidPath(container, result, field, extractSeries, chart, s
       pathElement('solid-path-message').classList.add('model-error');
     } finally { if (!disposed&&token===generation) pathElement('solid-path-analyze').disabled = false; }
   }
-  if(result.recording){pathElement('solid-path-count').max=8;pathElement('solid-path-message').textContent='长记录每批最多 8 点，读取完整采样数据。';}
+  if(result.recording){pathElement('solid-path-count').max=8;pathElement('solid-path-message').textContent=result.recording.record_mode==='compact'?'精简记录只在接收点保存了完整采样波形：多点提取的点需要是接收点（每批最多 8 点）。':'长记录每批最多 8 点，读取完整采样数据。';}
   if(result.scene.signal?.kind==='chirp'){pathElement('solid-path-panel').querySelector('.section-note').textContent='比较实体内多个接收点的激励频带和二倍频带功率，使用上方接收方向和分析窗。沿程距离按点列累计，不代表实际传播路径。';const headings=container.querySelectorAll('.solid-path-charts h3');headings[0].textContent='激励频带 RMS';headings[1].textContent='二倍频带 RMS';}
   const presets = result.scene.receivers;
   [0, 1, 2].forEach(j => {

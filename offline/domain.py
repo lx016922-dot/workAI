@@ -139,16 +139,33 @@ def _bounded_network_scene(raw, degree, material):
 
 
 ENGINES = ('network', 'coarse')
+RECORDS = ('auto', 'full', 'compact')
+TIME_STEPPING = ('auto', 'frozen')
 
 
 def validate_request(body):
     """A job request: {'scene', 'mesh': 'auto'} (the software chooses the mesh) or {'scene', 'degree'} with the scene's h_mm;
-    optional 'engine' and 'coarse_model'. A stored request's 'mesh_report' is recomputed, never trusted."""
+    optional 'engine' and 'coarse_model'. A stored request's 'mesh_report' is recomputed, never trusted.
+
+    Version-2 scenes on the network engine also take 'record' (auto: every node of every sample while that stays within
+    2 GiB, otherwise the compact record; full; compact) and 'time_stepping' (auto: `graphnet.timestep` chooses the layer;
+    frozen: the trained three-stage layer). Both default to auto."""
     if not isinstance(body, dict) or 'scene' not in body:
         raise ValueError('需要场景。')
     body = {k: v for k, v in body.items() if k != 'mesh_report'}
-    if set(body) - {'scene', 'degree', 'mesh', 'engine', 'coarse_model'}:
-        raise ValueError('请求只能包含 scene、degree、mesh、engine、coarse_model。')
+    if set(body) - {'scene', 'degree', 'mesh', 'engine', 'coarse_model', 'record', 'time_stepping'}:
+        raise ValueError('请求只能包含 scene、degree、mesh、engine、coarse_model、record、time_stepping。')
+    options = {k: body.pop(k) for k in ('record', 'time_stepping') if k in body}
+    if options.get('record', 'auto') not in RECORDS:
+        raise ValueError('记录方式需为 auto（自动）、full（完整记录）或 compact（精简记录）。')
+    if options.get('time_stepping', 'auto') not in TIME_STEPPING:
+        raise ValueError('时间层需为 auto（自动）或 frozen（训练时的三级四阶时间层）。')
+    if options and not (body.get('engine', 'network') == 'network' and isinstance(body['scene'], dict) and body['scene'].get('schema') == V2):
+        raise ValueError('记录方式和时间层设置只用于 v2 场景的冻结网络引擎。')
+    return dict(_validate_request(body), **options)
+
+
+def _validate_request(body):
     auto = body.get('mesh') == 'auto'
     if 'mesh' in body and not auto:
         raise ValueError('mesh 只能为 auto（软件自动选择网格）。')

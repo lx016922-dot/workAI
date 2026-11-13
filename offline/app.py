@@ -93,7 +93,11 @@ class Application:
         except OSError:
             self.fail(job, '无法启动计算进程。请检查软件包是否完整。')
             raise
-        threading.Thread(target=self.monitor, args=(job, self.process), daemon=True).start()
+        # A checkpointed record (every v2 network computation) may run as long as the model needs: it reports the remaining
+        # time, can be paused and resumes from its last chunk. The other paths keep the 90-minute limit.
+        request = json.loads((directory / 'request.json').read_text(encoding='utf-8'))
+        unlimited = request.get('engine', 'network') == 'network' and request['scene'].get('schema') == 'workai.hyperelastic.solid.v2'
+        threading.Thread(target=self.monitor, args=(job, self.process, None if unlimited else 5400), daemon=True).start()
 
     def control(self, job, action):
         with self.lock:
@@ -101,7 +105,7 @@ class Application:
             if action == 'pause':
                 if self.current != job or not self.process or self.process.poll() is not None:
                     raise ValueError('此任务未在运行。')
-                if json.loads((directory/'request.json').read_text(encoding='utf-8'))['scene']['acquisition']['duration_us'] < 5000:
+                if not self.status(job).get('resumable', json.loads((directory/'request.json').read_text(encoding='utf-8'))['scene']['acquisition']['duration_us'] >= 5000):
                     raise ValueError('历史短记录不支持检查点暂停。')
                 (directory/'pause.request').touch()
                 return {'job_id':job,'message':'当前分块保存后暂停。'}
@@ -122,9 +126,9 @@ class Application:
             status.update(phase=phase, message=message)
             save(self.path(job) / 'status.json', status)
 
-    def monitor(self, job, process):
+    def monitor(self, job, process, limit=5400):
         try:
-            process.wait(timeout=5400)
+            process.wait(timeout=limit)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
@@ -202,7 +206,7 @@ def handler(application):
                         names = ['request.json','status.json','exports.json'] + [p+ext for p in PARTS for ext in ('.json','.bin.gz')]
                         if (directory/'record/recording.json').exists():
                             m = manifest(directory/'record')
-                            names += ['record/recording.json','record/mesh.npz']
+                            names += ['record/recording.json','record/mesh.npz'] + (['record/'+m['display']['file']] if 'display' in m else [])
                             names += ['record/'+row['file'] for row in m['chunks']]
                             names += ['record/'+m['checkpoint_file']]
                         self.send_response(200)

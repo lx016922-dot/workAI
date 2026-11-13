@@ -28,7 +28,8 @@ GROUPS = {
     'core': ['physics.test_signals', 'physics.test_scene', 'physics.test_materials', 'physics.test_defects', 'offline.test_nlp', 'dispersion.test_lamb', 'dispersion.test_analysis', 'coarsegraph.test_comsol'],
     'solvers': ['solid.test_excitation', 'solid.test_physics', 'spectral2d.test_plane_strain', 'spectral3d.test_curved', 'spectral3d.test_excitation',
                 'spectral3d.test_implicit', 'spectral3d.test_physics', 'waveguide.test_safe', 'waveguide.test_field', 'sweep.test_sweep', 'sweep.test_convergence'],
-    'networks': ['graphnet.test_graphnet', 'coarsegraph.test_coarse', 'offline.test_long_record', 'offline.test_network_v2', 'offline.test_preview', 'offline.test_coarse_engine', 'offline.test_app', 'graphnet.test_defects'],
+    'networks': ['graphnet.test_graphnet', 'coarsegraph.test_coarse', 'offline.test_long_record', 'offline.test_network_v2', 'offline.test_preview', 'offline.test_coarse_engine', 'offline.test_app', 'graphnet.test_defects',
+                 'graphnet.test_timestep', 'spectral3d.test_display', 'offline.test_resources'],
     'torch': ['graphwave.test_network', 'modal3d.test_physics', 'operator3d.test_physics', 'spectralop.test_physics', 'training.test_physics'],
 }
 GROUPS['core'] += sorted(f'tests.{p.stem}' for p in (REPO / 'tests').glob('test_*.py'))

@@ -6,12 +6,12 @@ import { solidPathMarkup, mountSolidPath } from './solid-path-viewer.js';
 import { treeNodes, upgrade, workbenchTemplates, addSource, removeSource, addBoundary, removeBoundary, addReceiver, removeReceiver, sourcesOf, V2, BOUNDARY_LABELS, FACES, KIND_LABELS,
   DEFECT_LABELS, DEFECT_ICONS, addDefect, removeDefect, defectName } from './scene-model.js';
 import { drawScene, pick } from './model-view.js';
-import { inspectorMarkup, bindInspector, escapeHtml, COARSE_MODELS, DEFAULT_COARSE_MODEL } from './inspector.js';
+import { inspectorMarkup, bindInspector, escapeHtml, COARSE_MODELS, DEFAULT_COARSE_MODEL, RECORD_MODES, TIME_LAYERS } from './inspector.js';
 import { signalsMarkup } from './signal-view.js';
 import { materialDerivedMarkup } from './material-form.js';
 import { mountRibbon } from './ribbon.js';
 import { icon } from './icons.js';
-import { renderTreeView, popupMenu, createLog, dialog, initSplitters, previewMessages, renderMessages, fmtBytes } from './shell.js';
+import { renderTreeView, popupMenu, createLog, dialog, initSplitters, previewMessages, renderMessages, fmtBytes, fmtDuration, estimateMarkup } from './shell.js';
 
 const $ = s => document.querySelector(s);
 const PHASES = { starting: '准备中', meshing: '生成连接图', running: '计算中', exporting: '保存结果', completed: '已完成', failed: '未完成', paused: '已暂停' };
@@ -19,7 +19,7 @@ const VIEWS = { iso: [-.62, .52], front: [0, 0], top: [0, 1.5699], side: [-Math.
 const DRAFT = 'workai.workbench.draft.v1';
 const ENGINE_LABELS = { network: '物理 AI · 冻结网络', coarse: '物理 AI · 粗网格算子' };
 const host = window.chrome?.webview || null;   // present inside the WorkAI desktop window (WebView2)
-const state = { scene: null, degree: 4, engine: 'network', coarseModel: DEFAULT_COARSE_MODEL, selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
+const state = { scene: null, degree: 4, engine: 'network', coarseModel: DEFAULT_COARSE_MODEL, record: 'auto', timeStepping: 'auto', selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
   view: { yaw: VIEWS.iso[0], pitch: VIEWS.iso[1], zoom: 1, exaggerate: true, grid: true, preset: 'iso' }, history: [], templates: {}, token: '', picks: [], submitting: false,
   expanded: new Set(['scene', 'component', 'physics', 'sources', 'boundaries', 'receivers', 'study', 'results']), info: null, phases: {}, lastPreviewKey: '' };
 let previewTimer = 0, previewStamp = 0, poll = 0, generation = 0, viewer = null, pathViewer = null, ribbon = null, log = null;
@@ -35,9 +35,15 @@ function toast(message, kind = 'error') {
 }
 const fail = error => toast(error?.message || String(error));
 /** The mesh is always chosen by the software (offline/automesh.py): requests carry mesh 'auto', never a size or degree. */
-function requestBody() { return { scene: state.scene, mesh: 'auto', ...(state.engine === 'coarse' ? { engine: 'coarse', coarse_model: state.coarseModel } : {}) }; }
-/** Engine and coarse model from a stored request, draft or imported file (unknown values fall back to the defaults). */
-function takeEngine(d) { state.engine = d?.engine === 'coarse' ? 'coarse' : 'network'; state.coarseModel = COARSE_MODELS[d?.coarse_model] ? d.coarse_model : DEFAULT_COARSE_MODEL; }
+function requestBody() {
+  return { scene: state.scene, mesh: 'auto', ...(state.engine === 'coarse' ? { engine: 'coarse', coarse_model: state.coarseModel }
+    : { ...(state.record !== 'auto' ? { record: state.record } : {}), ...(state.timeStepping !== 'auto' ? { time_stepping: state.timeStepping } : {}) }) };
+}
+/** Engine, coarse model, record mode and time layer from a stored request, draft or imported file (unknown values fall back to the defaults). */
+function takeEngine(d) {
+  state.engine = d?.engine === 'coarse' ? 'coarse' : 'network'; state.coarseModel = COARSE_MODELS[d?.coarse_model] ? d.coarse_model : DEFAULT_COARSE_MODEL;
+  state.record = RECORD_MODES[d?.record] ? d.record : 'auto'; state.timeStepping = TIME_LAYERS[d?.time_stepping] ? d.time_stepping : 'auto';
+}
 function storeDraft() { try { localStorage.setItem(DRAFT, JSON.stringify(requestBody())); } catch { /* storage unavailable */ } }
 function readDraft() { try { const d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); return d?.scene?.schema === V2 ? d : null; } catch { return null; } }
 const running = () => state.jobs.find(j => !['completed', 'failed', 'paused'].includes(j.phase));
@@ -201,7 +207,7 @@ function renderInspector() {
   const iconName = kind === 'boundary' ? state.scene.boundaries[index]?.type || 'boundary' : kind === 'defect' ? DEFECT_ICONS[state.scene.defects?.[index]?.type] : NODE_ICONS[kind];
   $('#inspector-head').innerHTML = `${icon(iconName)}<b>${escapeHtml(nodeLabel(state.selection))}</b>`;
   if (kind === 'job') { renderJobInspector(state.selection.slice(4)); return; }
-  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, 4, { materials: state.materials, engine: state.engine, coarseModel: state.coarseModel, meshAuto: state.preview?.mesh?.auto });
+  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, 4, { materials: state.materials, engine: state.engine, coarseModel: state.coarseModel, meshAuto: state.preview?.mesh?.auto, record: state.record, timeStepping: state.timeStepping });
   renderMaterialDerived(); renderEngineDerived();
   let before = snapshot();
   bindInspector($('#inspector'), state.scene, state, kind => {
@@ -222,7 +228,7 @@ function renderJobInspector(id) {
 }
 function renderEngineDerived() {
   const box = $('#engine-derived'), e = state.preview?.engine; if (!box) return;
-  if (state.engine !== 'coarse') { box.innerHTML = '<small>冻结网络：求导滤波器与时间层等价于 GLL 谱元，精度由节点间距决定；支持全部几何、材料和长记录。</small>'; return; }
+  if (state.engine !== 'coarse') { box.innerHTML = `<small>冻结网络：求导滤波器与时间层等价于 GLL 谱元，精度由节点间距决定；支持全部几何、材料和长记录。</small>${estimateMarkup(state.preview?.estimate)}`; return; }
   if (!e) { box.innerHTML = '<small>正在读取模型信息…</small>'; return; }
   box.innerHTML = `<table class="wb-table"><tr><th>模型</th><td>${escapeHtml(e.name)}（${e.degree} 阶，h ${e.h_mm} mm，${e.parameters} 个参数）</td></tr>
     <tr><th>留出测试</th><td>全部门槛通过 ${e.test_passed}/${e.test_cases}（同网格 GLL 基线 ${e.baseline_test_passed}/${e.test_cases}）；最差波形差 ${(100 * e.test_worst_waveform_l2).toFixed(2)}%，最差增量 2f ${(100 * e.test_worst_increment_a2).toFixed(1)}%</td></tr>
@@ -247,7 +253,8 @@ function renderStatus() {
   badge.hidden = !issues; badge.textContent = issues; badge.className = `dock-badge${rows.some(r => r.kind === 'error') ? ' bad' : ''}`;
   const parts = [];
   if (p?.mesh) parts.push(`${p.mesh.nodes.toLocaleString()} 节点 · ${p.mesh.elements.toLocaleString()} 单元 · p ${p.mesh.degree}`);
-  if (p?.record) parts.push(`${p.record.samples.toLocaleString()} 采样点 · ${fmtBytes(p.record.uncompressed_bytes)}`);
+  if (p?.record) parts.push(`${p.record.samples.toLocaleString()} 采样点 · ${p.record.mode === 'compact' ? '精简记录 ' : ''}${fmtBytes(p.record.uncompressed_bytes)}`);
+  if (p?.estimate) parts.push(`预计 ${fmtDuration(p.estimate.seconds)} · 内存 ${fmtBytes(p.estimate.memory_bytes)}`);
   if (p?.resolution?.length) parts.push(`2f 分辨率 ${Math.min(...p.resolution.map(r => r.nodes_per_2f_shear_wavelength)).toFixed(1)}`);
   $('#sb-model').textContent = parts.join('　|　');
   renderStateText();
@@ -309,7 +316,7 @@ function renderProgress() {
   const pct = j.phase === 'completed' ? 100 : j.duration_us ? 100 * (j.completed_time_us || 0) / j.duration_us : 0;
   box.innerHTML = `<div class="pg"><div class="pg-head">${icon(j.phase === 'completed' ? 'job' : j.phase === 'failed' ? 'jobBad' : j.phase === 'paused' ? 'jobPaused' : 'jobRunning')}<b>${escapeHtml(j.name || j.job_id)}</b>
       <span class="wb-phase ${j.phase}">${PHASES[j.phase] || escapeHtml(j.phase)}</span><span class="muted">${new Date(j.started_at_utc).toLocaleString()}</span></div>
-      <div class="pg-bar"><span style="width:${pct.toFixed(1)}%"></span></div><div class="pg-foot"><span>${pct.toFixed(0)}%${j.completed_time_us !== undefined && j.duration_us ? ` · 已算到 ${(+j.completed_time_us).toFixed(2)} / ${j.duration_us} μs` : ''}</span>
+      <div class="pg-bar"><span style="width:${pct.toFixed(1)}%"></span></div><div class="pg-foot"><span>${pct.toFixed(0)}%${j.completed_time_us !== undefined && j.duration_us ? ` · 已算到 ${(+j.completed_time_us).toFixed(2)} / ${j.duration_us} μs` : ''}${j.remaining_s > 0 && !['completed', 'failed', 'paused'].includes(j.phase) ? ` · 预计还需 ${fmtDuration(j.remaining_s)}` : ''}</span>
       <span>${j.message ? escapeHtml(j.message) : ''}</span></div></div>`;
 }
 function clearResults() { viewer?.(); pathViewer?.cleanup(); viewer = null; pathViewer = null; $('#results').replaceChildren(); }
@@ -324,12 +331,13 @@ async function openJob(id, restore = false) {
     const s = await api('/api/jobs/' + id); if (stamp !== generation) return;
     const done = ['completed', 'failed', 'paused'].includes(s.phase), progress = s.duration_us ? 100 * (s.completed_time_us || 0) / s.duration_us : 100 * (s.controls_completed || 0) / 3;
     $('#result-head').innerHTML = `<div class="wb-result-title"><h2>${escapeHtml(s.name || id)}</h2><span class="wb-phase ${s.phase}">${PHASES[s.phase] || escapeHtml(s.phase)}</span>${s.engine === 'coarse' ? `<span class="wb-tag">粗网格算子${s.coarse_model ? ' · ' + escapeHtml(s.coarse_model) : ''}</span>` : ''}
-      <span class="muted">${Math.round(s.elapsed_s || 0)} 秒${s.message ? ' · ' + escapeHtml(s.message) : ''}</span></div>
+      ${s.record_mode === 'compact' ? '<span class="wb-tag">精简记录</span>' : ''}<span class="muted">${Math.round(s.elapsed_s || 0)} 秒${!done && s.remaining_s > 0 ? ` · 预计还需 ${fmtDuration(s.remaining_s)}` : ''}${s.message ? ' · ' + escapeHtml(s.message) : ''}</span></div>
+      ${s.time_plan?.scheme ? `<p class="muted small-text">时间层：${s.time_plan.scheme === 'verlet2' ? '二阶单级' : '三级四阶'}，Δt ${(+s.time_plan.layer_step_us * 1000).toFixed(2)} ns；每组控制 ${(+s.time_plan.evaluations_per_control).toLocaleString()} 次单元消息${s.time_plan.frozen_evaluations_per_control > s.time_plan.evaluations_per_control ? `（训练时的时间层需 ${(+s.time_plan.frozen_evaluations_per_control).toLocaleString()} 次）` : ''}。</p>` : ''}
       ${done ? '' : `<progress max="100" value="${progress.toFixed(1)}"></progress>`}
       <div class="wb-result-tools">${s.phase === 'completed' ? `<label class="wb-field inline"><span>响应</span><select id="part">${Object.entries(responseLabels).map(([k, v]) => `<option value="${k}" ${k === state.part ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
         <a class="wb-button" href="/api/jobs/${id}/export">${icon('export')}下载全部结果 ZIP</a>` : ''}
         <button type="button" class="wb-button" id="reuse">${icon('open')}载入该计算的模型</button>
-        ${s.duration_us >= 5000 && !done ? `<button type="button" class="wb-button" id="pause-job">${icon('pause')}保存后暂停</button>` : ''}${s.phase === 'paused' ? `<button type="button" class="wb-button primary" id="resume-job">${icon('resume')}继续计算</button>` : ''}</div>`;
+        ${(s.resumable ?? s.duration_us >= 5000) && !done ? `<button type="button" class="wb-button" id="pause-job">${icon('pause')}保存后暂停</button>` : ''}${s.phase === 'paused' ? `<button type="button" class="wb-button primary" id="resume-job">${icon('resume')}继续计算</button>` : ''}</div>`;
     $('#part')?.addEventListener('change', ev => { state.part = ev.target.value; openJob(id, true); });
     $('#reuse').onclick = () => reuseJob(id);
     $('#pause-job')?.addEventListener('click', () => command('pause'));
@@ -426,7 +434,7 @@ function disabled(id) {
   const [verb, arg] = id.split(':');
   if (verb === 'undo') return !state.history.length;
   if (verb === 'run') return state.submitting || Boolean(running()) || !state.preview?.ok;
-  if (verb === 'pause') { const j = running(); return !j || !(j.duration_us >= 5000); }
+  if (verb === 'pause') { const j = running(); return !j || !(j.resumable ?? j.duration_us >= 5000); }
   if (verb === 'resume') return selectedJob()?.phase !== 'paused' || Boolean(running());
   if (verb === 'export-result') return selectedJob()?.phase !== 'completed';
   if (verb === 'add-boundary' && arg === 'fixed') return state.scene?.boundary.fixed_face !== 'none';
@@ -462,7 +470,7 @@ async function showHelp() {
       <li><b>新建模型：</b>功能区“主屏幕 → 新建”选择模板（平板、圆管、带孔板、带缺口板、高斯激励、双贴片等），或“打开”已保存的模型文件（JSON）。</li>
       <li><b>设置模型：</b>在左侧“模型开发器”中选中节点，在“设置”窗口编辑：几何、材料、激励源、边界条件（对称 / 反对称 / 吸收层 / 固定面）、接收点和研究（记录时长、采样间隔、求解器）。右键节点可添加或删除。</li>
       <li><b>缺陷：</b>功能区“几何 → 一键添加缺陷”添加裂纹、孔、分层、接触界面或缺口；裂纹和分层可设为闭合（受压接触、受拉张开）。也可以在顶部文字框里描述，例如“在 100 mm 处添加深 0.5 mm 的裂纹”“在 60 到 80 mm 之间添加分层，距上表面 0.8 mm”，确认后修改模型。</li>
-      <li><b>网格：</b>由软件按激励频率、记录时长、缺陷位置和节点上限自动选择，“网格 1（自动）”节点显示所选尺寸和依据，不需要设置。</li>
+      <li><b>网格：</b>由软件按激励频率、记录时长和缺陷位置自动选择，“网格 1（自动）”节点显示所选尺寸和依据，不需要设置。模型大小只受本机内存、磁盘和时间限制，“消息”窗口给出预计耗时和内存；大模型自动保存精简记录（接收点完整波形 + 表面动画 + 快照），请先把关心的位置设为接收点。</li>
       <li><b>检查：</b>“消息”窗口实时列出模型检查结果、网格和记录大小、每个激励的 2f 分辨率，以及是否超出原验收范围。图形窗口显示几何、加载区、边界和接收点。</li>
       <li><b>计算：</b>点击“计算”（F8）。“进度”窗口显示计算进度；5 ms 及以上的长记录可“暂停”并在之后“继续”。首次计算需要几分钟编译。</li>
       <li><b>结果：</b>在“结果”下选择计算记录：位移场动画、任意点波形与频谱、多点提取、五种响应（完整、线性、StVK、几何增量、材料增量），可导出全部结果 ZIP。</li>

@@ -138,3 +138,42 @@ test('defects: one line each, add / remove on plates only, tree folder, variant 
   removeDefect(s, 0); removeDefect(s, 0); assert.equal(s.defects, undefined);
   const pipe = structuredClone(s); pipe.geometry.kind = 'pipe'; assert.throws(() => addDefect(pipe, crack), /平板/);
 });
+
+test('large models: display results validate, compact records are told apart, estimates and solver settings are shown', async () => {
+  const { validateSpectralResult } = await import('../offline/web/spectral-data.js');
+  const { solidResultMarkup } = await import('../offline/web/solid-viewer.js');
+  const { fmtDuration, estimateMarkup, previewMessages } = await import('../offline/web/shell.js');
+  const { inspectorMarkup, RECORD_MODES, TIME_LAYERS } = await import('../offline/web/inspector.js');
+  // a display result: 4 surface nodes of a 500 000-node computation, float32 frames, receivers in the compact record
+  const frames = 21, nodes = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]];
+  const scene = { name: '大板', geometry: { kind: 'plate' }, source: { frequency_mhz: .4 }, acquisition: { duration_us: 30, sample_step_us: .05 }, receivers: [{ name: 'top_0', point_mm: [1, 1, 0], direction: [0, 0, 1] }] };
+  const result = () => ({ schema: 'workai.offline.graphwave.result.v1', engine: 'workai_graphwave_offline', neural_model: { numerical_correction: false, weights_sha256: 'a'.repeat(64) },
+    response_part: 'full', scene, nodes_mm: nodes, tetra: [], surface: [[0, 1, 2], [0, 2, 3]], loaded_faces: [0], times_us: Array.from({ length: frames }, (_, i) => i * 1.5),
+    diagnostics: { output_dtype: 'float32', internal_step_us: .005, external_work_balance_relative: 1e-5, max_strain: 1e-5, min_J: .99999 },
+    spectral: { degree: 4, gll: [-1, -.65, 0, .65, 1], mapping_kind: 'cartesian', node_count: 500000, element_count: 7000 },
+    display: { nodes: 4, triangles: 2, stride: 4, cell_mm: 2.5, surface_faces: 9000, computation_nodes: 500000, computation_elements: 7000 },
+    field: { layout: 'time,node,xyz', dtype: 'little_endian_float32', unit: 'm', shape: [frames, 4, 3], uncompressed_bytes: frames * 4 * 3 * 4 },
+    recording: { schema: 'workai.graphnet.long_record.v1', duration_us: 30, sample_step_us: .05, frame_count: 601, animation_only: true, analysis_source: 'receiver_float64_probes', record_mode: 'compact',
+      receivers: [{ name: 'top_0', point_mm: [1, 1, 0] }], snapshot_frames: [150, 300, 450, 600] } });
+  assert.equal(validateSpectralResult(result()).display.nodes, 4);
+  const markup = solidResultMarkup(result());
+  assert.match(markup, /精简记录/); assert.match(markup, /500,000 节点 \/ 7,000 高阶六面体/); assert.match(markup, /显示网格：2 个表面三角形/); assert.match(markup, /按 2\.50 mm 合并/); assert.match(markup, /4 个时刻的完整 float64/);
+  for (const tamper of [r => { r.display.nodes = 5; }, r => { r.spectral.node_count = 3; }, r => { r.field.dtype = 'little_endian_float64'; r.field.uncompressed_bytes *= 2; }, r => { delete r.recording; },
+    r => { r.recording.analysis_source = 'other'; }, r => { r.recording.record_mode = 'full'; }, r => { r.surface.push([0, 1, 9]); r.display.triangles = 3; }]) {
+    const bad = result(); tamper(bad); assert.throws(() => validateSpectralResult(bad));
+  }
+  // durations and the cost table
+  assert.deepEqual([20, 600, 7200, 400000].map(fmtDuration), ['20 秒', '10 分钟', '2.0 小时', '4.6 天']);
+  const estimate = { record: 'compact', scheme: 'verlet2', layer_step_us: .005, evaluations_per_control: 6000, frozen_evaluations_per_control: 23400, seconds: 420, rate_measured: false, memory_bytes: 2 ** 30, physical_memory_bytes: 2 ** 34, disk_bytes: 3 * 2 ** 28 };
+  const table = estimateMarkup(estimate);
+  assert.match(table, /精简记录/); assert.match(table, /二阶单级/); assert.match(table, /5\.00 ns/); assert.match(table, /1\/3\.9/); assert.match(table, /7 分钟/); assert.match(table, /典型台式机/); assert.equal(estimateMarkup(null), '');
+  assert.match(estimateMarkup({ ...estimate, record: 'full', scheme: 'composition4', rate_measured: true }), /完整记录[\s\S]*三级四阶[\s\S]*本机上次/);
+  const rows = previewMessages({ ok: true, errors: [], record: { samples: 601, uncompressed_bytes: 3 * 2 ** 28, mode: 'compact' }, estimate });
+  assert.ok(rows.some(r => /精简记录/.test(r.text) && /接收点/.test(r.detail))); assert.ok(rows.some(r => /预计 7 分钟/.test(r.text)));
+  assert.ok(previewMessages({ ok: true, errors: [], record: { samples: 601, uncompressed_bytes: 1e6, mode: 'full' } }).some(r => /完整记录约/.test(r.text) && !r.detail));
+  // solver settings: record mode and time layer for the network engine only
+  const s = upgrade(v1), network = inspectorMarkup(s, 'engine', 4, { engine: 'network', record: 'compact', timeStepping: 'frozen' });
+  assert.match(network, /data-action="record-mode"/); assert.match(network, /value="compact" selected/); assert.match(network, /data-action="time-layer"/); assert.match(network, /value="frozen" selected/);
+  assert.doesNotMatch(inspectorMarkup(s, 'engine', 4, { engine: 'coarse' }), /record-mode|time-layer/);
+  assert.deepEqual([Object.keys(RECORD_MODES), Object.keys(TIME_LAYERS)], [['auto', 'full', 'compact'], ['auto', 'frozen']]);
+});
