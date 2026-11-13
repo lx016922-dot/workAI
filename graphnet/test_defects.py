@@ -42,8 +42,12 @@ class DefectMesh(unittest.TestCase):
         from spectral3d.curved_solver import internal_force as curved
         constants = np.array([58.1e9, 26.1e9, 0., 0., 0.]); A = np.array([[1, .3, .2], [.1, -.5, .4], [.2, .1, .7]]) * 1e-5
         eps = .5 * (A + A.T); density = .5 * 58.1e9 * np.trace(eps) ** 2 + 26.1e9 * np.sum(eps * eps)
-        cases = [([{'type': 'crack', 'x_mm': 6., 'depth_mm': .5}], 12 * 2 * 1.6, 36, 0),
-                 ([{'type': 'crack', 'x_mm': 6., 'depth_mm': .6, 'from': 'inside', 'z_mm': .8, 'closed': True}], 12 * 2 * 1.6, 27, 27),
+        # Split counts include the front refinement: the crack face 1.1–1.6 mm gets a grid line at 1.35 (tip + h/4), so two
+        # elements of 4 GLL intervals → 8 nodes split per y line (the tip stays shared) × 9 y lines.
+        cases = [([{'type': 'crack', 'x_mm': 6., 'depth_mm': .5}], 12 * 2 * 1.6, 72, 0),
+                 ([{'type': 'crack', 'x_mm': 6., 'depth_mm': .6, 'from': 'inside', 'z_mm': .8, 'closed': True}], 12 * 2 * 1.6, 63, 63),
+                 ([{'type': 'delamination', 'x_start_mm': 4., 'x_end_mm': 8., 'depth_mm': .5}], 12 * 2 * 1.6, 207, 0),
+                 ([{'type': 'crack', 'x_mm': 6., 'depth_mm': .5}, {'type': 'hole', 'x_mm': 7., 'y_mm': 1., 'radius_mm': .3}], 12 * 2 * 1.6 - np.pi * .09 * 1.6, 72, 0),
                  ([{'type': 'contact', 'orientation': 'vertical', 'x_mm': 6.}], 12 * 2 * 1.6, 81, 81),
                  ([{'type': 'notch', 'x_mm': 6., 'width_mm': .8, 'depth_mm': .5}], 12 * 2 * 1.6 - .8 * .5 * 2, 0, 0),
                  ([{'type': 'hole', 'x_mm': 6., 'y_mm': 1., 'radius_mm': .5}], 12 * 2 * 1.6 - np.pi * .25 * 1.6, 0, 0),
@@ -63,6 +67,21 @@ class DefectMesh(unittest.TestCase):
         close = plate(); close['defects'] = [{'type': 'crack', 'x_mm': 6., 'depth_mm': .5}, {'type': 'delamination', 'x_start_mm': 6.05, 'x_end_mm': 10., 'depth_mm': 1.2}]
         with self.assertRaises(ValueError) as caught: make_mesh(close, 4, 1.)
         self.assertIn('极薄', str(caught.exception))
+
+    def test_fronts_inside_the_material_get_refinement_lines(self):
+        from spectral3d.feature_mesh import _front_cuts
+        size = (12., 2., 1.6)
+        crack = {'axis': 0, 'position_mm': 6., 'ranges_mm': [[6., 6.], [0., 2.], [1.1, 1.6]]}           # from the top: tip at z = 1.1
+        cuts = [{0.: 'f', 6.: 'c', 12.: 'f'}, {0.: 'f', 2.: 'f'}, {0.: 'f', 1.1: 'c', 1.6: 'f'}]
+        _front_cuts([crack], cuts, size, .25)
+        self.assertEqual(sorted(cuts[0]), [0., 5.75, 6., 6.25, 12.])        # across the crack plane
+        self.assertEqual(sorted(cuts[2]), [0., .85, 1.1, 1.35, 1.6])        # across the tip, in the plane
+        self.assertEqual(sorted(cuts[1]), [0., 2.])                          # full width: the y edges open, no front
+        delamination = {'axis': 2, 'position_mm': 1.5, 'ranges_mm': [[4., 8.], [0., 2.], [1.5, 1.5]]}   # 0.1 mm under the top
+        cuts = [{0.: 'f', 4.: 'd', 8.: 'd', 12.: 'f'}, {0.: 'f', 2.: 'f'}, {0.: 'f', 1.5: 'd', 1.6: 'f'}]
+        _front_cuts([delamination], cuts, size, .25)
+        self.assertEqual(sorted(cuts[0]), [0., 3.75, 4., 4.25, 7.75, 8., 8.25, 12.])
+        self.assertEqual(sorted(cuts[2]), [0., 1.25, 1.5, 1.6])              # 1.75 lies outside the plate; no sliver lines
 
     def test_network_equals_the_gll_solver_on_cracked_notched_and_holed_plates(self):
         from spectral3d.solver import solve

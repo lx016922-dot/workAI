@@ -29,7 +29,8 @@ def rel(a, b): return float(np.linalg.norm(a - b) / max(np.linalg.norm(b), 1e-30
 
 if __name__ == '__main__':
     rec = receivers(); pts = [p for _, _, p in rec]
-    t, hole = read('hole', pts); _, plate = read('plate', pts + [[X0, Y0, T / 2]])
+    kind = sys.argv[1] if len(sys.argv) > 1 else 'hole'   # 'ogrid': the defect O-grid mesh (hole.py)
+    t, hole = read(kind, pts); _, plate = read('plate', pts + [[X0, Y0, T / 2]])
     inc = plate[:, -1, 0]; plate = plate[:, :-1]; dt = (t[1] - t[0]) * 1e-6
     theory = Hole(LAM, MU, RHO, A * 1e-3); c = theory.cp
     front = (X0 - A) / (c * 1e-3); window_end = front + (W - 2 * A - 1) / (c * 1e-3)   # μs: first image return
@@ -62,4 +63,4 @@ if __name__ == '__main__':
                          'sim_scattered_y': sim_scat[win, 1].tolist(), 'pred_scattered_y': pred_scat[win, 1].tolist()}}
         out['receivers'].append(row)
         print(f"r={r:5.2f} θ={th:5.0f}: total {row['total_rel_l2']:.3f}  scattered {row['scattered_rel_l2']:.3f}  peak ratio {row['scattered_peak_ratio']:.3f}  |scat|/|inc| {row['scattered_over_incident_peak']:.3f}")
-    (HERE / 'results' / 'hole.json').write_text(json.dumps(out, indent=1))
+    (HERE / 'results' / ('hole.json' if kind == 'hole' else f'hole-{kind}.json')).write_text(json.dumps(out, indent=1))
