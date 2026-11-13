@@ -1,0 +1,757 @@
+{
+ "schema": "workai.coarsegraph.range_verification.v1",
+ "case": "defect-closed-crack-f0.3-t1.6",
+ "purpose": "defect",
+ "scene": {
+  "schema": "workai.hyperelastic.solid.v2",
+  "name": "粗网格核验",
+  "geometry": {
+   "kind": "plate",
+   "length_mm": 100.0,
+   "width_mm": 2.0,
+   "thickness_mm": 1.6,
+   "outer_radius_mm": 3.0,
+   "inner_radius_mm": 2.0,
+   "hole_radius_mm": 0.7,
+   "hole_x_mm": 6.0,
+   "hole_y_mm": 2.0,
+   "notch_x_mm": 6.0,
+   "notch_width_mm": 1.0,
+   "notch_depth_mm": 0.6
+  },
+  "material": {
+   "rho_kg_m3": 2700.0,
+   "lambda_pa": 58100000000.0,
+   "mu_pa": 26100000000.0,
+   "l_pa": -143000000000.0,
+   "m_pa": -297000000000.0,
+   "n_pa": -345000000000.0
+  },
+  "constitutive": "murnaghan",
+  "boundary": {
+   "fixed_face": "none"
+  },
+  "acquisition": {
+   "duration_us": 60.0,
+   "sample_step_us": 0.05
+  },
+  "numerics": {
+   "h_mm": 1.0,
+   "cfl": 0.3,
+   "max_elements": 40000
+  },
+  "source": {
+   "face": "zmax",
+   "center_mm": [
+    16.0,
+    2.0,
+    1.6
+   ],
+   "radius_mm": 0.0,
+   "direction": [
+    0.0,
+    0.0,
+    -1.0
+   ],
+   "amplitude_mpa": 1.0,
+   "frequency_mhz": 0.3,
+   "cycles": 5.0,
+   "delay_us": 0.0,
+   "phase_deg": 0.0,
+   "signal": {
+    "type": "tone_burst",
+    "window": "hann"
+   },
+   "profile": {
+    "type": "gaussian",
+    "sigma_mm": 2.0
+   },
+   "name": "贴片 1"
+  },
+  "boundaries": [
+   {
+    "type": "absorbing",
+    "face": "xmin",
+    "length_mm": 8.0,
+    "ramp": "cubic",
+    "attenuation_db": 60.0
+   },
+   {
+    "type": "absorbing",
+    "face": "xmax",
+    "length_mm": 8.0,
+    "ramp": "cubic",
+    "attenuation_db": 60.0
+   },
+   {
+    "type": "symmetry",
+    "face": "ymax"
+   }
+  ],
+  "receivers": [
+   {
+    "name": "before:top0",
+    "point_mm": [
+     26.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "before:mid0",
+    "point_mm": [
+     26.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "before:top1",
+    "point_mm": [
+     29.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "before:mid1",
+    "point_mm": [
+     29.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "before:top2",
+    "point_mm": [
+     32.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "before:mid2",
+    "point_mm": [
+     32.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "before:top3",
+    "point_mm": [
+     35.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "before:mid3",
+    "point_mm": [
+     35.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "before:top4",
+    "point_mm": [
+     38.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "before:mid4",
+    "point_mm": [
+     38.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "before:top5",
+    "point_mm": [
+     41.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "before:mid5",
+    "point_mm": [
+     41.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "after:top0",
+    "point_mm": [
+     59.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "after:mid0",
+    "point_mm": [
+     59.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "after:top1",
+    "point_mm": [
+     62.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "after:mid1",
+    "point_mm": [
+     62.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "after:top2",
+    "point_mm": [
+     65.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "after:mid2",
+    "point_mm": [
+     65.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "after:top3",
+    "point_mm": [
+     68.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "after:mid3",
+    "point_mm": [
+     68.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "after:top4",
+    "point_mm": [
+     71.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "after:mid4",
+    "point_mm": [
+     71.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   },
+   {
+    "name": "after:top5",
+    "point_mm": [
+     74.0,
+     2.0,
+     1.6
+    ],
+    "direction": [
+     0.0,
+     0.0,
+     1.0
+    ]
+   },
+   {
+    "name": "after:mid5",
+    "point_mm": [
+     74.0,
+     2.0,
+     0.8
+    ],
+    "direction": [
+     1.0,
+     0.0,
+     0.0
+    ]
+   }
+  ],
+  "defects": [
+   {
+    "type": "crack",
+    "x_mm": 50.0,
+    "depth_mm": 0.8,
+    "closed": true
+   }
+  ]
+ },
+ "groups": {
+  "before": [
+   "before:top0",
+   "before:mid0",
+   "before:top1",
+   "before:mid1",
+   "before:top2",
+   "before:mid2",
+   "before:top3",
+   "before:mid3",
+   "before:top4",
+   "before:mid4",
+   "before:top5",
+   "before:mid5"
+  ],
+  "after": [
+   "after:top0",
+   "after:mid0",
+   "after:top1",
+   "after:mid1",
+   "after:top2",
+   "after:mid2",
+   "after:top3",
+   "after:mid3",
+   "after:top4",
+   "after:mid4",
+   "after:top5",
+   "after:mid5"
+  ]
+ },
+ "fine": {
+  "h_mm": 1.0,
+  "degree": 4,
+  "nodes": 62649,
+  "seconds": 561.4439210829996,
+  "layer": "verlet2",
+  "layer_step_us": 0.001282051282051282,
+  "evaluations_per_control": 46800,
+  "threads": 4,
+  "contact_pairs": 72
+ },
+ "runs": {
+  "p4-h3-harmonic:learned": {
+   "nodes": 6545,
+   "seconds": 15.70018984699891,
+   "layer_step_us": 0.0038461538461538464,
+   "evaluations_per_control": 15600,
+   "stability_number": 0.7723395197853515,
+   "energy_balance": 1.139345003621932e-05,
+   "groups": {
+    "before": {
+     "record_l2": 0.018208938961761734,
+     "increment_l2": 2.2278358397324243,
+     "worst_waveform_l2": 0.03708224092269245,
+     "worst_a1": 0.03670156988267383,
+     "worst_a2": 0.06178881525686724,
+     "worst_increment_a2": 9.61031499520994,
+     "increment_a2_reference_max_m": 4.786884484431882e-14,
+     "waveform_gate": false,
+     "increment_gate": false,
+     "passed": false,
+     "a2_vector_relative": 0.08921462310919129,
+     "increment_a2_vector_relative": 2.813025615710696,
+     "window_us": [
+      0.0,
+      60.0
+     ],
+     "whole_record": {
+      "record_l2": 0.018208938961761734,
+      "increment_l2": 2.2278358397324243,
+      "worst_waveform_l2": 0.03708224092269245,
+      "worst_a1": 0.03670156988267383,
+      "worst_a2": 0.06178881525686724,
+      "worst_increment_a2": 9.61031499520994,
+      "increment_a2_reference_max_m": 4.786884484431882e-14,
+      "waveform_gate": false,
+      "increment_gate": false,
+      "passed": false,
+      "a2_vector_relative": 0.08921462310919129,
+      "increment_a2_vector_relative": 2.813025615710696
+     }
+    },
+    "after": {
+     "record_l2": 0.028168348607495213,
+     "increment_l2": 2.312466100824725,
+     "worst_waveform_l2": 0.03787957115801215,
+     "worst_a1": 0.047845053133823603,
+     "worst_a2": 0.0694735469473628,
+     "worst_increment_a2": 3.3794526290346094,
+     "increment_a2_reference_max_m": 5.6609918713364165e-14,
+     "waveform_gate": false,
+     "increment_gate": false,
+     "passed": false,
+     "a2_vector_relative": 0.09098380138540388,
+     "increment_a2_vector_relative": 2.203131958123939,
+     "window_us": [
+      3.85,
+      60.0
+     ],
+     "whole_record": {
+      "record_l2": 0.02816834860749522,
+      "increment_l2": 2.312466100824725,
+      "worst_waveform_l2": 0.03787957115801215,
+      "worst_a1": 0.042511772046008416,
+      "worst_a2": 0.06163211631793729,
+      "worst_increment_a2": 3.6324452509659135,
+      "increment_a2_reference_max_m": 5.1871414971961354e-14,
+      "waveform_gate": false,
+      "increment_gate": false,
+      "passed": false,
+      "a2_vector_relative": 0.08919785976775767,
+      "increment_a2_vector_relative": 2.104980094435116
+     }
+    }
+   },
+   "passed": false
+  },
+  "p4-h3-harmonic:gll": {
+   "nodes": 6545,
+   "seconds": 18.613528694000706,
+   "layer_step_us": 0.0038461538461538464,
+   "evaluations_per_control": 15600,
+   "stability_number": 0.7753920306914994,
+   "energy_balance": 1.1460151687688633e-05,
+   "groups": {
+    "before": {
+     "record_l2": 0.018359885796998526,
+     "increment_l2": 2.0744760962897906,
+     "worst_waveform_l2": 0.03835871875564499,
+     "worst_a1": 0.03481750958788572,
+     "worst_a2": 0.08177334142357717,
+     "worst_increment_a2": 12.788519001750641,
+     "increment_a2_reference_max_m": 4.786884484431882e-14,
+     "waveform_gate": false,
+     "increment_gate": false,
+     "passed": false,
+     "a2_vector_relative": 0.11564946036819126,
+     "increment_a2_vector_relative": 3.3745914712351635,
+     "window_us": [
+      0.0,
+      60.0
+     ],
+     "whole_record": {
+      "record_l2": 0.018359885796998526,
+      "increment_l2": 2.0744760962897906,
+      "worst_waveform_l2": 0.03835871875564499,
+      "worst_a1": 0.03481750958788572,
+      "worst_a2": 0.08177334142357717,
+      "worst_increment_a2": 12.788519001750641,
+      "increment_a2_reference_max_m": 4.786884484431882e-14,
+      "waveform_gate": false,
+      "increment_gate": false,
+      "passed": false,
+      "a2_vector_relative": 0.11564946036819126,
+      "increment_a2_vector_relative": 3.3745914712351635
+     }
+    },
+    "after": {
+     "record_l2": 0.027807630632466825,
+     "increment_l2": 2.1531027854169293,
+     "worst_waveform_l2": 0.03980369872290426,
+     "worst_a1": 0.05288175148994126,
+     "worst_a2": 0.09400701080352449,
+     "worst_increment_a2": 4.397959940031662,
+     "increment_a2_reference_max_m": 5.6609918713364165e-14,
+     "waveform_gate": false,
+     "increment_gate": false,
+     "passed": false,
+     "a2_vector_relative": 0.11858171437908245,
+     "increment_a2_vector_relative": 2.5544066562446623,
+     "window_us": [
+      3.85,
+      60.0
+     ],
+     "whole_record": {
+      "record_l2": 0.02780763063246683,
+      "increment_l2": 2.1531027854169293,
+      "worst_waveform_l2": 0.039803698722904256,
+      "worst_a1": 0.04628171529013263,
+      "worst_a2": 0.08156902990134308,
+      "worst_increment_a2": 4.975729082271414,
+      "increment_a2_reference_max_m": 5.1871414971961354e-14,
+      "waveform_gate": false,
+      "increment_gate": false,
+      "passed": false,
+      "a2_vector_relative": 0.11564329241836652,
+      "increment_a2_vector_relative": 2.4532104390951894
+     }
+    }
+   },
+   "passed": false
+  },
+  "p4-h2-multisource:learned": {
+   "nodes": 17805,
+   "seconds": 117.78972952000004,
+   "layer_step_us": 0.001515151515151515,
+   "evaluations_per_control": 39600,
+   "stability_number": 0.6889376808885572,
+   "energy_balance": 1.1304591886392185e-05,
+   "groups": {
+    "before": {
+     "record_l2": 0.00996054713165698,
+     "increment_l2": 2.0854598868813503,
+     "worst_waveform_l2": 0.022664121390687332,
+     "worst_a1": 0.024066126462901873,
+     "worst_a2": 0.009098275535815619,
+     "worst_increment_a2": 11.622898271766026,
+     "increment_a2_reference_max_m": 4.786884484431882e-14,
+     "waveform_gate": true,
+     "increment_gate": false,
+     "passed": false,
+     "a2_vector_relative": 0.02038439419088685,
+     "increment_a2_vector_relative": 4.515091588541326,
+     "window_us": [
+      0.0,
+      60.0
+     ],
+     "whole_record": {
+      "record_l2": 0.00996054713165698,
+      "increment_l2": 2.0854598868813503,
+      "worst_waveform_l2": 0.022664121390687332,
+      "worst_a1": 0.024066126462901873,
+      "worst_a2": 0.009098275535815619,
+      "worst_increment_a2": 11.622898271766026,
+      "increment_a2_reference_max_m": 4.786884484431882e-14,
+      "waveform_gate": true,
+      "increment_gate": false,
+      "passed": false,
+      "a2_vector_relative": 0.02038439419088685,
+      "increment_a2_vector_relative": 4.515091588541326
+     }
+    },
+    "after": {
+     "record_l2": 0.015260235843751612,
+     "increment_l2": 2.164540579088141,
+     "worst_waveform_l2": 0.024185448129715608,
+     "worst_a1": 0.021610308754126457,
+     "worst_a2": 0.01040748178880886,
+     "worst_increment_a2": 9.477190391985019,
+     "increment_a2_reference_max_m": 5.6609918713364165e-14,
+     "waveform_gate": true,
+     "increment_gate": false,
+     "passed": false,
+     "a2_vector_relative": 0.020313330272177913,
+     "increment_a2_vector_relative": 3.5232831872610606,
+     "window_us": [
+      3.85,
+      60.0
+     ],
+     "whole_record": {
+      "record_l2": 0.015260235843751614,
+      "increment_l2": 2.164540579088141,
+      "worst_waveform_l2": 0.02418544812971561,
+      "worst_a1": 0.01951735157827978,
+      "worst_a2": 0.009133212573531738,
+      "worst_increment_a2": 10.222184816520272,
+      "increment_a2_reference_max_m": 5.1871414971961354e-14,
+      "waveform_gate": true,
+      "increment_gate": false,
+      "passed": false,
+      "a2_vector_relative": 0.020385739236812597,
+      "increment_a2_vector_relative": 3.341785248795001
+     }
+    }
+   },
+   "passed": false
+  },
+  "p4-h2-multisource:gll": {
+   "nodes": 17805,
+   "seconds": 113.18329879900011,
+   "layer_step_us": 0.001515151515151515,
+   "evaluations_per_control": 39600,
+   "stability_number": 0.6923061141146466,
+   "energy_balance": 2.0690617595268095e-05,
+   "groups": {
+    "before": {
+     "record_l2": 0.010390375471159936,
+     "increment_l2": 2.1577186839831732,
+     "worst_waveform_l2": 0.02387694699550902,
+     "worst_a1": 0.025620163302012396,
+     "worst_a2": 0.015346861924176032,
+     "worst_increment_a2": 7.498140544924326,
+     "increment_a2_reference_max_m": 4.786884484431882e-14,
+     "waveform_gate": true,
+     "increment_gate": false,
+     "passed": false,
+     "a2_vector_relative": 0.020175199059843756,
+     "increment_a2_vector_relative": 3.7277660319153725,
+     "window_us": [
+      0.0,
+      60.0
+     ],
+     "whole_record": {
+      "record_l2": 0.010390375471159936,
+      "increment_l2": 2.1577186839831732,
+      "worst_waveform_l2": 0.02387694699550902,
+      "worst_a1": 0.025620163302012396,
+      "worst_a2": 0.015346861924176032,
+      "worst_increment_a2": 7.498140544924326,
+      "increment_a2_reference_max_m": 4.786884484431882e-14,
+      "waveform_gate": true,
+      "increment_gate": false,
+      "passed": false,
+      "a2_vector_relative": 0.020175199059843756,
+      "increment_a2_vector_relative": 3.7277660319153725
+     }
+    },
+    "after": {
+     "record_l2": 0.015670966149268585,
+     "increment_l2": 2.2395172717996297,
+     "worst_waveform_l2": 0.025215618154677735,
+     "worst_a1": 0.01816318590403749,
+     "worst_a2": 0.01643656013690221,
+     "worst_increment_a2": 6.760538902178878,
+     "increment_a2_reference_max_m": 5.6609918713364165e-14,
+     "waveform_gate": true,
+     "increment_gate": false,
+     "passed": false,
+     "a2_vector_relative": 0.02044752618044422,
+     "increment_a2_vector_relative": 2.8826007656827066,
+     "window_us": [
+      3.85,
+      60.0
+     ],
+     "whole_record": {
+      "record_l2": 0.015670966149268585,
+      "increment_l2": 2.2395172717996297,
+      "worst_waveform_l2": 0.025215618154677735,
+      "worst_a1": 0.016977013152965844,
+      "worst_a2": 0.015447689741720347,
+      "worst_increment_a2": 7.403235817048575,
+      "increment_a2_reference_max_m": 5.1871414971961354e-14,
+      "waveform_gate": true,
+      "increment_gate": false,
+      "passed": false,
+      "a2_vector_relative": 0.02018939139176239,
+      "increment_a2_vector_relative": 2.750267157188259
+     }
+    }
+   },
+   "passed": false
+  }
+ }
+}

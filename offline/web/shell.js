@@ -131,7 +131,7 @@ export function previewMessages(p) {
   const rows = [];
   if (p.ok) rows.push({ kind: 'ok', text: '模型检查通过，可以计算。' });
   for (const e of p.errors || []) rows.push({ kind: 'error', text: e });
-  if (p.engine) rows.push({ kind: p.engine.out_of_training_range.length ? 'warn' : 'info', text: `快速引擎 ${p.engine.label || p.engine.name}：留出测试 ${p.engine.test_passed}/${p.engine.test_cases} 通过${p.engine.out_of_training_range.length ? `；超出训练范围 ${p.engine.out_of_training_range.length} 项：${p.engine.out_of_training_range.join('；')}` : '；在训练范围内'}` });
+  if (p.engine) rows.push({ kind: p.engine.out_of_training_range.length ? 'warn' : 'info', text: `快速引擎 ${p.engine.label || p.engine.name}：留出测试 ${p.engine.test_passed}/${p.engine.test_cases} 通过${p.engine.out_of_training_range.length ? `；超出训练与核验范围 ${p.engine.out_of_training_range.length} 项：${p.engine.out_of_training_range.join('；')}` : '；在训练或核验过的范围内'}` });
   if (p.mesh) rows.push({ kind: 'info', text: `${p.engine ? '粗网格（模型自带）' : p.mesh.auto ? '自动网格' : '网格'}：${p.mesh.elements.toLocaleString()} 个单元，${p.mesh.nodes.toLocaleString()} 个节点，阶次 p = ${p.mesh.degree}`
     + (p.mesh.auto && !p.engine ? `，单元 ${+p.mesh.auto.h_mm.toFixed(3)} mm（${p.mesh.auto.reason}）${p.mesh.auto.split_nodes ? `；缺陷面分开 ${p.mesh.auto.split_nodes} 个节点${p.mesh.auto.contact_pairs ? `，${p.mesh.auto.contact_pairs} 对接触` : ''}` : ''}` : '') });
   if (p.mesh?.auto?.warning && !p.engine) rows.push({ kind: 'warn', text: p.mesh.auto.warning });

@@ -77,6 +77,28 @@ class FastEngine(unittest.TestCase):
         self.assertEqual([r['group'] for r in forms], list(EXCITATIONS))
         self.assertEqual(sum(r['cases'] for r in forms), model_summary()['test_cases']); self.assertEqual(sum(r['passed'] for r in forms), model_summary()['test_passed'])
 
+    def test_range_verification(self):
+        from offline.coarse_engine import RANGE_VERIFICATION
+        a = json.loads((REPO / 'coarsegraph/specs/labels-a-top-gaussian.json').read_text(encoding='utf-8'))['base_scene']
+        far = copy.deepcopy(a); far['geometry'].update(length_mm=200., width_mm=8.); far['acquisition']['duration_us'] = 100.
+        # the accurate model was verified there; the fast one lists every item and says what the verification found
+        self.assertEqual(out_of_range(far, 'p4-h2-multisource'), [])
+        items = out_of_range(far); self.assertEqual(len(items), 4, items); self.assertIn('精确模型', items[-1])
+        beyond = copy.deepcopy(far); beyond['geometry']['length_mm'] = 300.; items = out_of_range(beyond, 'p4-h2-multisource')
+        self.assertEqual(len(items), 1, items); self.assertIn('核验到 200 mm', items[0])
+        thick = copy.deepcopy(a); thick['geometry']['thickness_mm'] = 3.; self.assertEqual(len(out_of_range(thick)), 1)   # not a matter of distance: no advice to change model
+        for name in MODELS: self.assertIn('通过', model_summary(REPO / 'coarsegraph/models' / name / 'model.json')['range_verification']['text'])
+        # the numbers quoted are those of the stored verification (the repository; not part of the packaged application)
+        results = REPO / 'research/coarse-range/results'
+        if not results.is_dir(): return
+        rows = [json.loads(path.read_text(encoding='utf-8')) for path in sorted(results.glob('*.json')) if not path.name.startswith(('reference-', 'defect-'))]
+        for name, quoted in RANGE_VERIFICATION.items():
+            groups = [g['passed'] for r in rows for g in r['runs'][f'{name}:learned']['groups'].values()]
+            self.assertEqual((len(groups), sum(groups)), (quoted['groups'], quoted['passed']), name)
+            self.assertIn(f"{quoted['groups']} 组接收点", quoted['text']); self.assertIn(f"{quoted['passed']} 组通过", quoted['text'])
+            for path, (lo, hi) in quoted['covered'].items():
+                values = [r['scene'][path.split('.')[0]][path.split('.')[1]] for r in rows]; self.assertEqual(max(values), hi, path)
+
     def test_a_windows_checkout_with_crlf_line_endings_still_matches_its_evaluation(self):
         # v1.0.0 on Windows: core.autocrlf rewrote model.json to CRLF and every fast-engine preview failed with
         # "evaluation-abcd.json 不是这个模型的评估。"

@@ -2,6 +2,8 @@
 
     python -m coarsegraph.verify run --output research/coarse-range/results [--only NAME ...]
     python -m coarsegraph.verify report --results research/coarse-range/results
+    python -m coarsegraph.verify table --results research/coarse-range/results      (Markdown)
+    python -m coarsegraph.verify reference --output research/coarse-range/results --case distance-f0.4-t1.6 --h-mm 0.8
 
 The shipped models were trained on 48 × 2 mm half-width plates, 30 μs records and receivers 6–21 mm from the
 source. The learned operators are element operators shared by every element, so nothing ties them to that plate;
@@ -89,6 +91,11 @@ def cases():
                          ('side-hole', {'type': 'hole', 'axis': 'y', 'x_mm': 50., 'z_mm': .8, 'radius_mm': .3}), ('open-delamination', {'type': 'delamination', 'x_start_mm': 46., 'x_end_mm': 54., 'depth_mm': .8}),
                          ('closed-crack', {'type': 'crack', 'x_mm': 50., 'depth_mm': .8, 'closed': True})):
         out[f'defect-{name}-f0.3-t1.6'] = ('defect', plate(100., 2., 1.6, .3, 60., groups=around, defects=[defect]))
+    # Volume defects at the other corners of the range, and a hole through the thickness of a full-width plate (receivers on the centre line and 1 mm from the edge).
+    out['defect-notch-f0.2-t1.6'] = ('defect', plate(100., 2., 1.6, .2, 60., groups=around, defects=[{'type': 'notch', 'x_mm': 50., 'width_mm': 1., 'depth_mm': .6}]))
+    out['defect-notch-f0.4-t2.4'] = ('defect', plate(100., 2., 2.4, .4, 60., groups=around, defects=[{'type': 'notch', 'x_mm': 50., 'width_mm': 1., 'depth_mm': .9}]))
+    out['defect-side-hole-f0.4-t2.4'] = ('defect', plate(100., 2., 2.4, .4, 60., groups=around, defects=[{'type': 'hole', 'axis': 'y', 'x_mm': 50., 'z_mm': 1.2, 'radius_mm': .4}]))
+    out['defect-through-hole-f0.3-t1.6'] = ('defect', plate(100., 8., 1.6, .3, 60., groups=around, edge_y=1., symmetry=False, defects=[{'type': 'hole', 'axis': 'z', 'x_mm': 50., 'y_mm': 4., 'radius_mm': 1.}]))
     return out
 
 
@@ -144,6 +151,30 @@ def run_case(name, purpose, raw, directory, models=MODELS, waveforms=None):
     return result
 
 
+def reference(name, h_mm, output):
+    """How converged is the fine reference of a stored case? The same scene on a finer grid (h_mm), compared with the stored
+    reference by the same gates; writes reference-<case>-h<h>.json."""
+    from graphnet.inputs import network_scene
+    from graphnet.model import load
+    from graphnet.rollout import read_record, rollout
+    from spectral3d.feature_mesh import make_mesh
+    from .record import projected
+    output = Path(output); stored = json.loads((output / f'{name}.json').read_text(encoding='utf-8')); data = np.load(output / f'{name}.npz')
+    raw = copy.deepcopy(stored['scene']); raw['numerics']['h_mm'] = h_mm
+    network = load(DEGREE, long_record=True); scene = network_scene(raw, DEGREE, network['material']); mesh = make_mesh(scene, DEGREE, h_mm); started = time.monotonic()
+    with tempfile.TemporaryDirectory() as scratch:
+        manifest = rollout(scene, mesh, network, Path(scratch) / 'finer', {'verify': name, 'h_mm': h_mm}, time_plan='auto', record='compact', controls=PAIR)
+        finer = projected(read_record(Path(scratch) / 'finer'), scene)
+    coarser = {law: data[f'fine:{law}'].astype(float) for law in PAIR}; times = data['times_us']; groups = {}
+    for i, rx in enumerate(scene['receivers']): groups.setdefault(rx['name'].split(':')[0], []).append(i)
+    result = {'schema': SCHEMA, 'case': name, 'purpose': 'convergence of the fine reference', 'reference_h_mm': stored['fine']['h_mm'], 'finer_h_mm': h_mm, 'finer_nodes': int(len(mesh['points'])),
+              'finer_layer_step_us': manifest['layer_step_us'], 'seconds': time.monotonic() - started,
+              'groups': {g: metrics(times, scene['source']['frequency_mhz'], coarser, finer, ids) for g, ids in groups.items()}}
+    (output / f'reference-{name}-h{h_mm:g}.json').write_text(json.dumps(result, ensure_ascii=False, indent=1, allow_nan=False) + '\n', encoding='utf-8')
+    print(f"{name}: reference h {stored['fine']['h_mm']:g} mm against h {h_mm:g} mm ({result['finer_nodes']} nodes, {result['seconds']:.0f} s) |" + ' |'.join(
+        f" {g}: {100 * m['worst_waveform_l2']:.2f} / {100 * m['worst_a1']:.2f} / {100 * m['worst_a2']:.2f} / {100 * m['worst_increment_a2']:.2f}" for g, m in result['groups'].items()), flush=True)
+
+
 def run(output, only=None):
     output = Path(output); output.mkdir(parents=True, exist_ok=True)
     for name, (purpose, raw) in cases().items():
@@ -168,15 +199,51 @@ def summary_line(result):
 
 def report(results):
     """Print every stored case: worst waveform / A1 / A2 / increment-A2 errors (%) per receiver group."""
-    for path in sorted(Path(results).glob('*.json')): print(summary_line(json.loads(path.read_text(encoding='utf-8'))))
+    for path in sorted(Path(results).glob('*.json')):
+        if not path.name.startswith('reference-'): print(summary_line(json.loads(path.read_text(encoding='utf-8'))))
+
+
+def stored(results):
+    """Stored case results, in the order of `cases()` (then any others by name)."""
+    found = {path.stem: json.loads(path.read_text(encoding='utf-8')) for path in sorted(Path(results).glob('*.json')) if not path.name.startswith('reference-')}
+    order = [name for name in cases() if name in found]
+    return [found[name] for name in order + sorted(set(found) - set(order))]
+
+
+def table(results):
+    """The stored results as Markdown: gates per receiver group, groups passed per kind of case, and cost."""
+    rows = stored(results); tags = [f'{model}:{kind}' for model in MODELS for kind in ('learned', 'gll')]
+    cell = lambda m: f"{100 * m['worst_waveform_l2']:.2f} / {100 * m['worst_a1']:.2f} / {100 * m['worst_a2']:.2f} / {100 * m['worst_increment_a2']:.1f} {'✓' if m['passed'] else '✗'}"
+    lines = ['| 算例 | 接收点组 | ' + ' | '.join(tag.replace(':learned', ' 学习').replace(':gll', ' GLL') for tag in tags) + ' |', '|---|---|' + '---|' * len(tags)]
+    counts = {}
+    for r in rows:
+        for g in r['groups']:
+            lines.append(f"| {r['case']} | {g} | " + ' | '.join(cell(r['runs'][tag]['groups'][g]) if 'groups' in r['runs'].get(tag, {}) else '—' for tag in tags) + ' |')
+            for tag in tags:
+                if 'groups' not in r['runs'].get(tag, {}): continue
+                kind = r['case'].split('-f')[0]; done = counts.setdefault(kind, {}).setdefault(tag, [0, 0]); done[0] += r['runs'][tag]['groups'][g]['passed']; done[1] += 1
+    lines += ['', '| 算例类别 | ' + ' | '.join(tag.replace(':learned', ' 学习').replace(':gll', ' GLL') for tag in tags) + ' |', '|---|' + '---|' * len(tags)]
+    for kind, by in counts.items(): lines.append(f'| {kind} | ' + ' | '.join(f'{by[tag][0]}/{by[tag][1]}' if tag in by else '—' for tag in tags) + ' |')
+    lines += ['', '| 算例 | 细网格节点 | 细网格 s | ' + ' | '.join(f'{model} 节点 | s | 倍数' for model in MODELS) + ' |', '|---|---|---|' + '---|---|---|' * len(MODELS)]
+    for r in rows:
+        parts = []
+        for model in MODELS:
+            run = r['runs'].get(f'{model}:learned', {})
+            parts.append(f"{run['nodes']} | {run['seconds']:.1f} | {r['fine']['seconds'] / run['seconds']:.0f}" if 'nodes' in run else '— | — | —')
+        lines.append(f"| {r['case']} | {r['fine']['nodes']} | {r['fine']['seconds']:.0f} | " + ' | '.join(parts) + ' |')
+    return '\n'.join(lines)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0]); sub = parser.add_subparsers(dest='command', required=True)
     a = sub.add_parser('run'); a.add_argument('--output', type=Path, required=True); a.add_argument('--only', nargs='*')
     b = sub.add_parser('report'); b.add_argument('--results', type=Path, required=True)
+    c = sub.add_parser('reference'); c.add_argument('--output', type=Path, required=True); c.add_argument('--case', required=True); c.add_argument('--h-mm', type=float, default=.8)
+    d = sub.add_parser('table'); d.add_argument('--results', type=Path, required=True)
     args = parser.parse_args()
     if args.command == 'run': run(args.output, args.only)
+    elif args.command == 'table': print(table(args.results))
+    elif args.command == 'reference': reference(args.case, args.h_mm, args.output)
     else: report(args.results)
 
 
