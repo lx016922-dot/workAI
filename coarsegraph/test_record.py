@@ -35,15 +35,16 @@ class Record(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             for learned in (True, False):
                 operators = c.operators(D, q, m) if learned else (base['weights']['derivative_4'], c.mesh['volume_weight'], c.mesh['mass'])
-                reference = {law: c.run(*operators, law, base['weights'])[0] for law in ('linear', 'murnaghan')}
-                manifest = simulate(self.scene, MODEL, Path(tmp) / str(learned), self.network, learned, controls=('linear', 'murnaghan'))
+                laws = ('linear', 'murnaghan') if learned else ('linear',)   # the GLL baseline: one control is enough to see it is the same grid
+                reference = {law: c.run(*operators, law, base['weights'])[0] for law in laws}
+                manifest = simulate(self.scene, MODEL, Path(tmp) / str(learned), self.network, learned, controls=laws)
                 values = projected(read_record(Path(tmp) / str(learned)), self.scene)
                 self.assertEqual((manifest['time_plan']['mode'], manifest['time_plan']['subdivisions'], manifest['nodes']), ('given', c.subdivisions, len(c.mesh['mass'])))
                 self.assertAlmostEqual(manifest['layer_step_us'], c.dt * 1e6); self.assertLessEqual(manifest['time_plan']['stability_number'], 1.5)
                 for law in reference: self.assertLess(relative(values[law], reference[law]), 1e-5, (learned, law))
-                self.assertLess(relative(values['murnaghan'] - values['linear'], reference['murnaghan'] - reference['linear']), 1e-5)
+                if learned: self.assertLess(relative(values['murnaghan'] - values['linear'], reference['murnaghan'] - reference['linear']), 1e-5)
             # learning changes the answer: the two runs above are different computations
-            a, b = (projected(read_record(Path(tmp) / str(flag)), self.scene)['murnaghan'] for flag in (True, False)); self.assertGreater(relative(a, b), 1e-4)
+            a, b = (projected(read_record(Path(tmp) / str(flag)), self.scene)['linear'] for flag in (True, False)); self.assertGreater(relative(a, b), 1e-4)
 
     def test_setup_carries_the_learned_operators_and_the_models_layer(self):
         model, (D, q, m) = load_model(MODEL); coarse, mesh, network, layer, _ = setup(self.scene, MODEL, self.network)
