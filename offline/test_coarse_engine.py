@@ -88,6 +88,15 @@ class FastEngine(unittest.TestCase):
         self.assertEqual(len(items), 1, items); self.assertIn('核验到 200 mm', items[0])
         thick = copy.deepcopy(a); thick['geometry']['thickness_mm'] = 3.; self.assertEqual(len(out_of_range(thick)), 1)   # not a matter of distance: no advice to change model
         for name in MODELS: self.assertIn('通过', model_summary(REPO / 'coarsegraph/models' / name / 'model.json')['range_verification']['text'])
+        # defects: holes with the accurate model only (verified); cracks, delaminations, interfaces and notches stay with the frozen network
+        plate = copy.deepcopy(a); plate['geometry']['length_mm'] = 100.; hole = dict(plate, defects=[{'type': 'hole', 'axis': 'y', 'x_mm': 50., 'z_mm': .8, 'radius_mm': .3}])
+        ok = validate_request({'scene': hole, 'mesh': 'auto', 'engine': 'coarse', 'coarse_model': 'p4-h2-multisource'}); self.assertEqual(ok['scene']['defects'][0]['type'], 'hole')
+        self.assertTrue(any('1 个孔' in item for item in out_of_range(ok['scene'], 'p4-h2-multisource')))
+        p = preview({'scene': hole, 'mesh': 'auto', 'engine': 'coarse', 'coarse_model': 'p4-h2-multisource'}, '.'); self.assertTrue(p['ok'], p['errors']); self.assertGreater(p['mesh']['nodes'], 5025)
+        for scene, model, word in [(hole, DEFAULT_MODEL, '精确模型'), (dict(plate, defects=[{'type': 'crack', 'x_mm': 50., 'depth_mm': .8}]), 'p4-h2-multisource', '冻结网络'),
+                                   (dict(plate, defects=[hole['defects'][0], {'type': 'notch', 'x_mm': 70., 'width_mm': 1., 'depth_mm': .6}]), 'p4-h2-multisource', '冻结网络')]:
+            with self.assertRaises(ValueError) as caught: validate_request({'scene': scene, 'mesh': 'auto', 'engine': 'coarse', 'coarse_model': model})
+            self.assertIn(word, str(caught.exception))
         # the numbers quoted are those of the stored verification (the repository; not part of the packaged application)
         results = REPO / 'research/coarse-range/results'
         if not results.is_dir(): return
