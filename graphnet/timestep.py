@@ -19,8 +19,13 @@ with the largest layer spacing that keeps both
   not from a leading-order estimate.
 
 Both conditions are worst cases: a wave that leaves through an absorbing layer travels for less than the record.
-Records with contact interfaces keep the frozen layer, because the penalty stiffness of the interface is tied to
-the layer spacing (`graphnet.contact`). The plan is never dearer than the frozen layer: when the conditions would need
+Contact interfaces keep the penalty stiffness of the frozen layer (`graphnet.contact`), so the interface itself is
+the same whatever the plan; their springs are part of the measured ω_max, taken as closed (the stiffest state).
+The springs are also the stiffest thing a clapping interface has to follow in time, so every stage of a plan keeps
+their ω·|stage| within `INTERFACE_STEP` (the value the stiffness was designed for): with one stage the layer is
+then no longer than the trained spacing, which keeps the error of a closed crack at that of the trained layer
+(docs/large-models.md 7.6) at a third of its element messages.
+The plan is never dearer than the frozen layer: when the conditions would need
 more element messages than it (very long records), the frozen layer is kept and its own phase-error bound is
 reported. `mode='frozen'` always returns the frozen layer.
 """
@@ -33,6 +38,7 @@ STABILITY_FRACTION = .75
 PHASE_TOLERANCE_RAD = .01
 MARGIN = 1.03          # on the Lanczos estimate of ω_max² (a Ritz value is a lower bound)
 MODES = ('auto', 'frozen')
+INTERFACE_STEP = .6      # ω·|stage| of the interface springs in an automatic plan (graphnet.contact.STABILITY)
 
 
 def _stage(y):
@@ -84,14 +90,21 @@ def band_top_mhz(scene):
     return top
 
 
-def largest_frequency(mesh, derivative, inverse, quadratic, cubic, free, iterations=80, tolerance=1e-4):
+def largest_frequency(mesh, derivative, inverse, quadratic, cubic, free, iterations=80, tolerance=1e-4, contact=None):
     """ω_max (rad/s) of the linear network on this mesh: √λ_max(M⁻¹K) on the unconstrained components.
 
-    Lanczos on M^(−1/2) K M^(−1/2) with the linear element message (no reorthogonalisation: three vectors of memory)."""
+    Lanczos on M^(−1/2) K M^(−1/2) with the linear element message (no reorthogonalisation: three vectors of memory).
+    `contact`: (a, b, normal, stiffness) of the interface node pairs; their springs are added as closed (a pressed
+    interface is the stiffest state, an open one adds nothing)."""
     from graphwave.buffered_inference import graph_message
     scale = 1 / np.sqrt(np.asarray(mesh['mass']))[:, None] * free; cells = mesh['elements']; volume = mesh['volume_weight']
+    pairs = contact is not None and len(contact[0]) > 0
     def apply(v):
-        return graph_message(np.ascontiguousarray(v * scale), cells, derivative, inverse, volume, quadratic, cubic, 0)[0] * scale
+        u = np.ascontiguousarray(v * scale); force = graph_message(u, cells, derivative, inverse, volume, quadratic, cubic, 0)[0]
+        if pairs:
+            a, b, normal, stiffness = contact; push = (stiffness * np.sum((u[b] - u[a]) * normal, axis=1))[:, None] * normal
+            np.add.at(force, b, push); np.add.at(force, a, -push)
+        return force * scale
     v = np.random.default_rng(20261113).standard_normal(scale.shape) * free; v /= np.linalg.norm(v)
     previous = np.zeros_like(v); beta = 0.; alphas, betas = [], []; estimate = 0.
     for k in range(iterations):
@@ -115,30 +128,31 @@ def frozen_plan(scene, mesh, composition, speed):
             'time_order': 4, 'reason': '训练时的三级四阶时间层（CFL × 最小节点间距 / 10000 m/s）'}
 
 
-def _subdivisions(composition, sample, duration, omega_max, omega_top):
-    """Fewest layers per sample that satisfy the stability and phase conditions."""
+def _subdivisions(composition, sample, duration, omega_max, omega_top, interface_omega=None):
+    """Fewest layers per sample that satisfy the stability, interface and phase conditions."""
     limit = STABILITY_FRACTION * stability_limit(composition); n = max(1, int(math.ceil(sample * omega_max / limit - 1e-12)))
+    if interface_omega: n = max(n, int(math.ceil(sample * interface_omega * max(abs(c) for c in composition) / INTERFACE_STEP - 1e-9)))
     while omega_top * duration * phase_error(composition, omega_top * sample / n) > PHASE_TOLERANCE_RAD: n = max(n + 1, int(math.ceil(n * 1.02)))
     return n
 
 
-def plan(scene, mesh, composition, speed, omega_max=None, mode='auto'):
-    """Layer plan for a record. `omega_max` (rad/s) from `largest_frequency`; it is needed for mode 'auto'."""
+def plan(scene, mesh, composition, speed, omega_max=None, mode='auto', interface_omega=None):
+    """Layer plan for a record. `omega_max` (rad/s) from `largest_frequency` (with the contact springs of a mesh that
+    has interfaces); it is needed for mode 'auto'. `interface_omega` (rad/s): the largest √(k/m) of the interface
+    springs, when the mesh has interfaces."""
     require(mode in MODES, '时间层设置需为 auto 或 frozen。')
     frozen = frozen_plan(scene, mesh, composition, speed)
     acquisition = scene['acquisition']; sample = acquisition['sample_step_us'] * 1e-6; duration = acquisition['duration_us'] * 1e-6
     frames = round(acquisition['duration_us'] / acquisition['sample_step_us'])
     frozen['evaluations_per_control'] = frames * frozen['subdivisions'] * 3
     if mode == 'frozen': return frozen
-    if 'contact_a' in mesh and len(mesh['contact_a']):
-        return dict(frozen, mode='auto', reason='含接触界面：界面罚刚度与层间距绑定，沿用训练时的时间层')
     require(omega_max is not None and omega_max > 0, '自动时间层需要网格的最高固有频率。')
     omega_top = 2 * math.pi * band_top_mhz(scene) * 1e6; best = None
     measured = lambda weights, n: {'stability_number': omega_max * sample / n, 'stability_limit': stability_limit(weights),
                                    'phase_error_bound_rad': omega_top * duration * phase_error(weights, omega_top * sample / n),
                                    'omega_max_rad_s': omega_max, 'band_top_mhz': band_top_mhz(scene), 'phase_tolerance_rad': PHASE_TOLERANCE_RAD}
     for scheme, weights, order in (('verlet2', VERLET, 2), ('composition4', tuple(float(c) for c in composition), 4)):
-        n = _subdivisions(weights, sample, duration, omega_max, omega_top); cost = frames * n * len(weights)
+        n = _subdivisions(weights, sample, duration, omega_max, omega_top, interface_omega); cost = frames * n * len(weights)
         row = {'mode': 'auto', 'scheme': scheme, 'composition': list(weights), 'subdivisions': n, 'layer_step_us': sample / n * 1e6, 'time_order': order,
                'evaluations_per_control': cost, **measured(weights, n)}
         if best is None or cost < best['evaluations_per_control']: best = row

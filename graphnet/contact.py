@@ -16,6 +16,10 @@ modulus, s the smallest node spacing) is capped pair by pair so that the interfa
 ω·Δt ≤ 0.6, well inside the stability range of the network's time layer. The finite K transmits a
 compressional wave with a small reflection R = 1/√(1 + (2K/ωZ)²) (Z = ρ c_L), reported for the source
 frequency and its second harmonic.
+
+Δt here is always the trained layer spacing (CFL × smallest node spacing / 10000 m/s), also when the record runs
+on another layer (`graphnet.timestep`): the interface is then the same physical model, and the plan counts its
+springs, taken as closed, in the measured ω_max that sets the layer spacing.
 """
 import math
 import numpy as np

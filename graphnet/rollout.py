@@ -127,6 +127,11 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
     fingerprint = hashlib.sha256(json.dumps({'identity': identity, 'sources': sources, 'scene': scene, 'degree': int(mesh['degree']), 'h_mm': float(mesh['h_mm']),
                                              **({} if (time_plan, record) == ('frozen', 'full') else {'time_plan': time_plan, 'record': record}),
                                              **({} if controls == LAWS else {'controls': list(controls)})}, sort_keys=True).encode()).hexdigest()
+    # Interface stiffness: that of the trained layer spacing whatever the plan, so the interface is the same physical model
+    # (its reflection and its clapping) and only the time layer differs.
+    from .timestep import frozen_plan
+    trained_step = frozen_plan(scene, mesh, trained, speed_bound(scene))['layer_step_us'] * 1e-6
+    ca, cb, cn, _ = contact_arrays(mesh); ck, contact = contact_stiffness(mesh, scene, trained_step)
     manifest_path = directory / 'recording.json'; manifest = None
     if manifest_path.exists():
         manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
@@ -137,13 +142,12 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         layers = manifest['time_plan']   # a resumed record keeps the layer it started with
     else:
         omega = None
-        if time_plan == 'auto' and not ('contact_a' in mesh and len(mesh['contact_a'])):
-            omega = largest_frequency(mesh, derivative, inverse, quadratic, cubic, inputs['free'])
-        layers = layer_plan(scene, mesh, trained, speed_bound(scene), omega, time_plan)
+        if time_plan == 'auto':
+            omega = largest_frequency(mesh, derivative, inverse, quadratic, cubic, inputs['free'], contact=(ca, cb, cn, ck))
+        layers = layer_plan(scene, mesh, trained, speed_bound(scene), omega, time_plan, interface_omega=contact['omega_dt_max'] / trained_step if contact else None)
     composition = np.asarray(layers['composition'], dtype=np.float64); stages = len(composition); subdivisions = int(layers['subdivisions'])
     sample_s = sample * 1e-6; dt = sample_s / subdivisions
     total_steps = (frames - 1) * subdivisions; require(total_steps <= 20000000, '长记录超过 2000 万层，请增大单元尺寸。')
-    ca, cb, cn, _ = contact_arrays(mesh); ck, contact = contact_stiffness(mesh, scene, dt)
     work_frames = int(WORK_PER_CHUNK // (nodes * subdivisions * stages)); shown_parts = display_parts(controls)
     if compact:
         if display is None:
@@ -171,7 +175,8 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
                     'execution_source_sha256': sources, 'mesh_sha256': digest(directory / 'mesh.npz'), 'input_layer': 'v2_multi_source', 'excitation': inputs['summary'],
                     'energy_columns': ['time_us', 'kinetic_j', 'strain_j', 'external_work_j', 'dissipated_j'], 'chunks': [], 'completed_frames': 0, 'elapsed_s': 0.,
                     'raw_storage_upper_bound_bytes': estimate, 'numerical_correction': False, 'neural_forward_only': True, **layer,
-                    'time_plan': layers, 'record_mode': record, 'controls': list(controls), **({'contact': contact} if contact else {})}
+                    'time_plan': layers, 'record_mode': record, 'controls': list(controls),
+                    **({'contact': dict(contact, stiffness_layer_step_us=trained_step * 1e6, layer_omega_dt_max=contact['omega_dt_max'] * dt / trained_step)} if contact else {})}
         if compact:
             save_arrays(directory / 'display.npz', nodes=display['nodes'], triangles=display['triangles'])
             manifest['display'] = {'file': 'display.npz', 'sha256': digest(directory / 'display.npz'), 'nodes': int(len(display['nodes'])), 'triangles': int(len(display['triangles'])),

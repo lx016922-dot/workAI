@@ -63,10 +63,49 @@ class Layers(unittest.TestCase):
             late = copy.deepcopy(scene); late['acquisition'] = {'duration_us': duration, 'sample_step_us': step}
             row = plan(late, mesh, composition, speed_bound(late), omega); trained = plan(late, mesh, composition, speed_bound(late), mode='frozen')
             self.assertLessEqual(row['evaluations_per_control'], trained['evaluations_per_control']); self.assertIn('phase_error_bound_rad', row)
-        contact = dict(mesh, contact_a=np.array([0]), contact_b=np.array([1]))   # interface stiffness is tied to the layer spacing: keep the trained layer
-        self.assertEqual(plan(scene, contact, composition, speed_bound(scene), omega)['subdivisions'], frozen['subdivisions'])
         with self.assertRaises(ValueError): plan(scene, mesh, composition, speed_bound(scene), omega, mode='other')
         with self.assertRaises(ValueError): plan(scene, mesh, composition, speed_bound(scene))   # auto needs the measured frequency
+
+
+class Interfaces(unittest.TestCase):
+    """Contact interfaces use the automatic layer too: same interface stiffness, their springs in the measured ω_max."""
+    def setUp(self):
+        from graphnet.test_defects import bar
+        from spectral3d.feature_mesh import make_mesh as featured
+        self.model = load(3, long_record=True); self.scene = network_scene(bar(1, True), 3, self.model['material']); self.mesh = featured(self.scene, 3, 1.)
+        self.opening = network_scene(bar(-1, True), 3, self.model['material'])
+
+    def test_closed_springs_raise_the_measured_frequency_within_their_own_bound(self):
+        from graphnet.contact import STABILITY, arrays, stiffness
+        from graphnet.timestep import frozen_plan
+        from graphwave.buffered_inference import graph_message
+        model, scene, mesh = self.model, self.scene, self.mesh; inputs = build(scene, mesh); q, c, _ = energy_layer(scene, model); D = model['weights']['derivative_3']; inverse = inverse_mapping(mesh)
+        step = frozen_plan(scene, mesh, model['temporal']['weights'], speed_bound(scene))['layer_step_us'] * 1e-6
+        a, b, normal, _ = arrays(mesh); k, summary = stiffness(mesh, scene, step); self.assertEqual(len(a), 16); self.assertAlmostEqual(summary['omega_dt_max'], STABILITY)
+        free = largest_frequency(mesh, D, inverse, q, c, inputs['free']); closed = largest_frequency(mesh, D, inverse, q, c, inputs['free'], contact=(a, b, normal, k))
+        self.assertGreater(closed, free); self.assertLess(closed, 1.02 * math.hypot(free, STABILITY / step))   # a spring adds at most its own ω² to ω_max²
+        n = len(mesh['points']) * 3; scale = np.repeat(1 / np.sqrt(mesh['mass']), 3) * inputs['free'].ravel(); K = np.zeros((n, n))
+        for i in range(n):
+            unit = np.zeros(n); unit[i] = scale[i]; u = unit.reshape(-1, 3); force = graph_message(u, mesh['elements'], D, inverse, mesh['volume_weight'], q, c, 0)[0]
+            push = (k * np.sum((u[b] - u[a]) * normal, axis=1))[:, None] * normal; np.add.at(force, b, push); np.add.at(force, a, -push); K[:, i] = force.ravel() * scale
+        exact = math.sqrt(np.linalg.eigvalsh((K + K.T) / 2)[-1]); self.assertGreaterEqual(closed, exact); self.assertLess(closed / exact, 1.03)
+
+    def test_automatic_layer_keeps_the_interface_and_agrees_with_the_trained_layer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for name, scene in (('pressed', self.scene), ('opening', self.opening)):
+                frozen = rollout(scene, self.mesh, self.model, root / f'{name}-frozen', {'t': 1}); auto = rollout(scene, self.mesh, self.model, root / f'{name}-auto', {'t': 1}, time_plan='auto')
+                a, c = read_record(root / f'{name}-frozen'), read_record(root / f'{name}-auto')
+                self.assertEqual(auto['time_plan']['scheme'], 'verlet2'); self.assertLess(auto['time_plan']['evaluations_per_control'], frozen['time_plan']['evaluations_per_control'] / 2)
+                self.assertLessEqual(auto['time_plan']['stability_number'], STABILITY_FRACTION * 2 + 1e-9)
+                # the same interface: stiffness of the trained layer spacing, whatever the layer
+                for key in ('pairs', 'stiffness_per_area_n_m3', 'compression_reflection', 'stiffness_layer_step_us'): self.assertEqual(auto['contact'][key], frozen['contact'][key], key)
+                self.assertAlmostEqual(frozen['contact']['layer_omega_dt_max'], .6); self.assertAlmostEqual(auto['contact']['layer_omega_dt_max'], .6 * auto['layer_step_us'] / frozen['layer_step_us'])
+                relative = lambda x, y: float(np.linalg.norm(x - y) / np.linalg.norm(y))
+                before = relative(c['probes'][:, 0, 2], a['probes'][:, 0, 2]); self.assertLess(before, 1e-3, name)
+                if name == 'pressed': self.assertLess(relative(c['probes'][:, 1, 2], a['probes'][:, 1, 2]), 1e-3)   # compression passes the interface
+                else: self.assertLess(np.max(np.abs(c['probes'][:, 1, 2])), 1e-6 * np.max(np.abs(c['probes'][:, 0, 2])))   # tension opens it: nothing arrives
+                e = c['energies'][2]; stored = e[:, 1] + e[:, 2] + e[:, 4]; self.assertLess(np.max(np.abs(stored - e[:, 3])) / np.max(np.abs(e[:, 3])), 1e-3)
 
 
 class Records(unittest.TestCase):

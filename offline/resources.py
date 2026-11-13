@@ -132,7 +132,14 @@ def estimate(scene, mesh, time_stepping='auto', record='auto', data_directory=No
     speed = fastest_speed(material) if is_custom(material) else math.sqrt((material['lambda_pa'] + 2 * material['mu_pa']) / material['rho_kg_m3'])
     from .domain import MODEL
     composition = json.loads((MODEL / 'time-coefficients.json').read_text(encoding='utf-8'))['weights']   # the trained composition
-    layers = plan(scene, mesh, composition, speed_bound(scene), OMEGA_SPACING * speed / float(mesh['min_node_spacing']), time_stepping)
+    omega = OMEGA_SPACING * speed / float(mesh['min_node_spacing']); interface = None
+    if 'contact_a' in mesh and len(mesh['contact_a']):
+        # Closed interfaces: their springs have ω·Δt = 0.6 at the trained layer spacing (graphnet/contact.py); a spring between two
+        # nodes raises ω_max² by at most its own ω².
+        from graphnet.contact import STABILITY
+        from graphnet.timestep import frozen_plan
+        interface = STABILITY / (frozen_plan(scene, mesh, composition, speed_bound(scene))['layer_step_us'] * 1e-6); omega = math.hypot(omega, interface)
+    layers = plan(scene, mesh, composition, speed_bound(scene), omega, time_stepping, interface_omega=interface)
     # A display mesh is at most the browser budget; the surface of a small mesh is smaller still.
     display_nodes = min(BROWSER_NODES, nodes); shown = min(FRAMES, frames)
     disk = storage_bytes(frames, nodes, mode, display_nodes, shown, len(scene['receivers']), controls=count)
