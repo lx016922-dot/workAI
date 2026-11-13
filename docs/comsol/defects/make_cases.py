@@ -30,6 +30,8 @@ CASES = {
     'D4-closed-crack-1MPa': (base('D4 闭合裂纹 1 MPa'), [{'type': 'crack', 'x_mm': 30., 'depth_mm': .8, 'from': 'top', 'closed': True}]),
     'D5-closed-crack-2MPa': (base('D5 闭合裂纹 2 MPa', amplitude=2.), [{'type': 'crack', 'x_mm': 30., 'depth_mm': .8, 'from': 'top', 'closed': True}]),
     'D6-closed-delamination': (base('D6 闭合分层'), [{'type': 'delamination', 'x_start_mm': 25., 'x_end_mm': 35., 'depth_mm': .8, 'closed': True}]),
+    # Covers only part of the width: the crack front has ends in y (3D corners), which the plane-strain check cannot reach.
+    'D7-part-width-crack': (base('D7 部分宽度裂纹'), [{'type': 'crack', 'x_mm': 30., 'depth_mm': .8, 'from': 'top', 'y_range_mm': [1., 2.]}]),
 }
 
 

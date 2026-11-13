@@ -48,5 +48,26 @@ class DesktopEndpoints(unittest.TestCase):
                     server.wait()
 
 
+class JobQueue(unittest.TestCase):
+    def test_a_job_right_after_a_finished_one_waits_for_the_old_worker_to_exit(self):
+        # The worker publishes 'completed' and then still needs a moment to exit; a new job submitted in that moment
+        # must not be refused as already running (the packaged smoke test hit this after 1.1.1 made defect jobs larger).
+        from offline.app import Application
+        with tempfile.TemporaryDirectory() as temp:
+            app = Application(Path(temp) / 'data')
+            job = 'local-' + '0' * 32; (app.jobs / job).mkdir()
+            (app.jobs / job / 'status.json').write_text(json.dumps({'job_id': job, 'phase': 'completed'}), encoding='utf-8')
+            app.current = job; app.process = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(1.5)'])
+            started = time.monotonic(); app.settle()
+            self.assertIsNotNone(app.process.poll()); self.assertGreater(time.monotonic() - started, .5)
+            (app.jobs / job / 'status.json').write_text(json.dumps({'job_id': job, 'phase': 'running'}), encoding='utf-8')
+            app.process = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
+            try:
+                started = time.monotonic(); app.settle()   # a running job is not waited for: submit refuses at once
+                self.assertLess(time.monotonic() - started, 5); self.assertIsNone(app.process.poll())
+            finally:
+                app.process.kill(); app.process.wait()
+
+
 if __name__ == '__main__':
     unittest.main()

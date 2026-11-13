@@ -13,7 +13,7 @@
 
 | 部分 | 状态 | 关键结果 | 详细 |
 |---|---|---|---|
-| 桌面软件 1.1.0 | Windows 正式版：WorkAI.exe 原生窗口，仿工程仿真软件的界面（功能区、模型开发器、设置、图形窗口、消息 / 进度 / 日志、状态栏）；本机离线，解压即用。1.1：一键添加裂纹、孔、分层、接触界面、缺口；网格由软件自动选择；顶部文字框用中文或英文描述修改模型，见 [缺陷与自动网格](docs/defects.md) | 计算核心为冻结网络；缺陷网格上与 GLL 谱元求解器一致到 1e-10，接触界面受压透射 1.004、受拉 0；核验见 [文献对照](research/literature-verification/README.md)、[1 ms 精度](research/long-record-accuracy/README.md)、[散射](research/scattering/README.md)；缺陷的 COMSOL 对照见 [运行要求](docs/comsol/defects/README.md) | [下载 v1.1.0](https://github.com/lx016922-dot/workAI/releases/tag/v1.1.0)、[构建](.github/workflows/desktop.yml) |
+| 桌面软件 1.1.1 | Windows 正式版：WorkAI.exe 原生窗口，仿工程仿真软件的界面（功能区、模型开发器、设置、图形窗口、消息 / 进度 / 日志、状态栏）；本机离线，解压即用。1.1：一键添加裂纹、孔、分层、接触界面、缺口；网格由软件自动选择；顶部文字框用中文或英文描述修改模型，见 [缺陷与自动网格](docs/defects.md) | 计算核心为冻结网络；缺陷网格上与 GLL 谱元求解器一致到 1e-10，接触界面受压透射 1.004、受拉 0；核验见 [文献对照](research/literature-verification/README.md)、[1 ms 精度](research/long-record-accuracy/README.md)、[散射](research/scattering/README.md)；缺陷用独立的二维有限元核对，见 [research/defects](research/defects/README.md)：1.1.1 在缺陷前沿加密网格后差 1–4%，COMSOL 只建议补一个部分宽度裂纹（[运行要求](docs/comsol/defects/README.md)） | [下载 v1.1.1](https://github.com/lx016922-dot/workAI/releases/tag/v1.1.1)、[构建](.github/workflows/desktop.yml) |
 | 离线软件 0.3.0 | 研究预发布版，Windows / Linux 便携包；界面已重建为仿真工作台（模型树、三维模型视图、属性面板、激励信号预览、2f 分辨率与验收范围检查），可在界面中编辑多源、任意信号、对称面和吸收层；材料可用自定义应变能密度 W(E) 定义（各向异性，如 CFRP），见 [材料](docs/materials.md) | 默认权重的 5 ms 长记录：20 组 0 组达到 5%，全场相对 L2 24.83%–141.97%，能量收支全部通过；原 0.2.0 模型 14 μs 误差 0.438% | [5 ms 验证](research/long-validation/README.md)、[离线说明](offline/README-OFFLINE.txt) |
 | 冻结图网络继续训练 v6–v10 | 均未采纳为发布模型 | 最好的 v10（六阶、h 1.6 mm）5 ms 每组最差接收点差异 15.01%–105.71%，0/20 | [第 10 轮](research/comsol-validation/CONTINUATION-V10.md)、[路线总表](research/comsol-validation/README.md) |
 | 模态降阶 v11–v12 | 研究候选，未采纳 | v12 原生 COMSOL 20 μs 核对 1.96% / 1.62%；5 ms 线性对照波形向量 19/20，全部分量与频带 11/20，最差 35%–40%；尚无收敛的 5 ms 非线性参考 | [第 11 轮](research/comsol-validation/CONTINUATION-V11.md)、[第 12 轮](research/comsol-validation/CONTINUATION-V12.md) |
@@ -71,7 +71,7 @@
 
 ## 快速开始
 
-**桌面软件（Windows）。** 从 [v1.1.0 发布页](https://github.com/lx016922-dot/workAI/releases/tag/v1.1.0) 下载 `WorkAI-1.1.0-windows-x64.zip`，完整解压到可写目录后双击 `WorkAI.exe`；使用方法见压缩包内的“使用说明.txt”（[源文件](desktop/README-DESKTOP.txt)）。从源码构建（Windows，需要 .NET SDK）：
+**桌面软件（Windows）。** 从 [v1.1.1 发布页](https://github.com/lx016922-dot/workAI/releases/tag/v1.1.1) 下载 `WorkAI-1.1.1-windows-x64.zip`，完整解压到可写目录后双击 `WorkAI.exe`；使用方法见压缩包内的“使用说明.txt”（[源文件](desktop/README-DESKTOP.txt)）。从源码构建（Windows，需要 .NET SDK）：
 
 ```sh
 dotnet build desktop/WorkAI.csproj -c Release -o desktop-out

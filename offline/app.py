@@ -66,8 +66,24 @@ class Application:
     def status(self, job):
         return json.loads((self.path(job) / 'status.json').read_text(encoding='utf-8'))
 
+    def settle(self):
+        """Give a worker that has already published its final status time to exit (closing files, unloading), so a job
+        started right after one finished is not refused as "already running"."""
+        process, job = self.process, self.current
+        if process is None or job is None or process.poll() is not None: return
+        try:
+            phase = self.status(job).get('phase')
+        except (OSError, ValueError):
+            return
+        if phase in ('completed', 'failed', 'paused'):
+            try:
+                process.wait(timeout=60)
+            except subprocess.TimeoutExpired:
+                pass
+
     def submit(self, value):
         request = validate_request(value)
+        self.settle()
         with self.lock:
             if self.closed or (self.process is not None and self.process.poll() is None):
                 raise ValueError('已有任务正在运行，请等待完成。')
