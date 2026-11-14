@@ -110,24 +110,34 @@ const ENGINES = { network: '物理 AI · 冻结网络（细网格，默认）', 
 export const COARSE_MODELS = { 'p4-h3-harmonic': '快速 · h 3 mm（默认）', 'p4-h2-multisource': '精确 · h 2 mm（节点约 1.5 倍，二次谐波更准）' };
 export const DEFAULT_COARSE_MODEL = Object.keys(COARSE_MODELS)[0];
 
+/** Record modes and time layers of the network engine (offline/domain.py RECORDS, TIME_STEPPING). */
+export const RECORD_MODES = { auto: '自动（完整记录不超过 2 GiB 时保存全部节点，否则精简）', full: '完整记录（全部节点、全部采样点）', compact: '精简记录（接收点完整波形 + 表面动画 + 快照）' };
+/** Constitutive controls a computation runs (offline/domain.py CONTROL_SETS) and the responses they give. */
+export const CONTROL_SETS = { all: '全部：线性、StVK、完整（五种响应，可分离几何与材料增量）', full_linear: '完整 + 线性（完整、线性、非线性增量）', full: '仅完整响应' };
+export const TIME_LAYERS = { auto: '自动（按稳定性和相位误差选最省的时间层）', frozen: '训练时的时间层（三级四阶，CFL 0.3）' };
+
 function recordForm(scene) {
   const a = scene.acquisition;
-  return section('瞬态记录', num('记录时长', 'acquisition.duration_us', a.duration_us, { unit: 'μs', min: .1, max: 20000, hint: '最长 20 ms；5 ms 及以上的记录可在计算中暂停、之后续算。' }) +
+  return section('瞬态记录', num('记录时长', 'acquisition.duration_us', a.duration_us, { unit: 'μs', min: .1, max: 20000, hint: '最长 20 ms；计算中可以暂停、之后续算。' }) +
       num('输出采样间隔', 'acquisition.sample_step_us', a.sample_step_us, { unit: 'μs', min: .01, max: .2, hint: '二次谐波每周期至少 8 个采样点。' }),
-    '计算保存全部节点、全部输出时刻的完整位移场（线性、StVK、完整三组控制），结果窗口可任取点和直线提取波形与频谱。');
+    '模型不大时保存全部节点、全部输出时刻的完整位移场（所算的各组本构控制），结果窗口可任取点和直线提取波形与频谱。完整记录超过 2 GiB 时自动改用精简记录，只在接收点保存完整波形；记录方式可在“求解器配置”中指定。');
 }
 
-function engineForm(engine = 'network', coarseModel = DEFAULT_COARSE_MODEL) {
+function engineForm(engine = 'network', coarseModel = DEFAULT_COARSE_MODEL, record = 'auto', timeStepping = 'auto', controls = 'all') {
+  const pick = (action, options, value) => `<select data-action="${action}">${Object.entries(options).map(([k, v]) => `<option value="${k}" ${k === value ? 'selected' : ''}>${v}</option>`).join('')}</select>`;
   return section('计算引擎', `<label class="wb-field wide"><span>引擎</span><select data-action="engine">${Object.entries(ENGINES).map(([k, v]) => `<option value="${k}" ${k === engine ? 'selected' : ''}>${v}</option>`).join('')}</select></label>
       ${engine === 'coarse' && Object.keys(COARSE_MODELS).length > 1 ? `<label class="wb-field wide"><span>粗网格模型</span><select data-action="coarse-model">${Object.entries(COARSE_MODELS).map(([k, v]) => `<option value="${k}" ${k === coarseModel ? 'selected' : ''}>${v}</option>`).join('')}</select></label>` : ''}
+      <label class="wb-field wide"><span>计算的响应</span>${pick('control-set', CONTROL_SETS, controls)}</label>
+      <label class="wb-field wide"><span>记录方式</span>${pick('record-mode', RECORD_MODES, record)}</label>
+      ${engine === 'coarse' ? '' : `<label class="wb-field wide"><span>时间层</span>${pick('time-layer', TIME_LAYERS, timeStepping)}</label>`}
       <div class="wb-field wide" id="engine-derived"></div>`,
-    engine === 'coarse' ? '粗网格算子是同一个网络换上学到的单元算子（求导滤波、刚度与质量积分），在模型自带的粗网格上计算，比细网格冻结网络快数倍到一个数量级。快速模型（h 3 mm）最省；精确模型（h 2 mm）节点约 1.5 倍，顶面、端面和双贴片的留出测试全部通过，需要二次谐波时选它。它们是研究模型，只在 48 × 2 mm 半宽铝板、板厚 1.6–2.4 mm、0.2–0.4 MHz、30 μs 记录上训练和测试过；超出范围要逐例核对。网格设置中的 h 与 p 只用于检查模型本身，计算用模型自带的网格。'
-      : '求解器是冻结图网络（物理 AI）：学到的求导、能量和状态更新逐时前向传播，不调用有限元求解器，也不做预测后的数值校正。精度由节点间距决定，见“消息”窗口中的 2f 分辨率；新模型要用细网格参考逐例核对。');
+    engine === 'coarse' ? '粗网格算子是同一个网络换上学到的单元算子（求导滤波、刚度与质量积分），在模型自带的粗网格上计算，记录方式、分块续算和多核与冻结网络相同。快速模型（h 3 mm）最省：在训练范围（48 × 2 mm 半宽板、30 μs 记录）内可用；范围外波形差多在 5% 内，二次谐波随传播距离变差。精确模型（h 2 mm）节点约为它的 1.5–2.7 倍：核验到板长 200 mm、记录 100 μs、半宽 8 mm（43 组接收点中 42 组通过全部门槛），比 1 mm 细网格参考快 3–22 倍；长板、长记录或需要二次谐波时选它。两者都是研究模型，只用于铝板、板厚 1.6–2.4 mm、0.2–0.4 MHz；缺陷只接受孔，且要用精确模型（裂纹、分层、接触界面和缺口请用冻结网络）；超出训练与核验范围的项目会在下方列出，需逐例核对。网格设置中的 h 与 p 只用于检查模型本身，计算用模型自带的网格。'
+      : '求解器是冻结图网络（物理 AI）：学到的求导、能量和状态更新逐时前向传播，不调用有限元求解器，也不做预测后的数值校正。精度由节点间距决定，见“消息”窗口中的 2f 分辨率；新模型要用细网格参考逐例核对。模型大小只受本机内存、磁盘和时间限制：大模型自动保存精简记录，动画用抽稀的表面网格。时间层“自动”按实测的稳定极限和相位误差上界（0.01 rad）为短记录选二阶单级、为长记录选三级四阶；要逐位重现旧结果请选“训练时的时间层”。“计算的响应”决定算几组本构控制：只要完整响应或只要总的非线性增量时不必三组都算，可省时间、内存和磁盘。计算自动用上全部 CPU 核：核数多于控制数时把每组控制分摊到所有核上，结果与单核逐位相同。');
 }
 
 function meshForm(scene, auto) {
   const rule = '软件按每个激励的 −30 dB 带宽和二次谐波（2f）自动选择单元尺寸：2f 剪切波长内的节点数目标为 10（记录 ≥ 1 ms 时为 15，按 1 ms 平板实测末段误差约 0.1%），'
-    + '单元尺寸限定在网络验证过的 0.8–2.5 mm、阶次 4；网格线穿过每个缺陷的边缘（裂纹尖端、分层前沿、缺口角点、孔的 O 型网格），节点数不超过 60 000。';
+    + '单元尺寸限定在网络验证过的 0.8–2.5 mm、阶次 4；网格线穿过每个缺陷的边缘（裂纹尖端、分层前沿、缺口角点、孔的 O 型网格）。节点数只受本机内存限制（三组控制都算时约 2–3 kB / 节点，只算完整响应约 1 kB / 节点；不超过物理内存的 80%）：放不下时才放粗，并在“消息”中提示。';
   if (!auto) return section('网格（自动）', '<p class="wb-note">正在根据当前模型选择网格…（模型有错误时显示在“消息”窗口）</p>', rule);
   const f = (v, d = 3) => (+v).toFixed(d).replace(/\.?0+$/, '');
   const rows = [['单元尺寸 h', `${f(auto.h_mm)} mm`], ['阶次 p', auto.degree], ['节点间距 h / p', `${f(auto.node_spacing_mm)} mm（最小 ${f(auto.min_node_spacing_mm)} mm）`],
@@ -207,7 +217,7 @@ export function inspectorMarkup(scene, selection, degree, context = {}) {
   if (kind === 'receiver') return receiverForm(scene, index);
   if (kind === 'fixed') return fixedForm(scene);
   if (kind === 'study') return recordForm(scene);
-  if (kind === 'engine') return engineForm(context.engine, context.coarseModel);
+  if (kind === 'engine') return engineForm(context.engine, context.coarseModel, context.record, context.timeStepping, context.controls);
   if (kind === 'mesh') return meshForm(scene, context.meshAuto);
   if (kind === 'defect') return defectForm(scene, index);
   if (kind === 'defects') return section('缺陷', '<p class="wb-note">在功能区“几何 → 一键添加缺陷”中添加裂纹、孔、分层、接触界面或缺口，或在顶部文字框里描述（例如“在 100 mm 处添加深 0.5 mm 的裂纹”）。缺陷之间需至少相隔 0.2 mm。</p>');
@@ -248,6 +258,9 @@ export function bindInspector(root, scene, state, onChange) {
   if (state.selection === 'material') bindMaterial(root, scene, state.materials || {}, onChange);
   root.querySelectorAll('select[data-action="engine"]').forEach(el => el.addEventListener('change', () => { state.engine = el.value; onChange('structure'); }));
   root.querySelectorAll('select[data-action="coarse-model"]').forEach(el => el.addEventListener('change', () => { state.coarseModel = el.value; onChange('structure'); }));
+  root.querySelectorAll('select[data-action="control-set"]').forEach(el => el.addEventListener('change', () => { state.controls = el.value; onChange('structure'); }));
+  root.querySelectorAll('select[data-action="record-mode"]').forEach(el => el.addEventListener('change', () => { state.record = el.value; onChange('structure'); }));
+  root.querySelectorAll('select[data-action="time-layer"]').forEach(el => el.addEventListener('change', () => { state.timeStepping = el.value; onChange('structure'); }));
   root.querySelectorAll('button[data-action]').forEach(el => el.addEventListener('click', () => {
     const action = el.dataset.action;
     try {

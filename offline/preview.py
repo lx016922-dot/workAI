@@ -1,5 +1,6 @@
 """Editor preview: validation, source signals, mesh size and resolution for a scene. Never starts a computation."""
 import copy
+import json
 import math
 import shutil
 
@@ -80,9 +81,10 @@ def _signals(scene):
     return rows
 
 
-def _mesh(scene, degree):
+def _mesh(scene, degree, built=None):
     from spectral3d.feature_mesh import make_mesh
     mesh = make_mesh(scene, degree, scene['numerics']['h_mm'])
+    if built is not None: built.append(mesh)
     out = {'nodes': int(len(mesh['points'])), 'elements': int(len(mesh['elements'])), 'degree': degree, 'h_mm': scene['numerics']['h_mm'],
            'node_spacing_mm': scene['numerics']['h_mm'] / degree}
     if 'origin' in mesh and len(mesh['origin']) <= 6000:
@@ -117,10 +119,12 @@ def preview(body, data_directory=None):
         name = body.get('coarse_model', DEFAULT_MODEL); name = name if name in MODELS else DEFAULT_MODEL  # an unknown name is already in errors
         summary = model_summary(model_path(name)); degree = summary['degree']
         out['engine'] = dict(summary, out_of_training_range=out_of_range(scene or body['scene'], name) if (scene or body['scene']).get('schema') == V2 else [])
-        if scene is not None: scene = dict(scene, numerics=dict(scene['numerics'], h_mm=summary['h_mm']))
+        if scene is not None:   # the model's own grid and CFL
+            scene = dict(scene, numerics=dict(scene['numerics'], h_mm=summary['h_mm'], cfl=json.loads(model_path(name).read_text(encoding='utf-8'))['cfl']))
     if scene is not None:
+        built = []
         try:
-            out['mesh'] = _mesh(scene, degree)
+            out['mesh'] = _mesh(scene, degree, built)
             if out.get('mesh_auto'): out['mesh']['auto'] = out.pop('mesh_auto')
         except (ValueError, KeyError) as error:
             out['ok'] = False; out['errors'].append(f'网格：{error}')
@@ -132,10 +136,28 @@ def preview(body, data_directory=None):
         acq = scene['acquisition']; samples = int(round(acq['duration_us'] / acq['sample_step_us'])) + 1
         out['warnings'] += long_record_warnings(acq['duration_us'], out['signals'], out['resolution'])
         if out['mesh']:
-            size = samples * out['mesh']['nodes'] * 3 * 8 * CONTROLS
+            from .domain import CONTROL_SETS
+            size = samples * out['mesh']['nodes'] * 3 * 8 * len(CONTROL_SETS[request.get('controls', 'all')])
             free = shutil.disk_usage(data_directory).free if data_directory else None
-            out['record'] = {'samples': samples, 'uncompressed_bytes': size, 'free_bytes': free}
-            if free is not None and size > free: out['warnings'].append('完整记录超过数据目录的可用磁盘空间。')
+            out['record'] = {'samples': samples, 'uncompressed_bytes': size, 'free_bytes': free, 'mode': 'full'}
+            if scene.get('schema') == V2:
+                # The record mode, the time layer and what the computation costs on this machine (offline/resources.py); the fast engine
+                # runs on its model's own layer.
+                from .resources import estimate, memory_problem
+                try:
+                    chosen = CONTROL_SETS[request.get('controls', 'all')]; layer = None
+                    if body.get('engine') == 'coarse':
+                        from coarsegraph.record import model_layer
+                        layer = model_layer(scene, built[0])
+                    cost = estimate(scene, built[0], request.get('time_stepping', 'auto'), request.get('record', 'auto'), data_directory, chosen, layer)
+                    out['estimate'] = cost; out['record'].update(mode=cost['record'], uncompressed_bytes=samples * out['mesh']['nodes'] * 3 * 8 * len(chosen))
+                    size = out['record']['uncompressed_bytes']
+                    if cost['record'] == 'compact': out['record']['uncompressed_bytes'] = size = cost['disk_bytes']
+                    problem = memory_problem(out['mesh']['nodes'], cost['record'], len(chosen))
+                    if problem: out['ok'] = False; out['errors'].append(f'模型太大：{problem}。请增大单元尺寸、缩小模型或使用对称面。')
+                except (ValueError, KeyError, TypeError) as error:
+                    out['warnings'].append(f'无法估计计算量：{error}')
+            if free is not None and size > free: out['warnings'].append('记录超过数据目录的可用磁盘空间。')
         out['warnings'] += absorber_warnings(scene)
     return out
 

@@ -3,6 +3,12 @@ import { validateDisplacementLayout, decodeDisplacementField, unitVector } from 
 export function validateSpectralResult(result) {
   if(result?.schema!=='workai.offline.graphwave.result.v1'||!['workai_graphwave_offline','workai_coarse_graph_offline'].includes(result?.engine)||result.neural_model?.numerical_correction!==false||!/^[a-f0-9]{64}$/.test(result.neural_model.weights_sha256))throw new Error('离线网络结果格式不正确。');
   validateDisplacementLayout(result);
+  if(result.display){
+    // Display mesh of a large model or a compact record (spectral3d/display.py): surface nodes and float32 frames only; the computation mesh is described by its size.
+    const d=result.display,m=result.spectral;
+    if(!result.recording||result.field.dtype!=='little_endian_float32'||d.nodes!==result.nodes_mm.length||d.triangles!==result.surface.length||!Number.isInteger(d.computation_nodes)||d.computation_nodes<d.nodes||!Number.isInteger(d.computation_elements)||d.computation_elements<1||!Number.isInteger(m?.degree)||m.degree<2||m.degree>6||m.node_count!==d.computation_nodes||m.element_count!==d.computation_elements)throw new Error('显示网格信息无效。');
+    return result;
+  }
   const mesh=result.spectral,p=mesh?.degree,n=p+1,count=result.nodes_mm.length;
   if(!Number.isInteger(p)||p<2||p>6||!Array.isArray(mesh.gll)||mesh.gll.length!==n||!mesh.gll.every(Number.isFinite)||Math.abs(mesh.gll[0]+1)>1e-12||Math.abs(mesh.gll[p]-1)>1e-12||mesh.gll.some((x,i)=>i&&x<=mesh.gll[i-1])||!Array.isArray(mesh.elements)||!mesh.elements.length||mesh.elements.length*n**3>200000||(mesh.mapping_kind!=='isoparametric'&&(mesh.origins_mm?.length!==mesh.elements.length||mesh.sizes_mm?.length!==mesh.elements.length)))throw new Error('高阶网格信息无效。');
   for(let e=0;e<mesh.elements.length;e++){

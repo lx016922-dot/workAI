@@ -11,13 +11,14 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import webbrowser
 import zipfile
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs, unquote
-from .domain import ROOT, PARTS, digest, model_info, templates, validate_request
+from .domain import ROOT, ALL_PARTS, digest, model_info, templates, validate_request
 from .recording import traces, manifest
 from .preview import preview
 
@@ -26,10 +27,21 @@ REPOSITORY = ROOT.parent
 APP = json.loads((ROOT / 'version.json').read_text(encoding='utf-8'))
 
 
+def replace(temp, path):
+    """Atomic replace. On Windows it is refused while another process has the target open (the server reading a status
+    the worker is writing, or the reverse), so it is retried for a moment."""
+    for attempt in range(40):
+        try:
+            return temp.replace(path)
+        except PermissionError:
+            if attempt == 39: raise
+            time.sleep(.05)
+
+
 def save(path, value):
     temp = path.with_suffix('.tmp')
     temp.write_text(json.dumps(value, ensure_ascii=False, allow_nan=False), encoding='utf-8')
-    temp.replace(path)
+    replace(temp, path)
 
 
 class Application:
@@ -64,7 +76,13 @@ class Application:
         return p
 
     def status(self, job):
-        return json.loads((self.path(job) / 'status.json').read_text(encoding='utf-8'))
+        path = self.path(job) / 'status.json'
+        for attempt in range(40):   # Windows: the worker may be replacing the file at this instant
+            try:
+                return json.loads(path.read_text(encoding='utf-8'))
+            except PermissionError:
+                if attempt == 39: raise
+                time.sleep(.05)
 
     def settle(self):
         """Give a worker that has already published its final status time to exit (closing files, unloading), so a job
@@ -109,7 +127,11 @@ class Application:
         except OSError:
             self.fail(job, '无法启动计算进程。请检查软件包是否完整。')
             raise
-        threading.Thread(target=self.monitor, args=(job, self.process), daemon=True).start()
+        # A checkpointed record (every v2 computation, on either engine) may run as long as the model needs: it reports the remaining
+        # time, can be paused and resumes from its last chunk. The other paths keep the 90-minute limit.
+        request = json.loads((directory / 'request.json').read_text(encoding='utf-8'))
+        unlimited = request['scene'].get('schema') == 'workai.hyperelastic.solid.v2'
+        threading.Thread(target=self.monitor, args=(job, self.process, None if unlimited else 5400), daemon=True).start()
 
     def control(self, job, action):
         with self.lock:
@@ -117,7 +139,7 @@ class Application:
             if action == 'pause':
                 if self.current != job or not self.process or self.process.poll() is not None:
                     raise ValueError('此任务未在运行。')
-                if json.loads((directory/'request.json').read_text(encoding='utf-8'))['scene']['acquisition']['duration_us'] < 5000:
+                if not self.status(job).get('resumable', json.loads((directory/'request.json').read_text(encoding='utf-8'))['scene']['acquisition']['duration_us'] >= 5000):
                     raise ValueError('历史短记录不支持检查点暂停。')
                 (directory/'pause.request').touch()
                 return {'job_id':job,'message':'当前分块保存后暂停。'}
@@ -138,9 +160,9 @@ class Application:
             status.update(phase=phase, message=message)
             save(self.path(job) / 'status.json', status)
 
-    def monitor(self, job, process):
+    def monitor(self, job, process, limit=5400):
         try:
-            process.wait(timeout=5400)
+            process.wait(timeout=limit)
         except subprocess.TimeoutExpired:
             process.kill()
             process.wait()
@@ -215,10 +237,10 @@ def handler(application):
                     if status['phase'] != 'completed':
                         return self.reply(409, {'error': '任务尚未完成。'})
                     if kind == 'export':
-                        names = ['request.json','status.json','exports.json'] + [p+ext for p in PARTS for ext in ('.json','.bin.gz')]
+                        names = ['request.json','status.json','exports.json'] + [p+ext for p in json.loads((directory/'exports.json').read_text(encoding='utf-8')) if p in ALL_PARTS for ext in ('.json','.bin.gz')]
                         if (directory/'record/recording.json').exists():
                             m = manifest(directory/'record')
-                            names += ['record/recording.json','record/mesh.npz']
+                            names += ['record/recording.json','record/mesh.npz'] + (['record/'+m['display']['file']] if 'display' in m else [])
                             names += ['record/'+row['file'] for row in m['chunks']]
                             names += ['record/'+m['checkpoint_file']]
                         self.send_response(200)
@@ -236,9 +258,11 @@ def handler(application):
                                 archive.write(path,name)
                         return
                     part = parse_qs(url.query).get('part', ['full'])[0]
-                    if part not in PARTS:
+                    if part not in ALL_PARTS:
                         raise ValueError('响应类型无效。')
                     exports = json.loads((directory / 'exports.json').read_text(encoding='utf-8'))
+                    if part not in exports:
+                        raise ValueError('这次计算没有算这种响应所需的控制。')
                     path = directory / (part + ('.json' if kind == 'result' else '.bin.gz'))
                     if digest(path) != exports[part][kind + '_sha256']:
                         raise ValueError('结果文件校验失败。')
@@ -279,7 +303,7 @@ def handler(application):
                     if action == 'traces':
                         if application.status(job)['phase'] != 'completed':
                             raise ValueError('任务尚未完成。')
-                        if not isinstance(body,dict) or set(body) != {'part','points'} or body['part'] not in PARTS:
+                        if not isinstance(body,dict) or set(body) != {'part','points'} or body['part'] not in ALL_PARTS:
                             raise ValueError('提取参数无效。')
                         with application.trace_lock:
                             return self.reply(200,traces(application.path(job)/'record',body['part'],body['points']))

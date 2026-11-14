@@ -30,11 +30,16 @@ class FastEngine(unittest.TestCase):
         with self.assertRaises(ValueError): validate_request({'scene': s, 'degree': 4, 'engine': 'solver'})
         from physics.materials import presets
         cfrp = copy.deepcopy(s); cfrp['material'] = presets()['cfrp_ud']['material']
-        for bad, word in [(cfrp, '铝'), (dict(s, geometry=dict(s['geometry'], kind='notch')), '平板'), (dict(s, acquisition={'duration_us': 300., 'sample_step_us': .05}), '采样点')]:
+        for bad, word in [(cfrp, '铝'), (dict(s, geometry=dict(s['geometry'], kind='notch')), '平板')]:
             with self.assertRaises(ValueError) as caught: validate_request({'scene': bad, 'degree': 4, 'engine': 'coarse'})
             self.assertIn(word, str(caught.exception))
+        # long records are computed in chunks like the fine network's; the record length is listed as outside the training range
+        long = dict(s, acquisition={'duration_us': 300., 'sample_step_us': .05}); self.assertEqual(validate_request({'scene': long, 'degree': 4, 'engine': 'coarse', 'record': 'compact'})['record'], 'compact')
+        self.assertTrue(any('记录 300' in item for item in out_of_range(long)))
+        with self.assertRaises(ValueError): validate_request({'scene': s, 'degree': 4, 'engine': 'coarse', 'time_stepping': 'frozen'})   # the model runs on its own layer
         p = preview({'scene': s, 'degree': 4, 'engine': 'coarse'}, '.')
         summary = model_summary(); self.assertTrue(p['ok'], p['errors'])
+        self.assertEqual((p['estimate']['scheme'], p['estimate']['record']), ('verlet2', 'full')); self.assertGreater(p['estimate']['seconds'], 0)
         self.assertEqual(p['mesh']['degree'], summary['degree']); self.assertEqual(p['mesh']['h_mm'], summary['h_mm'])
         self.assertEqual(len(p['engine']['out_of_training_range']), 1); self.assertIn('2 个激励源', p['engine']['out_of_training_range'][0])
         self.assertLess(p['mesh']['nodes'], preview({'scene': s, 'degree': 4}, '.')['mesh']['nodes'] / 4)
@@ -72,6 +77,37 @@ class FastEngine(unittest.TestCase):
         self.assertEqual([r['group'] for r in forms], list(EXCITATIONS))
         self.assertEqual(sum(r['cases'] for r in forms), model_summary()['test_cases']); self.assertEqual(sum(r['passed'] for r in forms), model_summary()['test_passed'])
 
+    def test_range_verification(self):
+        from offline.coarse_engine import RANGE_VERIFICATION
+        a = json.loads((REPO / 'coarsegraph/specs/labels-a-top-gaussian.json').read_text(encoding='utf-8'))['base_scene']
+        far = copy.deepcopy(a); far['geometry'].update(length_mm=200., width_mm=8.); far['acquisition']['duration_us'] = 100.
+        # the accurate model was verified there; the fast one lists every item and says what the verification found
+        self.assertEqual(out_of_range(far, 'p4-h2-multisource'), [])
+        items = out_of_range(far); self.assertEqual(len(items), 4, items); self.assertIn('精确模型', items[-1])
+        beyond = copy.deepcopy(far); beyond['geometry']['length_mm'] = 300.; items = out_of_range(beyond, 'p4-h2-multisource')
+        self.assertEqual(len(items), 1, items); self.assertIn('核验到 200 mm', items[0])
+        thick = copy.deepcopy(a); thick['geometry']['thickness_mm'] = 3.; self.assertEqual(len(out_of_range(thick)), 1)   # not a matter of distance: no advice to change model
+        for name in MODELS: self.assertIn('通过', model_summary(REPO / 'coarsegraph/models' / name / 'model.json')['range_verification']['text'])
+        # defects: holes with the accurate model only (verified); cracks, delaminations, interfaces and notches stay with the frozen network
+        plate = copy.deepcopy(a); plate['geometry']['length_mm'] = 100.; hole = dict(plate, defects=[{'type': 'hole', 'axis': 'y', 'x_mm': 50., 'z_mm': .8, 'radius_mm': .3}])
+        ok = validate_request({'scene': hole, 'mesh': 'auto', 'engine': 'coarse', 'coarse_model': 'p4-h2-multisource'}); self.assertEqual(ok['scene']['defects'][0]['type'], 'hole')
+        self.assertTrue(any('1 个孔' in item for item in out_of_range(ok['scene'], 'p4-h2-multisource')))
+        p = preview({'scene': hole, 'mesh': 'auto', 'engine': 'coarse', 'coarse_model': 'p4-h2-multisource'}, '.'); self.assertTrue(p['ok'], p['errors']); self.assertGreater(p['mesh']['nodes'], 5025)
+        for scene, model, word in [(hole, DEFAULT_MODEL, '精确模型'), (dict(plate, defects=[{'type': 'crack', 'x_mm': 50., 'depth_mm': .8}]), 'p4-h2-multisource', '冻结网络'),
+                                   (dict(plate, defects=[hole['defects'][0], {'type': 'notch', 'x_mm': 70., 'width_mm': 1., 'depth_mm': .6}]), 'p4-h2-multisource', '冻结网络')]:
+            with self.assertRaises(ValueError) as caught: validate_request({'scene': scene, 'mesh': 'auto', 'engine': 'coarse', 'coarse_model': model})
+            self.assertIn(word, str(caught.exception))
+        # the numbers quoted are those of the stored verification (the repository; not part of the packaged application)
+        results = REPO / 'research/coarse-range/results'
+        if not results.is_dir(): return
+        rows = [json.loads(path.read_text(encoding='utf-8')) for path in sorted(results.glob('*.json')) if not path.name.startswith(('reference-', 'defect-'))]
+        for name, quoted in RANGE_VERIFICATION.items():
+            groups = [g['passed'] for r in rows for g in r['runs'][f'{name}:learned']['groups'].values()]
+            self.assertEqual((len(groups), sum(groups)), (quoted['groups'], quoted['passed']), name)
+            self.assertIn(f"{quoted['groups']} 组接收点", quoted['text']); self.assertIn(f"{quoted['passed']} 组通过", quoted['text'])
+            for path, (lo, hi) in quoted['covered'].items():
+                values = [r['scene'][path.split('.')[0]][path.split('.')[1]] for r in rows]; self.assertEqual(max(values), hi, path)
+
     def test_a_windows_checkout_with_crlf_line_endings_still_matches_its_evaluation(self):
         # v1.0.0 on Windows: core.autocrlf rewrote model.json to CRLF and every fast-engine preview failed with
         # "evaluation-abcd.json 不是这个模型的评估。"
@@ -107,7 +143,10 @@ class FastEngine(unittest.TestCase):
             full = json.loads((job / 'full.json').read_text(encoding='utf-8'))
             self.assertEqual(full['engine'], 'workai_coarse_graph_offline'); self.assertEqual(full['coarse_model']['name'], name)
             self.assertEqual(full['controls'][0]['h_mm'], model_summary(REPO / 'coarsegraph/models' / name / 'model.json')['h_mm'])
-            self.assertEqual(len(full['times_us']), round(duration / request['scene']['acquisition']['sample_step_us']) + 1); self.assertTrue(all(c['energy_balance_within_1_percent'] for c in full['controls']))
+            frames = round(duration / request['scene']['acquisition']['sample_step_us']) + 1
+            self.assertEqual(full['recording']['frame_count'], frames); self.assertEqual(full['times_us'][-1], duration); self.assertTrue(all(c['energy_balance_within_1_percent'] for c in full['controls']))
+            self.assertEqual((status['resumable'], status['record_mode'], status['time_plan']['scheme']), (True, 'full', 'verlet2'))
+            manifest = json.loads((job / 'record' / 'recording.json').read_text(encoding='utf-8')); self.assertEqual(manifest['time_plan']['mode'], 'given'); self.assertLessEqual(manifest['time_plan']['stability_number'], 1.5)
             self.assertTrue(full['loaded_faces'])
 
 

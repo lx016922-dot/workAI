@@ -10,6 +10,25 @@ from graphwave.signals import specification
 ROOT = Path(__file__).resolve().parent
 MODEL = ROOT / 'model'
 PARTS = ('full', 'linear', 'stvk', 'geometric', 'material')
+# Constitutive controls a computation runs and the responses they give. Each response is one control or the difference of two.
+LAWS = ('linear', 'stvk', 'murnaghan')
+CONTROL_SETS = {'all': LAWS, 'full_linear': ('linear', 'murnaghan'), 'full': ('murnaghan',)}
+RECIPES = {'full': ('murnaghan', None), 'linear': ('linear', None), 'stvk': ('stvk', None), 'geometric': ('stvk', 'linear'), 'material': ('murnaghan', 'stvk'),
+           'nonlinear': ('murnaghan', 'linear')}
+ALL_PARTS = tuple(RECIPES)
+
+
+def parts_for(controls):
+    """Responses available from the computed controls. All three give the original five (the total nonlinear increment is
+    then geometric + material); linear and complete give complete, linear and their difference; complete alone gives complete."""
+    if tuple(controls) == LAWS: return PARTS
+    return tuple(part for part, (a, b) in RECIPES.items() if a in controls and (b is None or b in controls))
+
+
+def response(values, part):
+    """A response from the controls' values (a mapping control name → array)."""
+    a, b = RECIPES[part]
+    return values[a] if b is None else values[a] - values[b]
 
 
 def digest(path):
@@ -72,7 +91,7 @@ def templates():
 V2 = 'workai.hyperelastic.solid.v2'
 
 
-def validate_v2_request(body):
+def validate_v2_request(body, controls=3):
     """Version-2 scenes for the v2 input layer: any planar-face sources, signals, profiles, symmetry and absorbing faces.
 
     Geometry, material and mesh-size bounds stay those of the offline package; every v2 job runs as a
@@ -98,7 +117,7 @@ def validate_v2_request(body):
         # The software chooses the degree and element size (offline/automesh.py); any h_mm in the scene is replaced.
         from .automesh import choose
         if not isinstance(raw.get('numerics'), dict): raise ValueError('场景需要 numerics。')
-        s, report = choose(raw, lambda trial, degree: _bounded_network_scene(trial, degree, load(degree, long_record=True)['material']))
+        s, report = choose(raw, lambda trial, degree: _bounded_network_scene(trial, degree, load(degree, long_record=True)['material']), controls=controls)
         degree = report['degree']
     else:
         h = raw.get('numerics', {}).get('h_mm')
@@ -139,16 +158,44 @@ def _bounded_network_scene(raw, degree, material):
 
 
 ENGINES = ('network', 'coarse')
+RECORDS = ('auto', 'full', 'compact')
+TIME_STEPPING = ('auto', 'frozen')
 
 
 def validate_request(body):
     """A job request: {'scene', 'mesh': 'auto'} (the software chooses the mesh) or {'scene', 'degree'} with the scene's h_mm;
-    optional 'engine' and 'coarse_model'. A stored request's 'mesh_report' is recomputed, never trusted."""
+    optional 'engine' and 'coarse_model'. A stored request's 'mesh_report' is recomputed, never trusted.
+
+    Version-2 scenes also take 'record' (auto: every node of every sample while that stays within 2 GiB, otherwise the
+    compact record; full; compact) and, on the network engine, 'time_stepping' (auto: `graphnet.timestep` chooses the
+    layer; frozen: the trained three-stage layer; the fast engine runs on its model's own layer). Both default to auto.
+    Version-2 scenes on either engine take 'controls':
+    all (linear, StVK and complete: five responses; the default), full_linear (complete and linear: three responses) or
+    full (the complete response only)."""
     if not isinstance(body, dict) or 'scene' not in body:
         raise ValueError('需要场景。')
     body = {k: v for k, v in body.items() if k != 'mesh_report'}
-    if set(body) - {'scene', 'degree', 'mesh', 'engine', 'coarse_model'}:
-        raise ValueError('请求只能包含 scene、degree、mesh、engine、coarse_model。')
+    if set(body) - {'scene', 'degree', 'mesh', 'engine', 'coarse_model', 'record', 'time_stepping', 'controls'}:
+        raise ValueError('请求只能包含 scene、degree、mesh、engine、coarse_model、record、time_stepping、controls。')
+    options = {k: body.pop(k) for k in ('record', 'time_stepping', 'controls') if k in body}
+    v2 = isinstance(body['scene'], dict) and body['scene'].get('schema') == V2
+    if options.get('controls', 'all') not in CONTROL_SETS:
+        raise ValueError('计算的控制需为 all（线性、StVK、完整）、full_linear（完整与线性）或 full（仅完整）。')
+    if 'controls' in options and not v2:
+        raise ValueError('选择计算的控制需要 v2 场景。')
+    if options.get('record', 'auto') not in RECORDS:
+        raise ValueError('记录方式需为 auto（自动）、full（完整记录）或 compact（精简记录）。')
+    if options.get('time_stepping', 'auto') not in TIME_STEPPING:
+        raise ValueError('时间层需为 auto（自动）或 frozen（训练时的三级四阶时间层）。')
+    if 'record' in options and not v2:
+        raise ValueError('记录方式设置需要 v2 场景。')
+    if 'time_stepping' in options and not (body.get('engine', 'network') == 'network' and v2):
+        raise ValueError('时间层设置只用于 v2 场景的冻结网络引擎；快速引擎使用模型训练时的时间层。')
+    return dict(_validate_request(body, len(CONTROL_SETS[options.get('controls', 'all')])), **options)
+
+
+def _validate_request(body, controls=3):
+    """`controls`: how many constitutive controls will run (the automatic mesh's memory limit depends on it)."""
     auto = body.get('mesh') == 'auto'
     if 'mesh' in body and not auto:
         raise ValueError('mesh 只能为 auto（软件自动选择网格）。')
@@ -181,7 +228,7 @@ def validate_request(body):
         check(result['scene'], name)
         return dict(result, engine='coarse', coarse_model=name)
     if isinstance(body['scene'], dict) and body['scene'].get('schema') == V2:
-        return validate_v2_request({k: v for k, v in body.items() if k in ('scene', 'degree', 'mesh')})
+        return validate_v2_request({k: v for k, v in body.items() if k in ('scene', 'degree', 'mesh')}, controls)
     raw = copy.deepcopy(body['scene'])
     signal = raw.pop('signal', {'kind': 'hann'})
     if not isinstance(signal, dict):

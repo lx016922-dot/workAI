@@ -45,3 +45,26 @@ def result_record(job_id,scene,mesh,computed):
                      'compressed_bytes':len(packed),'uncompressed_bytes':len(raw),
                      'sha256':sha(packed),'uncompressed_sha256':sha(raw)}}
     return record,packed
+
+
+def display_record(job_id,scene,mesh,display,field,times_us,diagnostics,loaded):
+    """Browser result on the display mesh (`spectral3d.display`): its nodes, triangles and float32 frames.
+
+    The computation mesh is described by its size only; waveforms come from the record, not from this field."""
+    field=np.asarray(field,dtype='<f4');raw=field.tobytes();nodes=np.asarray(display['nodes']);surface=np.asarray(display['triangles'])
+    if not np.isfinite(field).all() or len(raw)>192*1024**2 or len(nodes)>60000 or len(surface)>50000 or field.shape!=(len(times_us),len(nodes),3):
+        raise ValueError('显示位移场超出浏览器大小限制。')
+    packed=gzip.compress(raw,compresslevel=1,mtime=0);sha=lambda value:hashlib.sha256(value).hexdigest()
+    record={'schema':'workai.spectral_reference.result.v1','engine':'workai_spectral_reference_3d',
+            'job_id':job_id,'response_part':'full','scene':scene,'accepted_for_solver_routing':False,
+            'engine_scope':'numerical_solution_not_neural_prediction','nodes_mm':(np.asarray(mesh['points'])[nodes]*1000).tolist(),
+            'tetra':[],'surface':surface.tolist(),'loaded_faces':loaded,
+            'times_us':np.asarray(times_us).tolist(),'diagnostics':diagnostics,
+            'spectral':{'degree':int(mesh['degree']),'gll':np.asarray(mesh['gll']).tolist(),'mapping_kind':'isoparametric' if 'mapping_kind' in mesh else 'cartesian',
+                        'node_count':int(len(mesh['points'])),'element_count':int(len(mesh['elements']))},
+            'display':{'nodes':int(len(nodes)),'triangles':int(len(surface)),'stride':display['stride'],'cell_mm':display['cell_mm'],'surface_faces':display['surface_faces'],
+                       'computation_nodes':int(len(mesh['points'])),'computation_elements':int(len(mesh['elements']))},
+            'field':{'layout':'time,node,xyz','dtype':'little_endian_float32','unit':'m','shape':list(field.shape),
+                     'compressed_bytes':len(packed),'uncompressed_bytes':len(raw),
+                     'sha256':sha(packed),'uncompressed_sha256':sha(raw)}}
+    return record,packed

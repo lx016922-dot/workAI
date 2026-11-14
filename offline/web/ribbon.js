@@ -14,7 +14,7 @@ export const RIBBON = [
     { label: '缺陷', items: [L('add:defect', '添加缺陷', 'crack', { menu: 'defect', tip: '一键添加裂纹、孔、分层、接触界面或缺口；也可在上方文字框描述' })] },
     { label: '物理场', items: [L('add:source', '激励源', 'source', { tip: '添加一个激励源' }), L('add:boundary', '边界条件', 'boundary', { menu: 'boundary', tip: '添加边界条件' }), L('add:receiver', '接收点', 'receiver', { tip: '添加一个接收点' })] },
     { label: '网格', items: [L('sel:mesh', '网格', 'mesh')] },
-    { label: '研究', items: [L('run', '计算', 'compute', { primary: true, tip: '用物理 AI 网络计算当前模型（F8）' }), S('pause', '暂停', 'pause', { tip: '当前分块保存后暂停（5 ms 及以上的长记录）' }), S('resume', '继续', 'resume', { tip: '从检查点继续计算' }), S('sel:study', '研究设置', 'study')] },
+    { label: '研究', items: [L('run', '计算', 'compute', { primary: true, tip: '用物理 AI 网络计算当前模型（F8）' }), S('pause', '暂停', 'pause', { tip: '当前分块保存后暂停，之后可从检查点继续' }), S('resume', '继续', 'resume', { tip: '从检查点继续计算' }), S('sel:study', '研究设置', 'study')] },
     { label: '结果', items: [L('tab:result', '结果', 'results'), S('tab:signal', '激励信号', 'signal'), S('export-result', '导出结果', 'export', { tip: '下载所选计算的全部结果 ZIP' })] },
   ] },
   { id: 'geometry', label: '几何', groups: [

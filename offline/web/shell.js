@@ -106,6 +106,24 @@ export function initSplitters(host, spec) {
 // ---------- messages ----------
 const fmtBytes = n => n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(2)} GiB` : n >= 2 ** 20 ? `${(n / 2 ** 20).toFixed(1)} MiB` : `${Math.round(n / 1024)} KiB`;
 export { fmtBytes };
+/** Seconds as a short Chinese duration (estimates: no false precision). */
+export function fmtDuration(seconds) {
+  if (!(seconds >= 0)) return '—';
+  if (seconds < 90) return `${Math.max(1, Math.round(seconds))} 秒`;
+  if (seconds < 5400) return `${Math.round(seconds / 60)} 分钟`;
+  if (seconds < 172800) return `${(seconds / 3600).toFixed(1)} 小时`;
+  return `${(seconds / 86400).toFixed(1)} 天`;
+}
+/** What the computation will cost on this machine (offline/resources.py), for the solver settings. */
+export function estimateMarkup(e) {
+  if (!e) return '';
+  const saved = e.frozen_evaluations_per_control > e.evaluations_per_control ? `，是训练时时间层的 1/${(e.frozen_evaluations_per_control / e.evaluations_per_control).toFixed(1)}` : '';
+  return `<table class="wb-table"><tr><th>记录</th><td>${e.record === 'compact' ? '精简记录：接收点保存全部采样点（float64），动画用抽稀的表面网格，另存 4 个完整快照' : '完整记录：全部节点、全部采样点（float64）'}，约 ${fmtBytes(e.disk_bytes)}</td></tr>
+    ${e.controls ? `<tr><th>控制</th><td>${e.controls.length} 组（${e.controls.map(c => ({ linear: '线性', stvk: 'StVK', murnaghan: '完整' })[c] || c).join('、')}）${e.controls.length < 3 ? `，CPU 用量约为三组全算的 ${Math.round(100 * e.cpu_relative_to_all)}%` : ''}${e.threads ? `；${e.threads} 个线程，${e.spread ? '各组控制分摊到全部线程' : '每组控制一个线程'}` : ''}</td></tr>` : ''}
+    <tr><th>时间层</th><td>${e.scheme === 'verlet2' ? '二阶单级' : '三级四阶'}，Δt ≈ ${(e.layer_step_us * 1000).toFixed(2)} ns；每组控制约 ${e.evaluations_per_control.toLocaleString()} 次单元消息${saved}</td></tr>
+    <tr><th>预计耗时</th><td>${fmtDuration(e.seconds)}（${e.rate_measured ? '按本机上次计算的速度' : '按典型台式机速度，首次计算后改用本机实测'}）</td></tr>
+    <tr><th>预计内存</th><td>${fmtBytes(e.memory_bytes)}${e.physical_memory_bytes ? ` / 本机 ${fmtBytes(e.physical_memory_bytes)}` : ''}</td></tr></table>`;
+}
 
 /** Message rows from a preview result: [{kind: ok|error|warn|info, text, detail}] */
 export function previewMessages(p) {
@@ -113,11 +131,14 @@ export function previewMessages(p) {
   const rows = [];
   if (p.ok) rows.push({ kind: 'ok', text: '模型检查通过，可以计算。' });
   for (const e of p.errors || []) rows.push({ kind: 'error', text: e });
-  if (p.engine) rows.push({ kind: p.engine.out_of_training_range.length ? 'warn' : 'info', text: `快速引擎 ${p.engine.label || p.engine.name}：留出测试 ${p.engine.test_passed}/${p.engine.test_cases} 通过${p.engine.out_of_training_range.length ? `；超出训练范围 ${p.engine.out_of_training_range.length} 项：${p.engine.out_of_training_range.join('；')}` : '；在训练范围内'}` });
+  if (p.engine) rows.push({ kind: p.engine.out_of_training_range.length ? 'warn' : 'info', text: `快速引擎 ${p.engine.label || p.engine.name}：留出测试 ${p.engine.test_passed}/${p.engine.test_cases} 通过${p.engine.out_of_training_range.length ? `；超出训练与核验范围 ${p.engine.out_of_training_range.length} 项：${p.engine.out_of_training_range.join('；')}` : '；在训练或核验过的范围内'}` });
   if (p.mesh) rows.push({ kind: 'info', text: `${p.engine ? '粗网格（模型自带）' : p.mesh.auto ? '自动网格' : '网格'}：${p.mesh.elements.toLocaleString()} 个单元，${p.mesh.nodes.toLocaleString()} 个节点，阶次 p = ${p.mesh.degree}`
     + (p.mesh.auto && !p.engine ? `，单元 ${+p.mesh.auto.h_mm.toFixed(3)} mm（${p.mesh.auto.reason}）${p.mesh.auto.split_nodes ? `；缺陷面分开 ${p.mesh.auto.split_nodes} 个节点${p.mesh.auto.contact_pairs ? `，${p.mesh.auto.contact_pairs} 对接触` : ''}` : ''}` : '') });
   if (p.mesh?.auto?.warning && !p.engine) rows.push({ kind: 'warn', text: p.mesh.auto.warning });
-  if (p.record) rows.push({ kind: 'info', text: `记录：${p.record.samples.toLocaleString()} 个采样点，完整记录约 ${fmtBytes(p.record.uncompressed_bytes)}${p.record.free_bytes ? `，磁盘可用 ${fmtBytes(p.record.free_bytes)}` : ''}` });
+  if (p.record) rows.push({ kind: 'info', text: `记录：${p.record.samples.toLocaleString()} 个采样点，${p.record.mode === 'compact' ? '精简记录（接收点完整波形、抽稀表面动画、4 个完整快照）' : '完整记录'}约 ${fmtBytes(p.record.uncompressed_bytes)}${p.record.free_bytes ? `，磁盘可用 ${fmtBytes(p.record.free_bytes)}` : ''}`,
+    ...(p.record.mode === 'compact' ? { detail: '模型较大，全部节点的完整记录超过 2 GiB，自动改用精简记录：结果窗口只能在接收点提取波形，请先把关心的位置设为接收点。' } : {}) });
+  if (p.estimate) rows.push({ kind: 'info', text: `计算量：${p.estimate.scheme === 'verlet2' ? '二阶单级' : '三级四阶'}时间层，Δt ≈ ${(p.estimate.layer_step_us * 1000).toFixed(2)} ns；预计 ${fmtDuration(p.estimate.seconds)}，内存约 ${fmtBytes(p.estimate.memory_bytes)}`,
+    detail: p.estimate.rate_measured ? '耗时按本机上次计算的速度估计。' : '耗时按典型台式机速度估计；本机完成一次计算后改用实测速度。' });
   for (const r of p.resolution || []) {
     const n = r.nodes_per_2f_shear_wavelength;
     rows.push({ kind: n >= 8 ? 'info' : 'warn', text: `2f 分辨率（${r.name}）：${n.toFixed(1)} 个节点 / 2f 剪切波长${n < 4 ? '，二次谐波分辨不足' : n < 8 ? '，适合短记录；长记录需复核' : '，分辨充分'}` });

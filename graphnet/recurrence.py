@@ -89,20 +89,25 @@ def forward_with_contact(cells, derivative, inverse, volume, mass, loads, signal
 def _segment(position, velocity, acceleration, previous_external, work, dissipated,
              cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
              law, dt, subdivisions, start_step, end_step, include_initial, signals,
-             prior_potential, prior_max_strain, prior_min_j, ca, cb, cn, ck):
-    """Long record: the frozen symmetric three-stage composition, each stage a damped velocity-Verlet layer."""
+             prior_potential, prior_max_strain, prior_min_j, ca, cb, cn, ck, keep, subset):
+    """Long record: a symmetric composition of damped velocity-Verlet layers.
+
+    `composition` holds the stage weights: the frozen three-stage composition (fourth order) or a single stage
+    (second order, `graphnet.timestep`). With `subset` only the nodes listed in `keep` are returned for every
+    sample (compact records); otherwise the whole field is, exactly as before."""
     count = (end_step - start_step) // subdivisions + (1 if include_initial else 0)
-    nodes = len(mass); sources = loads.shape[0]
-    fields = np.empty((count, nodes, 3)); energies = np.empty((count, 5))
+    nodes = len(mass); sources = loads.shape[0]; stages = len(composition)
+    fields = np.empty((count, len(keep) if subset else nodes, 3)); energies = np.empty((count, 5))
     potential, max_strain, min_j = prior_potential, prior_max_strain, prior_min_j
     at = 0
     if include_initial:
-        fields[at] = position
+        if subset: fields[at] = position[keep]
+        else: fields[at] = position
         energies[at, 0] = start_step * dt * 1e6; energies[at, 1] = np.sum(.5 * mass[:, None] * velocity * velocity)
         energies[at, 2] = potential; energies[at, 3] = work; energies[at, 4] = dissipated
         at += 1
     for step in range(start_step + 1, end_step + 1):
-        for stage in range(3):
+        for stage in range(stages):
             h = composition[stage] * dt
             next_position = position + h * velocity + .5 * h * h * acceleration
             next_position *= free
@@ -130,7 +135,8 @@ def _segment(position, velocity, acceleration, previous_external, work, dissipat
             work += np.sum(.5 * (external + previous_external) * (next_position - position))
             position, velocity, acceleration, previous_external = next_position, next_velocity, next_acceleration, external
         if step % subdivisions == 0:
-            fields[at] = position
+            if subset: fields[at] = position[keep]
+            else: fields[at] = position
             energies[at, 0] = step * dt * 1e6; energies[at, 1] = np.sum(.5 * mass[:, None] * velocity * velocity)
             energies[at, 2] = potential; energies[at, 3] = work; energies[at, 4] = dissipated
             at += 1
@@ -140,13 +146,15 @@ def _segment(position, velocity, acceleration, previous_external, work, dissipat
 @njit(cache=True, parallel=True)
 def three_segments(positions, velocities, accelerations, externals, works, dissipations, potentials, strains, jacobians,
                    cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
-                   dt, subdivisions, start_step, end_step, include_initial, signals, ca, cb, cn, ck):
-    count = (end_step - start_step) // subdivisions + (1 if include_initial else 0)
-    fields = np.empty((3, count, len(mass), 3)); energies = np.empty((3, count, 5)); failed = np.full(3, -1, dtype=np.int64)
-    for law in prange(3):
+                   dt, subdivisions, start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, subset, laws):
+    """One thread per control. `laws` lists the constitutive controls to run (0 linear, 1 StVK, 2 complete); the state
+    arrays, fields and energies have one row per listed control, in that order."""
+    count = (end_step - start_step) // subdivisions + (1 if include_initial else 0); controls = len(laws)
+    fields = np.empty((controls, count, len(keep) if subset else len(mass), 3)); energies = np.empty((controls, count, 5)); failed = np.full(controls, -1, dtype=np.int64)
+    for law in prange(controls):
         row = _segment(positions[law], velocities[law], accelerations[law], externals[law], works[law], dissipations[law],
                        cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
-                       law, dt, subdivisions, start_step, end_step, include_initial, signals, potentials[law], strains[law], jacobians[law], ca, cb, cn, ck)
+                       laws[law], dt, subdivisions, start_step, end_step, include_initial, signals, potentials[law], strains[law], jacobians[law], ca, cb, cn, ck, keep, subset)
         fields[law], energies[law] = row[0], row[1]
         positions[law], velocities[law], accelerations[law], externals[law] = row[2], row[3], row[4], row[5]
         works[law], dissipations[law], potentials[law], strains[law], jacobians[law] = row[6], row[7], row[8], row[9], row[10]
