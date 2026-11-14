@@ -224,6 +224,8 @@ python research/defects/comsol_compare.py report      # → comsol-results/compa
 
 按估算，阻尼哪怕只有要求值的万分之一，反射波也会差 0.1% 以上，所以阻尼体载荷实际上没有加上，而不是偏弱。原因要在 COMSOL 模型里查（体载荷节点是否启用、选择的域、速度变量和单位）；软件这边看不到模型文件。
 
+![D0：COMSOL 与有、无吸收层的软件（x = 45 mm 上表面 u_z）](figures/comsol-d0-boundaries.png)
+
 这不影响核对缺陷：把软件也设成两端自由，两边就是同一个问题，而且波在板里来回反射，比有吸收层时更严。下面的对照都是这样做的。D4、D5、D7 用的是同一个模型，交付后同样按两端自由对照，**不需要重算**；只请把元数据里的吸收层一项改成实际状态。
 
 ### 4.2 结果（两端自由）
@@ -237,6 +239,10 @@ python research/defects/comsol_compare.py report      # → comsol-results/compa
 | D1 开口裂纹：软件 对 COMSOL mesh2 | **0.05%** | **0.06%** | 0.09° | 0.1% | 0.1% |
 | D2 开口分层：软件 对 COMSOL 基准网格 | 1.39% | 1.73% | 0.90° | 2.0% | 0.9% |
 | D3 横孔：软件 对 COMSOL 基准网格 | 0.64% | 1.95% | 0.46° | 1.9% | 1.9% |
+
+![散射场：COMSOL、COMSOL mesh2 与软件，两端自由](figures/comsol-scattered.png)
+
+图由 `comsol_compare.py report` 生成（只要已经运行过 `run --free-ends` 和 `run D0-intact`）。
 
 - 波形差全部在 5% 门槛内（最大 2.04%）。
 - f 幅值差只有一处超过 5%：D1 的 top_45 u_x 对 COMSOL 基准网格为 6.55%。这是 COMSOL 基准网格自己的误差：它与 COMSOL mesh2 在同一处相差 6.09%，而软件与 mesh2 只差 0.06%。
