@@ -1,0 +1,61 @@
+{
+    "case":  "D0-intact",
+    "mode":  "full",
+    "workai_revision":  "2ae4223c5140bd383a1671996d3be9966f7dffcb",
+    "comsol_version":  "COMSOL Multiphysics 6.4 (开发版本: 429)",
+    "element":  {
+                    "shape":  "hexahedral, mapped and swept",
+                    "order":  "quartic serendipity",
+                    "discretization":  "small-strain linear elastic displacement"
+                },
+    "max_element_size_mm":  {
+                                "x":  0.40000000,
+                                "y":  0.40000000,
+                                "z":  0.40000000
+                            },
+    "near_defect_x_target_mm":  0.20000000,
+    "mesh_scale":  1.0000000,
+    "elements":  3120,
+    "dofs":  157842,
+    "min_hex_quality":  0.7698,
+    "integration_order":  "COMSOL automatic full integration",
+    "time_stepping":  {
+                          "method":  "generalized-alpha",
+                          "rho_infinity":  1.0,
+                          "max_step_us":  0.0050000000,
+                          "output_step_us":  0.050000000,
+                          "steps":  "strict",
+                          "max_logged_step_us":  0.005
+                      },
+    "tolerances":  {
+                       "time_relative":  1E-06,
+                       "time_absolute_m":  1E-15,
+                       "contact_newton_tolerance_factor":  null
+                   },
+    "load":  {
+                 "type":  "fixed direction nominal traction per reference area",
+                 "amplitude_mpa":  1
+             },
+    "absorbing":  {
+                      "method":  "three-component mass-proportional body load",
+                      "alpha_max_per_s":  17660492,
+                      "ramp_power":  3
+                  },
+    "material":  {
+                     "rho_kg_m3":  2700,
+                     "lambda_pa":  58100000000,
+                     "mu_pa":  26100000000
+                 },
+    "runs":  {
+                 "linear":  {
+                                "solve_time_s":  4090.882276,
+                                "output_times":  701,
+                                "time_steps":  7000
+                            }
+             },
+    "checks":  {
+                   "max_abs_displacement_m":  2.2034336767035544E-08,
+                   "max_abs_uy_m":  1.1681815972979893E-24
+               },
+    "model_source_sha256":  "5d9cf3e1fd70f357d3417bdda9dbf31f5402b2dbff4bd5c6729a644f9d4879a5"
+}
