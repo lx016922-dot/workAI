@@ -3,7 +3,7 @@
     python research/defects/comsol_compare.py run --free-ends D0-intact D1-open-crack ...          # the software without absorbing layers
     python research/defects/comsol_compare.py run --free-ends --h 1.0 D0-intact D1-open-crack ...  # the same on a finer mesh (h in mm, degree 4)
     python research/defects/comsol_compare.py run D0-intact D1-open-crack ...                      # the scenes as specified (absorbing layers)
-    python research/defects/comsol_compare.py report                                               # comsol-results/comparison.json and Markdown tables
+    python research/defects/comsol_compare.py report                                               # comsol-results/comparison.json, Markdown tables, figures/comsol-*.png
 
 COMSOL: `comsol-results/<date>/<case>.csv` (701 samples, u_x, u_y, u_z at the ten receivers; small-strain linear
 elasticity, quartic hexahedra, generalized-α without dissipation) and `<case>_mesh2.csv` (h × 0.7).
@@ -175,12 +175,55 @@ def markdown(cases):
     return '\n'.join(lines + (['', '网格收敛（每行以后者为准）：', ''] + HEADER + extra if extra else []))
 
 
+def figures():
+    """figures/comsol-scattered.png (the scattered field of each defect, both solvers with free ends) and
+    figures/comsol-d0-boundaries.png (the intact plate against the software with and without absorbing layers)."""
+    try:
+        import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
+    except ImportError:
+        print('matplotlib is not installed: no figures'); return
+    target = HERE / 'figures'; target.mkdir(exist_ok=True)
+    t, c0, names, _, _ = comsol(INTACT); _, s0, _ = software(INTACT, FREE)
+    defects = [c for c in ('D1-open-crack', 'D2-open-delamination', 'D3-side-drilled-hole') if (FREE / f'{c}.npz').exists()]
+    picks = [('top_20', 2), ('top_40', 2), ('mid_20', 0), ('mid_40', 0)]
+    if defects:
+        fig, axes = plt.subplots(len(defects), len(picks), figsize=(16, 3 * len(defects)), sharex=True, squeeze=False)
+        for row, case in enumerate(defects):
+            _, c, _, _, _ = comsol(case); _, s, _ = software(case, FREE)
+            try:
+                fine = comsol(case + '_mesh2')[1]
+            except StopIteration:
+                fine = None
+            for col, (name, a) in enumerate(picks):
+                i = names.index(name); ax = axes[row, col]
+                ax.plot(t, (c[:, i, a] - c0[:, i, a]) * 1e9, color='#1f77b4', lw=1.4, label='COMSOL')
+                if fine is not None: ax.plot(t, (fine[:, i, a] - c0[:, i, a]) * 1e9, color='#2ca02c', lw=1, ls=':', label='COMSOL mesh2 (h × 0.7)')
+                ax.plot(t, (s[:, i, a] - s0[:, i, a]) * 1e9, color='#d62728', lw=1, ls='--', label='WorkAI')
+                ax.set_title(f'{case}  {name}  u_{AXES[a]}', fontsize=9); ax.grid(alpha=.3)
+                if col == 0: ax.set_ylabel('scattered field (nm)')
+                if row == len(defects) - 1: ax.set_xlabel('t (μs)')
+        axes[0, 0].legend(fontsize=7)
+        fig.suptitle('Scattered field (defect run − intact run of the same solver), both with free ends', fontsize=11)
+        fig.tight_layout(); fig.savefig(target / 'comsol-scattered.png', dpi=110); plt.close(fig)
+    specified = RESULTS / 'software' / f'{INTACT}.npz'
+    if specified.exists():
+        _, s_abs, _ = software(INTACT, RESULTS / 'software'); i = names.index('top_45')
+        fig, ax = plt.subplots(figsize=(10, 3.6))
+        ax.plot(t, c0[:, i, 2] * 1e9, color='#1f77b4', lw=1.6, label='COMSOL D0')
+        ax.plot(t, s0[:, i, 2] * 1e9, color='#d62728', lw=1, ls='--', label='WorkAI, free ends')
+        ax.plot(t, s_abs[:, i, 2] * 1e9, color='0.5', lw=1, label='WorkAI, absorbing layers as specified')
+        ax.set_xlabel('t (μs)'); ax.set_ylabel('u_z at top_45 (nm)'); ax.grid(alpha=.3); ax.legend(fontsize=8)
+        ax.set_title('D0 intact plate: the COMSOL record carries the end reflections of a plate without absorbing layers', fontsize=10)
+        fig.tight_layout(); fig.savefig(target / 'comsol-d0-boundaries.png', dpi=110); plt.close(fig)
+
+
 def report():
     out = {'gate': GATE, 'frequency_mhz': F_MHZ, 'delivery': comsol(INTACT)[4], 'variants': {}}
     for name, folder in VARIANTS.items():
         if (folder / f'{INTACT}.npz').exists():
             out['variants'][name] = variant(folder); print(f'\n## {name}（各接收点、各分量中的最大值）\n'); print(markdown(out['variants'][name]))
     (RESULTS / 'comparison.json').write_text(json.dumps(out, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
+    figures()
 
 
 if __name__ == '__main__':
