@@ -20,6 +20,7 @@ import numpy as np
 from numba import njit, prange
 from graphwave.buffered_inference import _activation
 from .recurrence import contact_terms
+from .subnormal import enter, leave
 
 # Cost of one element message of each control (linear, StVK, complete) relative to each other: sizes the element chunks
 # so that every task is about the same work.
@@ -113,8 +114,9 @@ def _elements(current, cells, derivative, inverse, volume, quadratic, cubic, law
 def parallel_segments(positions, velocities, accelerations, externals, works, dissipations, potentials, strains, jacobians,
                       cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
                       dt, subdivisions, start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, subset, laws,
-                      pointer, entries, loaded, absorbing, element_tasks, node_blocks, P, V, A, X, message, flux, energy):
-    """`recurrence.three_segments` with every control spread over the threads; same arguments plus the arrays of `prepare` (in the order of `ARRAYS`)."""
+                      pointer, entries, loaded, absorbing, element_tasks, node_blocks, P, V, A, X, message, flux, energy, flush=False):
+    """`recurrence.three_segments` with every control spread over the threads; same arguments plus the arrays of `prepare` (in the order of `ARRAYS`)
+    and, last, `flush` (subnormal numbers count as zero inside every task, `graphnet.subnormal`)."""
     count = (end_step - start_step) // subdivisions + (1 if include_initial else 0); controls = len(laws); stages = len(composition)
     nodes = len(mass); elements = cells.shape[0]; n = cells.shape[1]; n3 = n * n * n; sources = loads.shape[0]; blocks = node_blocks.shape[0]
     fields = np.empty((controls, count, len(keep) if subset else nodes, 3)); energies = np.empty((controls, count, 5)); failed = np.full(controls, -1, dtype=np.int64)
@@ -125,6 +127,7 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
     work = works.copy(); dissipated = dissipations.copy(); potential = potentials.copy(); max_strain = strains.copy(); min_j = jacobians.copy()
     if include_initial:
         for c in prange(controls):
+            saved = enter(flush)
             if subset: fields[c, 0] = P[0, c][keep]
             else: fields[c, 0] = P[0, c]
             kinetic = 0.
@@ -132,27 +135,29 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
                 for axis in range(3): kinetic += .5 * mass[node] * V[0, c, node, axis] * V[0, c, node, axis]
             energies[c, 0, 0] = start_step * dt * 1e6; energies[c, 0, 1] = kinetic
             energies[c, 0, 2] = potential[c]; energies[c, 0, 3] = work[c]; energies[c, 0, 4] = dissipated[c]
-            at[c] = 1
+            at[c] = 1; leave(saved)
     for step in range(start_step + 1, end_step + 1):
         for stage in range(stages):
             h = composition[stage] * dt
             # 1. positions of the layer
             for task in prange(controls * blocks):
-                c = task // blocks
+                c = task // blocks; saved = enter(flush)
                 if active[c]:
                     a0 = now[c]; a1 = 1 - a0
                     for node in range(node_blocks[task % blocks, 0], node_blocks[task % blocks, 1]):
                         for axis in range(3):
                             P[a1, c, node, axis] = (P[a0, c, node, axis] + h * V[a0, c, node, axis] + .5 * h * h * A[a0, c, node, axis]) * free[node, axis]
+                leave(saved)
             # 2. element messages: flux and energy of every quadrature point
             for task in prange(len(element_tasks)):
-                c = element_tasks[task, 0]
+                c = element_tasks[task, 0]; saved = enter(flush)
                 if active[c]:
                     s, j = _elements(P[1 - now[c], c], cells, derivative, inverse, volume, quadratic, cubic, laws[c], element_tasks[task, 1], element_tasks[task, 2], flux[c], energy[c])
                     task_strain[task] = s; task_jac[task] = j
+                leave(saved)
             # 3. each node collects its message, element by element as the frozen loop does
             for task in prange(controls * blocks):
-                c = task // blocks
+                c = task // blocks; saved = enter(flush)
                 if active[c]:
                     for node in range(node_blocks[task % blocks, 0], node_blocks[task % blocks, 1]):
                         m0 = 0.; m1 = 0.; m2 = 0.
@@ -166,8 +171,10 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
                                 m2 += (derivative[neighbor, i] * flux[c, e, neighbor, j, k, 2, 0] + derivative[neighbor, j] * flux[c, e, i, neighbor, k, 2, 1]
                                        + derivative[neighbor, k] * flux[c, e, i, j, neighbor, 2, 2])
                         message[c, node, 0] = m0; message[c, node, 1] = m1; message[c, node, 2] = m2
+                leave(saved)
             # 4. energy, guard and contact of each control (serial sums in the frozen order)
             for c in prange(controls):
+                saved = enter(flush)
                 if active[c]:
                     total = 0.
                     for e in range(elements):
@@ -182,9 +189,10 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
                     else:
                         potential[c] = total + contact_terms(P[1 - now[c], c], message[c], ca, cb, cn, ck)
                         max_strain[c] = max(max_strain[c], strain); min_j[c] = min(min_j[c], jac)
+                leave(saved)
             # 5. velocities and accelerations of the layer
             for task in prange(controls * blocks):
-                c = task // blocks
+                c = task // blocks; saved = enter(flush)
                 if active[c]:
                     a0 = now[c]; a1 = 1 - a0
                     for node in range(node_blocks[task % blocks, 0], node_blocks[task % blocks, 1]):
@@ -199,8 +207,10 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
                                 acceleration = undamped
                                 velocity = (V[a0, c, node, axis] + .5 * h * (A[a0, c, node, axis] + acceleration)) * free[node, axis]
                             X[a1, c, node, axis] = external; V[a1, c, node, axis] = velocity; A[a1, c, node, axis] = acceleration
+                leave(saved)
             # 6. work and dissipation (only loaded and damped nodes contribute; the others add exact zeros), then the layer becomes the state
             for c in prange(controls):
+                saved = enter(flush)
                 if active[c]:
                     a0 = now[c]; a1 = 1 - a0
                     if damped:
@@ -215,8 +225,10 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
                         node = loaded[q]
                         for axis in range(3): total += .5 * (X[a1, c, node, axis] + X[a0, c, node, axis]) * (P[a1, c, node, axis] - P[a0, c, node, axis])
                     work[c] += total; now[c] = a1
+                leave(saved)
         if step % subdivisions == 0:
             for c in prange(controls):
+                saved = enter(flush)
                 if active[c]:
                     a0 = now[c]
                     if subset: fields[c, at[c]] = P[a0, c][keep]
@@ -227,6 +239,7 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
                     energies[c, at[c], 0] = step * dt * 1e6; energies[c, at[c], 1] = kinetic
                     energies[c, at[c], 2] = potential[c]; energies[c, at[c], 3] = work[c]; energies[c, at[c], 4] = dissipated[c]
                     at[c] += 1
+                leave(saved)
     for c in range(controls):
         positions[c] = P[now[c], c]; velocities[c] = V[now[c], c]; accelerations[c] = A[now[c], c]; externals[c] = X[now[c], c]
         works[c] = work[c]; dissipations[c] = dissipated[c]; potentials[c] = potential[c]; strains[c] = max_strain[c]; jacobians[c] = min_j[c]
