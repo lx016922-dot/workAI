@@ -20,7 +20,10 @@ Two things can be chosen per record (the defaults reproduce the frozen behaviour
 * `record`: 'full' stores every node at every sample (float64); 'compact' stores what a large model can
   afford: the receivers at every sample (float64, bit-identical to the full record), the display mesh
   (`spectral3d.display`) at the animation frames as float32 (`display_parts`: the linear response and the
-  increments when the controls allow them), and a few full float64 snapshots.
+  increments when the controls allow them), and a few full float64 snapshots;
+* `flush`: subnormal numbers count as zero inside the layers (`graphnet.subnormal`), which removes the slow start
+  of a record on a large model, where the wave has not arrived yet. Only values next to the bottom of the double
+  range (below 1e-280) can differ from the unflushed record. False (the default) keeps the frozen arithmetic.
 """
 import hashlib
 import json
@@ -100,8 +103,8 @@ def storage_bytes(frames, nodes, record, display_nodes=0, shown=0, receivers=0, 
 
 
 def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_chunks=None, time_plan='frozen', record='full', display=None, controls=LAWS,
-            spread=None, threads=None):
-    """`model` from graphnet.model.load(..., long_record=True). See the module text for `time_plan`, `record`, `controls` and `spread`;
+            spread=None, threads=None, flush=False):
+    """`model` from graphnet.model.load(..., long_record=True). See the module text for `time_plan`, `record`, `controls`, `spread` and `flush`;
     `threads` limits the threads used (default: all that numba was started with)."""
     if not is_v2(scene):
         from graphwave.long_rollout import rollout as frozen
@@ -118,6 +121,8 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
     laws = np.array([LAWS.index(name) for name in controls], dtype=np.int64); count = len(controls)
     directory = Path(directory); (directory / 'fields').mkdir(parents=True, exist_ok=True); (directory / 'states').mkdir(parents=True, exist_ok=True)
     from .parallel import ARRAYS, choose, parallel_segments, prepare
+    from .subnormal import AVAILABLE as can_flush
+    flush = bool(flush) and can_flush   # only where the processor mode is switched; the manifest says what was done
     available = max(1, min(int(threads or numba_config.NUMBA_NUM_THREADS), numba_config.NUMBA_NUM_THREADS))
     if spread is None: spread, used = choose(controls, available, len(mesh['points']))
     else: spread = bool(spread); used = available if spread else max(1, min(count, available))
@@ -134,7 +139,7 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
     fingerprint = hashlib.sha256(json.dumps({'identity': identity, 'sources': sources, 'scene': scene, 'degree': int(mesh['degree']), 'h_mm': float(mesh['h_mm']),
                                              **({} if (time_plan, record) == ('frozen', 'full') else {'time_plan': time_plan, 'record': record}),
                                              **({} if given is None else {'layer': [stage_weights, per_sample]}),
-                                             **({} if controls == LAWS else {'controls': list(controls)})}, sort_keys=True).encode()).hexdigest()
+                                             **({} if controls == LAWS else {'controls': list(controls)}), **({'flush_subnormals': True} if flush else {})}, sort_keys=True).encode()).hexdigest()
     # Interface stiffness: that of the trained layer spacing whatever the plan, so the interface is the same physical model
     # (its reflection and its clapping) and only the time layer differs.
     from .timestep import frozen_plan
@@ -201,6 +206,7 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
             manifest['snapshot_frames'] = kept.tolist()
             manifest['receivers'] = [{'name': r['name'], 'point_mm': list(r['point_mm'])} for r in scene['receivers']]
     manifest.update(layer_threads=used, layer_spread=spread)   # how this run uses the cores (a resumed run may differ: the bits do not)
+    manifest['flush_subnormals'] = flush   # part of the fingerprint: a resumed record keeps the arithmetic it started with
     workspace = prepare(mesh, inputs['loads'], alpha, laws, used) if spread else None
     def advance(first, last, include_initial):
         """Samples first..last (first − 1 is the saved state): fields on the kept nodes or the whole mesh, and energies."""
@@ -210,8 +216,8 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         arguments = (*(state[name] for name in STATE), mesh['elements'], derivative, inverse, mesh['volume_weight'], mesh['mass'],
                      inputs['loads'], inputs['free'], alpha, damped, quadratic, cubic, composition, dt, subdivisions,
                      start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, compact, laws)
-        if spread: fields, energies, failed = parallel_segments(*arguments, *(workspace[name] for name in ARRAYS))
-        else: fields, energies, failed = three_segments(*arguments)
+        if spread: fields, energies, failed = parallel_segments(*arguments, *(workspace[name] for name in ARRAYS), flush)
+        else: fields, energies, failed = three_segments(*arguments, flush)
         if (failed >= 0).any():
             tripped = '、'.join(LAW_LABELS[name] for name, step in zip(controls, failed) if step >= 0)
             raise ValueError(f'{GUARD_MESSAGE}（{tripped}控制，约 {int(failed.max()) * dt * 1e6:.2f} μs，最大应变 {float(np.max(state["strains"])):.2e}；'

@@ -37,7 +37,7 @@ files = {'graphwave': ['__init__.py', 'inference.py', 'predict.py', 'buffered_in
          'spectral3d': ['__init__.py', 'mesh.py', 'curved_mesh.py', 'result.py', 'loads.py', 'feature_mesh.py', 'display.py'],
          'solid': ['__init__.py', 'schema.py'],
          # Version-2 input layer of the frozen network and the excitation/boundary definitions it reads.
-         'graphnet': ['__init__.py', 'model.py', 'inputs.py', 'recurrence.py', 'predict.py', 'rollout.py', 'contact.py', 'timestep.py', 'parallel.py'],
+         'graphnet': ['__init__.py', 'model.py', 'inputs.py', 'recurrence.py', 'predict.py', 'rollout.py', 'contact.py', 'timestep.py', 'parallel.py', 'subnormal.py'],
          'physics': ['__init__.py', 'scene.py', 'signals.py', 'loads.py', 'boundaries.py', 'materials.py', 'receivers.py', 'runs.py', 'defects.py'],
          # Fast engine: the learned coarse-graph operator (inference only) and its shipped model.
          'coarsegraph': ['__init__.py', 'operator.py', 'simulate.py', 'kernel.py', 'run.py', 'record.py']}

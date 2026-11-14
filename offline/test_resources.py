@@ -178,13 +178,17 @@ class Jobs(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); one = run_job(root / 'one', validate_request({'scene': scene, 'degree': 4, 'engine': 'coarse', 'controls': 'full'}))
             run_job(root / 'all', validate_request({'scene': scene, 'degree': 4, 'engine': 'coarse'}))
-            self.assertEqual((one['phase'], one['controls'], one['parts']), ('completed', ['murnaghan'], ['full'])); self.assertEqual(set(json.loads((root / 'one' / 'exports.json').read_text())), {'full'})
+            self.assertEqual((one['phase'], one['controls'], one['parts']), ('completed', ['murnaghan'], ['full'])); 
+            from graphnet.subnormal import AVAILABLE
+            self.assertEqual(one['flush_subnormals'], AVAILABLE)   # the model's own layer, like the automatic one, flushes subnormal numbers
+            self.assertEqual(set(json.loads((root / 'one' / 'exports.json').read_text())), {'full'})
             self.assertEqual((root / 'one' / 'full.bin.gz').read_bytes(), (root / 'all' / 'full.bin.gz').read_bytes())
 
     def test_a_full_record_too_large_for_the_browser_is_shown_on_the_display_mesh(self):
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(resources, 'BROWSER_NODES', 100):
             status = run_job(Path(tmp) / 'job', validate_request({'scene': v2_plate(), 'degree': 3, 'time_stepping': 'frozen'}))
             self.assertEqual((status['phase'], status['record_mode']), ('completed', 'full')); self.assertEqual(status['time_plan']['scheme'], 'composition4')
+            self.assertFalse(status['flush_subnormals'])   # the trained layer keeps the frozen arithmetic, bit for bit
             full = json.loads((Path(tmp) / 'job' / 'full.json').read_text(encoding='utf-8'))
             self.assertIn('display', full); self.assertEqual(full['recording']['record_mode'], 'full'); self.assertEqual(full['recording']['analysis_source'], 'complete_float64_chunks')
             self.assertEqual(len(traces(Path(tmp) / 'job' / 'record', 'full', [[5., 1., 1.]])['points']), 1)   # a full record still serves any point
