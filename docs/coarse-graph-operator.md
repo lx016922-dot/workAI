@@ -62,6 +62,35 @@ python -m coarsegraph.train --labels A B C --splits coarsegraph/specs/splits.jso
 python -m coarsegraph.run --model DIR/model.json --scene scene.json --output out [--laws all|scene]
 ```
 
+### 4.1 从模型继续训练与中断恢复
+
+`--init` 开始一个新的训练实验，读取已有模型的实际算子，在本次网格、时间层与标签上重新优化；`--resume` 则恢复一个被中断的实验。两者不能同时使用。每次接受迭代后，训练器原子保存 `OUTPUT/checkpoint.json`，包括当前状态、历史验证最优算子、LM 阻尼、停滞计数和累计历史。
+
+例如，从精确模型开始一轮新实验（A、B、C 是已经生成的标签目录）：
+
+```sh
+python -m coarsegraph.train --labels A B C --splits coarsegraph/specs/splits.json \
+    --degree 4 --h-mm 2 --cfl .3 --increment-weight 1 --harmonic-weight 1 \
+    --init coarsegraph/models/p4-h2-multisource/model.json \
+    --iterations 3 --workers 4 --output runs/coarse-continuation
+```
+
+如果进程中断，重复相同的数据、划分和训练参数，将 `--init ...` 换成 `--resume`：
+
+```sh
+python -m coarsegraph.train --labels A B C --splits coarsegraph/specs/splits.json \
+    --degree 4 --h-mm 2 --cfl .3 --increment-weight 1 --harmonic-weight 1 \
+    --resume --iterations 3 --workers 4 --output runs/coarse-continuation
+```
+
+- `--iterations 3` 是总迭代上限；已经完成 2 次时，只再运行第 3 次。
+- 检查点绑定标签的场景、时间轴、接收点、波形及文件哈希，也绑定划分、训练设置、前向源码和冻结能量权重。不兼容的输入会被拒绝；完整标签目录可以搬到另一台机器。
+- 保存的实际 D/q/m 算子是跨机器恢复的依据。同一参数基下保留精确坐标和残差；零空间基变化时，先换到本机坐标，再重算训练残差。
+- 参数仍只由训练集和验证集选择。最终测试开始前先保存冻结状态；此时中断，`--resume` 只完成同一候选的评估。已经完成测试的实验不能再恢复选参；需要用 `--init` 和新的输出目录开始另一轮，不能把反复查看的测试集宣称为全新的留出数据。
+- 最终评估同时保存 `baseline_gll`、`initial_model`（使用 `--init` 时）和 `learned`，可直接判断相对父模型的变化。新候选不会自动接入离线软件。
+
+原始 A–D 标签没有包含在历史模型目录内。2026-11-17 的[短记录接续实验](../research/coarse-continuation-20261117/README.md)提供固定的 9 对工况、参考解生成和网格抽查命令，以及本轮紧凑标签归档；它的结果范围限于这组实验。
+
 ## 5. 门槛
 
 与 `sweep converge` 相同的量，5% 门槛：每个接收点的波形相对 L2，整段记录 Hann 加权的精确频率 f、2f 幅值，以及非线性增量的 2f 幅值。区别是报告下限用相对值：只统计参考值不低于该工况最大值 10% 的接收点。1 MPa 激励下非线性增量的 2f 只有 1e-15–1e-11 m，大多低于求解器复核用的 1e-13 m 绝对下限；增量与幅值平方成正比，相对误差与幅值无关。一个工况通过，需要非线性记录的波形、f、2f 和增量的 2f 全部在 5% 以内。
