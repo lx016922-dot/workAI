@@ -32,24 +32,62 @@ REF = ROOT / 'reference'; REF.mkdir(exist_ok=True)
 DURATION, REF_STEP, NET_STEP = 5000., .5, .1
 LAWS = ('linear', 'stvk', 'murnaghan')
 WINDOW = 50.
+CHECKPOINT_FRAMES = 200   # 100 μs of record
 
 
-def reference(h, law):
+def reference(h, law, stop_after_frames=None):
+    """spectral2d's velocity-Verlet loop (spectral2d.solver.solve, undamped branch, same internal force, step and loads), with a
+    checkpoint every CHECKPOINT_FRAMES output frames so a long reference survives an interrupted process. Without an
+    interruption the result is bit for bit what solve() returns (checked on a 30 μs record)."""
+    import math
     from spectral2d.run import prepared_scene
-    from spectral2d.mesh import make_mesh
+    from spectral2d.mesh import make_mesh, interpolation
     from spectral2d.loads import prepare_excitation, receiver_points
-    from spectral2d.solver import solve
-    path = REF / f'plate5ms-{law}-h{h:g}.npy'
+    from spectral2d.solver import internal_force
+    from physics.signals import evaluate
+    path = REF / f'plate5ms-{law}-h{h:g}.npy'; checkpoint = REF / f'plate5ms-{law}-h{h:g}.checkpoint.npz'
     if path.exists(): return
     s = plate(h, '2d'); s['constitutive'] = law
     scene = prepared_scene(s, 4)   # validated as the 1 ms scene (the scene rules stop at 1 ms), then extended
     scene['acquisition']['duration_us'] = DURATION; assert scene['acquisition']['sample_step_us'] == REF_STEP
-    mesh = make_mesh(scene, 4, h); excitation = prepare_excitation(mesh, scene); receivers = receiver_points(scene); started = time.time()
-    r = solve(scene, mesh, excitation, receivers, cfl=scene['numerics']['cfl'], budget=False)
-    np.save(path, np.asarray(r['probes_m']))
-    (REF / f'plate5ms-{law}-h{h:g}.json').write_text(json.dumps({'h_mm': h, 'law': law, 'nodes': int(len(mesh['mass'])), 'seconds': time.time() - started,
-                                                              'frames': int(len(r['times_us']))}, indent=1) + '\n')
-    print('reference', law, h, f'{time.time() - started:.0f} s', flush=True)
+    mesh = make_mesh(scene, 4, h); excitation = prepare_excitation(mesh, scene); receivers = receiver_points(scene)
+    assert excitation['alpha'] is None, 'free ends: no absorbing layer'
+    material = scene['material']; mass = mesh['mass']; cfl = scene['numerics']['cfl']
+    constants = np.array([material[k] for k in ['lambda_pa', 'mu_pa', 'l_pa', 'm_pa', 'n_pa']]); code = {'linear': 0, 'stvk': 1, 'murnaghan': 2}[law]
+    speed = math.sqrt((material['lambda_pa'] + 2 * material['mu_pa']) / material['rho_kg_m3'])
+    sample = REF_STEP * 1e-6; subdivisions = math.ceil(sample / (cfl * mesh['min_node_spacing'] / (speed * 1.05))); dt = sample / subdivisions
+    frames = round(DURATION / REF_STEP) + 1; steps = (frames - 1) * subdivisions
+    loads = excitation['loads']; constrained = excitation['constrained']
+    times = np.arange(steps + 1) * dt * 1e6; values = [evaluate(src, times) for _, src in loads]
+    taps = [interpolation(mesh, rx['point_mm']) for rx in receivers]
+    if checkpoint.exists():
+        with np.load(checkpoint) as z:
+            u, v, acc, probes, previous_ext = z['u'], z['v'], z['acc'], z['probes'], z['previous_ext']; first = int(z['step']) + 1; work = float(z['work']); spent = float(z['seconds'])
+        print('reference', law, h, 'resumes at', f'{(first - 1) * dt * 1e6:.1f} μs', flush=True)
+    else:
+        u = np.zeros((len(mass), 2)); v = u.copy(); acc = u.copy(); previous_ext = u.copy(); probes = np.zeros((frames, len(taps), 2)); first = 1; work = 0.; spent = 0.
+    started = time.time(); stored = 0.
+    for step in range(first, steps + 1):
+        next_u = u + dt * v + .5 * dt * dt * acc; next_u[constrained] = 0
+        fint, energy, strain, jac = internal_force(next_u, mesh['elements'], mesh['derivative'], mesh['size'], mesh['area_weight'], constants, code)
+        if not np.isfinite(energy) or strain > .001 or jac <= 0: raise ValueError(f'Elastic guard failed: strain={strain}, J={jac}')
+        ext = loads[0][0] * values[0][step]
+        for k in range(1, len(loads)): ext = ext + loads[k][0] * values[k][step]
+        next_acc = (ext - fint) / mass[:, None]; next_acc[constrained] = 0
+        next_v = v + .5 * dt * (acc + next_acc); next_v[constrained] = 0
+        work += float(np.sum(.5 * (ext + previous_ext) * (next_u - u))); u, v, acc = next_u, next_v, next_acc; previous_ext = ext
+        if step % subdivisions == 0:
+            frame = step // subdivisions
+            for i, (ids, w) in enumerate(taps): probes[frame, i] = w @ u[ids]
+            stored = float(np.sum(.5 * mass[:, None] * v * v)) + energy
+            if frame % CHECKPOINT_FRAMES == 0 and step < steps:
+                np.savez(checkpoint.with_suffix('.tmp.npz'), u=u, v=v, acc=acc, probes=probes, previous_ext=previous_ext, step=step, work=work, seconds=spent + time.time() - started)
+                checkpoint.with_suffix('.tmp.npz').replace(checkpoint)
+                if stop_after_frames and frame >= stop_after_frames: return
+    np.save(path, probes); checkpoint.unlink(missing_ok=True)
+    (REF / f'plate5ms-{law}-h{h:g}.json').write_text(json.dumps({'h_mm': h, 'law': law, 'nodes': int(len(mass)), 'seconds': spent + time.time() - started, 'frames': frames,
+                                                              'internal_step_ns': dt * 1e9, 'final_energy_balance': abs(stored - work) / max(abs(work), 1e-300)}, indent=1) + '\n')
+    print('reference', law, h, f'{spent + time.time() - started:.0f} s', flush=True)
 
 
 def network(h):
@@ -58,6 +96,7 @@ def network(h):
     from graphnet.model import load
     from graphnet.rollout import read_record, rollout
     auto = h == 'auto'
+    if (REF / f"plate5ms-network-{'auto' if auto else f'h{float(h):g}'}.npz").exists(): return
     s = plate(1. if auto else float(h)); s['acquisition'] = {'duration_us': DURATION, 'sample_step_us': NET_STEP}
     request = validate_request({'scene': s, 'mesh': 'auto'} if auto else {'scene': s, 'degree': 4}); scene = request['scene']
     mesh = make_mesh(scene, request['degree'], scene['numerics']['h_mm']); model = load(request['degree'], long_record=True); started = time.monotonic()
