@@ -1,0 +1,154 @@
+"""5 ms plane-strain plate: the software as it runs today (automatic time layer, compact record) against a converged
+2D spectral reference. The 1 ms study (plate.py, analyze_plate.py) extrapolated to 5 ms; this measures it.
+
+Same plate as plate.py: 48 × 2 mm aluminium, free ends, uniform end-face traction along (1, 0, 1) (S0 and A0), 0.2 MHz
+5-cycle Hann, 1 MPa; receivers u_z on the top at x = 24, 32, 40 mm and u_x at mid-thickness at x = 24, 32 mm. In 5 ms S0
+crosses the plate about 280 times and A0 about 145 times (1000 carrier periods).
+
+    python research/long-record-accuracy/scripts/plate5ms.py reference 0.75 linear     # also stvk, murnaghan; and h 0.5
+    python research/long-record-accuracy/scripts/plate5ms.py network 2 | 1.5 | 1 | auto
+    python research/long-record-accuracy/scripts/plate5ms.py analyse                    # → results/plate-5ms.json
+
+Reference: `spectral2d` (velocity Verlet, degree 4, CFL 0.35, no network) at h 0.75 and 0.5 mm with the step budget lifted,
+then Richardson extrapolation in Δt² as in analyze_plate.py; the two levels' difference is its self-check. About 35 and
+75 min per law on one core. Network: the 3D plate with symmetry on both y faces (exactly plane strain), the record path of
+the application (graphnet.rollout, time_plan 'auto', compact record, all three controls), at fixed h or with the
+automatic mesh; receivers at 0.1 μs. Waveforms are written to reference/ (not in git).
+"""
+import json
+import sys
+import tempfile
+import time
+from pathlib import Path
+import numpy as np
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parent
+REPO = HERE.parents[2]
+sys.path.insert(0, str(REPO)); sys.path.insert(0, str(HERE))
+from plate import plate, TOP, MID   # noqa: E402
+
+REF = ROOT / 'reference'; REF.mkdir(exist_ok=True)
+DURATION, REF_STEP, NET_STEP = 5000., .5, .1
+LAWS = ('linear', 'stvk', 'murnaghan')
+WINDOW = 50.
+
+
+def reference(h, law):
+    from spectral2d.run import prepared_scene
+    from spectral2d.mesh import make_mesh
+    from spectral2d.loads import prepare_excitation, receiver_points
+    from spectral2d.solver import solve
+    path = REF / f'plate5ms-{law}-h{h:g}.npy'
+    if path.exists(): return
+    s = plate(h, '2d'); s['constitutive'] = law
+    scene = prepared_scene(s, 4)   # validated as the 1 ms scene (the scene rules stop at 1 ms), then extended
+    scene['acquisition']['duration_us'] = DURATION; assert scene['acquisition']['sample_step_us'] == REF_STEP
+    mesh = make_mesh(scene, 4, h); excitation = prepare_excitation(mesh, scene); receivers = receiver_points(scene); started = time.time()
+    r = solve(scene, mesh, excitation, receivers, cfl=scene['numerics']['cfl'], budget=False)
+    np.save(path, np.asarray(r['probes_m']))
+    (REF / f'plate5ms-{law}-h{h:g}.json').write_text(json.dumps({'h_mm': h, 'law': law, 'nodes': int(len(mesh['mass'])), 'seconds': time.time() - started,
+                                                              'frames': int(len(r['times_us']))}, indent=1) + '\n')
+    print('reference', law, h, f'{time.time() - started:.0f} s', flush=True)
+
+
+def network(h):
+    from offline.domain import validate_request
+    from spectral3d.feature_mesh import make_mesh
+    from graphnet.model import load
+    from graphnet.rollout import read_record, rollout
+    auto = h == 'auto'
+    s = plate(1. if auto else float(h)); s['acquisition'] = {'duration_us': DURATION, 'sample_step_us': NET_STEP}
+    request = validate_request({'scene': s, 'mesh': 'auto'} if auto else {'scene': s, 'degree': 4}); scene = request['scene']
+    mesh = make_mesh(scene, request['degree'], scene['numerics']['h_mm']); model = load(request['degree'], long_record=True); started = time.monotonic()
+    with tempfile.TemporaryDirectory() as tmp:   # what the application does for this request: compact record, automatic time layer
+        manifest = rollout(scene, mesh, model, Path(tmp) / 'record', {'case': f'plate5ms-{h}'}, time_plan='auto', record='compact', controls=LAWS, flush=True)
+        record = read_record(Path(tmp) / 'record')
+    name = 'auto' if auto else f'h{float(h):g}'
+    np.savez_compressed(REF / f'plate5ms-network-{name}.npz', times_us=record['times_us'], probes_m=record['probes'])
+    energies = record['energies']
+    balance = [float(np.abs(e[:, 1] + e[:, 2] + e[:, 4] - e[:, 3]).max() / np.abs(e[:, 3]).max()) for e in energies]
+    info = {'h_mm': float(scene['numerics']['h_mm']), 'degree': int(request['degree']), 'nodes': int(len(mesh['points'])), 'mesh': request.get('mesh_report'),
+            'time_layer': {k: manifest['time_plan'].get(k) for k in ('scheme', 'layer_step_us', 'evaluations_per_control', 'phase_error_bound_rad', 'stability_number')},
+            'seconds': time.monotonic() - started, 'energy_balance': balance}
+    (ROOT / 'results' / f'plate5ms-network-{name}.json').write_text(json.dumps(info, ensure_ascii=False, indent=1, default=float) + '\n', encoding='utf-8')
+    print('network', name, json.dumps({k: info[k] for k in ('h_mm', 'nodes', 'time_layer', 'seconds')}, default=float), flush=True)
+
+
+def component(u):
+    """u_z at the top points, u_x at the mid-plane points (arrays carry the in-plane components last: 2D (x, z), 3D (x, y, z))."""
+    return np.concatenate([u[:, :len(TOP), -1], u[:, len(TOP):, 0]], 1)
+
+
+def responses(d):
+    return {'linear': d['linear'], 'geometric': d['stvk'] - d['linear'], 'material': d['murnaghan'] - d['stvk'], 'full': d['murnaghan']}
+
+
+def rel(a, b):
+    return float(np.linalg.norm(a - b) / max(np.linalg.norm(b), 1e-300))
+
+
+def compare(a, b, t):
+    edges = np.arange(0, t[-1] + 1e-9, WINDOW)
+    return {'window_rel_l2': [rel(a[(t >= lo) & (t < lo + WINDOW)], b[(t >= lo) & (t < lo + WINDOW)]) for lo in edges[:-1]],
+            'cumulative_rel_l2': {f'{T:g}': rel(a[t <= T], b[t <= T]) for T in (1000., 2000., 3000., 4000., 5000.)},
+            'last_50us_rel_l2': rel(a[t >= DURATION - WINDOW], b[t >= DURATION - WINDOW])}
+
+
+def analyse():
+    from analyze_plate import extrapolated, time_step
+    levels = {h: responses({law: component(np.load(REF / f'plate5ms-{law}-h{h:g}.npy')) for law in LAWS}) for h in (.75, .5)}
+    t = np.arange(len(levels[.5]['linear'])) * REF_STEP
+    dt = {h: time_step(h) for h in levels}; ref = extrapolated(levels[.5], levels[.75], dt[.5], dt[.75])
+    out = {'duration_us': DURATION, 'reference_dt_ns': {f'h{h:g}': dt[h] * 1e9 for h in dt},
+           'reference_self_check': {k: compare(levels[.75][k], levels[.5][k], t) for k in ref},
+           'reference_fine_vs_extrapolated': {k: compare(levels[.5][k], ref[k], t)['cumulative_rel_l2'] for k in ref},
+           'windows_end_us': (np.arange(1, len(t) * REF_STEP / WINDOW + 1e-9) * WINDOW).tolist(), 'network': {}}
+    every = round(REF_STEP / NET_STEP)
+    for path in sorted(REF.glob('plate5ms-network-*.npz')):
+        name = path.stem.split('-')[-1]
+        with np.load(path) as z: probes = z['probes_m'][::every]
+        assert len(probes) == len(t)
+        sim = responses({law: component(probes[:, :, i]) for i, law in enumerate(LAWS)})
+        info = json.loads((ROOT / 'results' / f'plate5ms-network-{name}.json').read_text(encoding='utf-8'))
+        out['network'][name] = {'run': info, 'against_reference': {k: compare(sim[k], ref[k], t) for k in sim},
+                                'against_fine_reference_level': {k: compare(sim[k], levels[.5][k], t)['cumulative_rel_l2'] for k in sim}}
+        print(name, info['h_mm'], {k: {T: f'{v:.2e}' for T, v in c['cumulative_rel_l2'].items()} | {'last50': f"{c['last_50us_rel_l2']:.2e}"}
+                                   for k, c in out['network'][name]['against_reference'].items()}, flush=True)
+    print('reference h0.75 vs h0.5', {k: {T: f'{v:.1e}' for T, v in c['cumulative_rel_l2'].items()} for k, c in out['reference_self_check'].items()})
+    (ROOT / 'results' / 'plate-5ms.json').write_text(json.dumps(out, indent=1) + '\n')
+    figures(out, t, ref, levels)
+
+
+def figures(out, t, ref, levels):
+    try:
+        import matplotlib; matplotlib.use('Agg'); import matplotlib.pyplot as plt
+    except ImportError:
+        print('matplotlib is not installed: no figures'); return
+    ends = np.array(out['windows_end_us'])
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4.2))
+    for ax, key, title in ((axes[0], 'full', 'complete response'), (axes[1], 'material', 'material-nonlinearity increment')):
+        for name, row in out['network'].items():
+            ax.semilogy(ends / 1000, row['against_reference'][key]['window_rel_l2'], lw=1.2, label=f"WorkAI {name} (h {row['run']['h_mm']:g} mm)")
+        ax.semilogy(ends / 1000, out['reference_self_check'][key]['window_rel_l2'], color='0.5', lw=1, ls=':', label='reference h 0.75 vs h 0.5')
+        ax.set_xlabel('t (ms)'); ax.set_ylabel('relative L2 in each 50 μs window'); ax.set_title(f'5 ms plate: {title}', fontsize=10); ax.grid(alpha=.3, which='both')
+    axes[0].legend(fontsize=7)
+    fig.tight_layout(); fig.savefig(ROOT / 'figures' / 'fig5-plate-5ms-error-vs-time.png', dpi=110); plt.close(fig)
+    late = t >= DURATION - 100.
+    fig, axes = plt.subplots(2, 1, figsize=(11, 6), sharex=True)
+    every = round(REF_STEP / NET_STEP)
+    for ax, key, label in ((axes[0], 'full', 'complete response u_z, top x = 24 mm (nm)'), (axes[1], 'material', 'material increment u_z, top x = 24 mm (nm)')):
+        ax.plot(t[late], ref[key][late, 0] * 1e9, color='k', lw=1.6, label='reference (extrapolated)')
+        for name in out['network']:
+            with np.load(REF / f'plate5ms-network-{name}.npz') as z: probes = z['probes_m'][::every]
+            sim = responses({law: component(probes[:, :, i]) for i, law in enumerate(LAWS)})
+            ax.plot(t[late], sim[key][late, 0] * 1e9, lw=1, ls='--', label=f'WorkAI {name}')
+        ax.set_ylabel(label, fontsize=9); ax.grid(alpha=.3)
+    axes[1].set_xlabel('t (μs)'); axes[0].legend(fontsize=7)
+    fig.tight_layout(); fig.savefig(ROOT / 'figures' / 'fig6-plate-5ms-late-waveform.png', dpi=110); plt.close(fig)
+
+
+if __name__ == '__main__':
+    if sys.argv[1] == 'reference': reference(float(sys.argv[2]), sys.argv[3])
+    elif sys.argv[1] == 'network': network(sys.argv[2])
+    else: analyse()

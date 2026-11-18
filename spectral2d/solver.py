@@ -48,16 +48,17 @@ def internal_force(u, elements, derivative, sizes, area_weight, constants, law):
     return force, energy, max_strain, min_j
 
 
-def solve(scene, mesh, excitation, receivers, cfl=.3, keep_fields=False, callback=None):
+def solve(scene, mesh, excitation, receivers, cfl=.3, keep_fields=False, callback=None, budget=True):
+    """Per-unit-width plane-strain transient; `receivers` are dicts with point_mm and direction. `budget=False` lifts the
+    step budget for research references (research/long-record-accuracy: 5 ms records)."""
     from physics.materials import require_isotropic; require_isotropic(scene['material'], '二维平面应变谱元')
-    """Per-unit-width plane-strain transient; `receivers` are dicts with point_mm and direction."""
     if not .05 <= cfl <= .35: raise ValueError('Use CFL 0.05–0.35.')
     start = time.monotonic(); material = scene['material']; mass = mesh['mass']
     constants = np.array([material[k] for k in ['lambda_pa', 'mu_pa', 'l_pa', 'm_pa', 'n_pa']]); law = {'linear': 0, 'stvk': 1, 'murnaghan': 2}[scene['constitutive']]
     speed = math.sqrt((material['lambda_pa'] + 2 * material['mu_pa']) / material['rho_kg_m3'])
     sample = scene['acquisition']['sample_step_us'] * 1e-6; subdivisions = math.ceil(sample / (cfl * mesh['min_node_spacing'] / (speed * 1.05))); dt = sample / subdivisions
     frames = round(scene['acquisition']['duration_us'] / scene['acquisition']['sample_step_us']) + 1; steps = (frames - 1) * subdivisions
-    if steps > 500000 or steps * mesh['elements'].size > 5_000_000_000: raise ValueError('Plane-strain compute budget exceeded; coarsen the mesh or shorten the record.')
+    if budget and (steps > 500000 or steps * mesh['elements'].size > 5_000_000_000): raise ValueError('Plane-strain compute budget exceeded; coarsen the mesh or shorten the record.')
     if keep_fields and frames * len(mass) * 16 > 1024**3: raise ValueError('Field exceeds 1 GiB; store receivers or lines instead.')
     loads = excitation['loads']; constrained = excitation['constrained']; alpha = excitation['alpha']
     times = np.arange(steps + 1) * dt * 1e6; values = [evaluate(src, times) for _, src in loads]
