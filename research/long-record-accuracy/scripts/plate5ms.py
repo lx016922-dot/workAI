@@ -16,8 +16,8 @@ the application (graphnet.rollout, time_plan 'auto', compact record, all three c
 automatic mesh; receivers at 0.1 μs. Waveforms are written to reference/ (not in git).
 """
 import json
+import shutil
 import sys
-import tempfile
 import time
 from pathlib import Path
 import numpy as np
@@ -100,18 +100,21 @@ def network(h):
     s = plate(1. if auto else float(h)); s['acquisition'] = {'duration_us': DURATION, 'sample_step_us': NET_STEP}
     request = validate_request({'scene': s, 'mesh': 'auto'} if auto else {'scene': s, 'degree': 4}); scene = request['scene']
     mesh = make_mesh(scene, request['degree'], scene['numerics']['h_mm']); model = load(request['degree'], long_record=True); started = time.monotonic()
-    with tempfile.TemporaryDirectory() as tmp:   # what the application does for this request: compact record, automatic time layer
-        manifest = rollout(scene, mesh, model, Path(tmp) / 'record', {'case': f'plate5ms-{h}'}, time_plan='auto', record='compact', controls=LAWS, flush=True)
-        record = read_record(Path(tmp) / 'record')
     name = 'auto' if auto else f'h{float(h):g}'
+    # what the application does for this request: compact record, automatic time layer. The record directory persists, so
+    # an interrupted run resumes from its last chunk (graphnet.rollout checkpoints), as a paused job does in the application.
+    directory = REF / 'records' / name
+    manifest = rollout(scene, mesh, model, directory, {'case': f'plate5ms-{h}'}, time_plan='auto', record='compact', controls=LAWS, flush=True)
+    record = read_record(directory)
     np.savez_compressed(REF / f'plate5ms-network-{name}.npz', times_us=record['times_us'], probes_m=record['probes'])
     energies = record['energies']
     balance = [float(np.abs(e[:, 1] + e[:, 2] + e[:, 4] - e[:, 3]).max() / np.abs(e[:, 3]).max()) for e in energies]
     info = {'h_mm': float(scene['numerics']['h_mm']), 'degree': int(request['degree']), 'nodes': int(len(mesh['points'])), 'mesh': request.get('mesh_report'),
             'time_layer': {k: manifest['time_plan'].get(k) for k in ('scheme', 'layer_step_us', 'evaluations_per_control', 'phase_error_bound_rad', 'stability_number')},
-            'seconds': time.monotonic() - started, 'energy_balance': balance}
+            'seconds': float(manifest.get('elapsed_s') or time.monotonic() - started), 'energy_balance': balance}
     (ROOT / 'results' / f'plate5ms-network-{name}.json').write_text(json.dumps(info, ensure_ascii=False, indent=1, default=float) + '\n', encoding='utf-8')
     print('network', name, json.dumps({k: info[k] for k in ('h_mm', 'nodes', 'time_layer', 'seconds')}, default=float), flush=True)
+    shutil.rmtree(directory)
 
 
 def component(u):
