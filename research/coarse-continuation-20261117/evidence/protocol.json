@@ -1,0 +1,145 @@
+{
+  "schema": "workai.coarsegraph.continuation-protocol.v1",
+  "configuration": {
+    "schema": "workai.coarsegraph.continuation-pilot.v1",
+    "base_commit": "c0e035c8fde032aebbf4da2f848aec3f1082a6de",
+    "purpose": "A bounded, reproducible continuation pilot; not the original 13/5/16 experiment and not a release candidate.",
+    "initial_model": "coarsegraph/models/p4-h2-multisource/model.json",
+    "original_splits": "coarsegraph/specs/splits.json",
+    "reference": {
+      "engine": "3d_spectral",
+      "degree": 4,
+      "h_mm": 1.5,
+      "cfl": 0.3,
+      "duration_us": 30.0,
+      "sample_step_us": 0.05,
+      "seconds_per_case": 3600
+    },
+    "training": {
+      "degree": 4,
+      "h_mm": 2.0,
+      "cfl": 0.3,
+      "axes": "shared",
+      "increment_weight": 1.0,
+      "harmonic_weight": 1.0,
+      "iterations": 3,
+      "stall": 0.01
+    },
+    "reference_check": {
+      "pair_ids": [
+        "A-train",
+        "C-train"
+      ],
+      "space_factor": 0.6666666666666666,
+      "relative_tolerance": 0.01,
+      "relative_reporting_floor": 0.1,
+      "scope": "Predeclared spatial refinement checks on two training pairs only; not full reference certification."
+    },
+    "gate": {
+      "relative_tolerance": 0.05,
+      "relative_reporting_floor": 0.1,
+      "terms": [
+        "waveform",
+        "f",
+        "2f",
+        "nonlinear_increment_2f"
+      ]
+    },
+    "pairs": [
+      {
+        "id": "A-train",
+        "campaign": "labels-a-top-gaussian",
+        "split": "train",
+        "parameters": {
+          "source.frequency_mhz": 0.4,
+          "geometry.thickness_mm": 1.6
+        }
+      },
+      {
+        "id": "B-train",
+        "campaign": "labels-b-end-axial",
+        "split": "train",
+        "parameters": {
+          "source.frequency_mhz": 0.2,
+          "geometry.thickness_mm": 2.4
+        }
+      },
+      {
+        "id": "C-train",
+        "campaign": "labels-c-two-patch",
+        "split": "train",
+        "parameters": {
+          "source.frequency_mhz": 0.3,
+          "geometry.thickness_mm": 2.0
+        }
+      },
+      {
+        "id": "A-validation",
+        "campaign": "labels-a-top-gaussian",
+        "split": "validation",
+        "parameters": {
+          "source.frequency_mhz": 0.2,
+          "geometry.thickness_mm": 2.0
+        }
+      },
+      {
+        "id": "B-validation",
+        "campaign": "labels-b-end-axial",
+        "split": "validation",
+        "parameters": {
+          "source.frequency_mhz": 0.3,
+          "geometry.thickness_mm": 1.6
+        }
+      },
+      {
+        "id": "C-validation",
+        "campaign": "labels-c-two-patch",
+        "split": "validation",
+        "parameters": {
+          "source.frequency_mhz": 0.2,
+          "geometry.thickness_mm": 2.0
+        }
+      },
+      {
+        "id": "A-test",
+        "campaign": "labels-a-top-gaussian",
+        "split": "test",
+        "parameters": {
+          "source.frequency_mhz": 0.3,
+          "geometry.thickness_mm": 2.4
+        }
+      },
+      {
+        "id": "B-test",
+        "campaign": "labels-b-end-axial",
+        "split": "test",
+        "parameters": {
+          "source.frequency_mhz": 0.4,
+          "geometry.thickness_mm": 1.6
+        }
+      },
+      {
+        "id": "C-test",
+        "campaign": "labels-c-two-patch",
+        "split": "test",
+        "parameters": {
+          "source.frequency_mhz": 0.35,
+          "geometry.thickness_mm": 2.4
+        }
+      }
+    ],
+    "test_used_for_selection": false,
+    "accepted_for_solver_routing": false,
+    "accepted_for_offline_release": false
+  },
+  "configuration_sha256": "66715042b1ebffa81c028403ca7838ddcd366f3eab683fc996058867324450fc",
+  "source_sha256": {
+    "coarsegraph/models/p4-h2-multisource/model.json": "d4b39fbf44f7cae84b2cd28cd318146de8de15e9e42787a756882a4a893d0f04",
+    "coarsegraph/specs/splits.json": "3b63975a1e10ec846966c221f81f631820025d84568cf856eee4bb4735099109",
+    "coarsegraph/specs/labels-a-top-gaussian.json": "1f4add26c340a66cbcf7cd6d064a092065e152cded983a713cb26694f9373420",
+    "coarsegraph/specs/labels-b-end-axial.json": "fc604134b35d61f5a1ea182474031fcd811a05209e8f8c305d458ad6d7659c64",
+    "coarsegraph/specs/labels-c-two-patch.json": "9f8f12bccb820b6c5e6afe7c77178be316837f6194f4088ae9d2edbf268049a2"
+  },
+  "reference_identity": "Actual spectral3d.run solutions; regenerated labels, not recovered historical files.",
+  "scope": "Pilot: 3 train, 3 validation, 3 test pairs; no D comb cases or long-record certification."
+}

@@ -3,10 +3,19 @@ offline/model/* -text
 # Learned coarse-graph models: evaluation files record the SHA-256 of model.json, so a Windows checkout
 # (core.autocrlf) must not rewrite their line endings.
 coarsegraph/models/** -text
+# Training checkpoints bind the bytes of their forward dependencies and specs.
+coarsegraph/*.py text eol=lf
+coarsegraph/specs/*.json text eol=lf
+graphnet/*.py text eol=lf
+physics/*.py text eol=lf
+dispersion/*.py text eol=lf
 graphwave/*.py text eol=lf
 spectral3d/*.py text eol=lf
 solid/*.py text eol=lf
 # Signed COMSOL artifacts and hashed research snapshots keep their exact bytes.
 research/comsol-validation/** -text
 research/comsol-validation/data/** -text -diff
+research/coarse-continuation-20261117/** -text
+# Keep the full optimizer residual checkpoint without expanding it in line diffs.
+research/coarse-continuation-20261117/candidate/checkpoint.json -diff
 research/**/*.csv -text whitespace=cr-at-eol

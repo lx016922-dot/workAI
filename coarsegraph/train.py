@@ -14,8 +14,15 @@ with a forward-difference Jacobian (the operator has 6–16 parameters). After e
 accepted step the validation pairs are scored with the same residual; the
 parameter vector with the lowest validation loss is kept. Test pairs are only
 evaluated once, after the parameters are frozen.
+
+Every accepted step is saved to OUTPUT/checkpoint.json. Use the same command
+with --resume (without --init) after an interruption; --iterations is the TOTAL
+iteration target, not a number of additional steps. Once final testing has
+completed, start a separate run with --init OUTPUT/model.json and a new output
+directory instead of resuming model selection on the tested run.
 """
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -27,6 +34,8 @@ import numpy as np
 from solid.schema import require
 from .operator import parameterization
 from .simulate import Coarse, fine_projected, label_pairs
+from .checkpoint import (atomic_json, load_checkpoint, operator_snapshot, restore_operators,
+                         save_checkpoint, training_identity)
 
 REPO = Path(__file__).resolve().parents[1]
 FAILED = 10.
@@ -75,6 +84,13 @@ def harmonic_targets(pair, floor=.1, spread=(.9, 1., 1.1)):
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def training_source_hashes():
+    """Bind cached residuals to the complete local forward/metric implementation."""
+    modules = ('coarsegraph', 'graphnet', 'graphwave', 'physics', 'spectral3d', 'solid', 'dispersion')
+    return {f'{module}/{path.name}': digest(path) for module in modules
+            for path in sorted((REPO / module).glob('*.py')) if not path.name.startswith('test_')}
 
 
 class Problem:
@@ -178,22 +194,56 @@ def load_pairs(label_dirs, splits, degree, h_mm, cfl):
             scene = json.loads(Path(pair['murnaghan'], 'scene.json').read_text(encoding='utf-8'))
             from physics.receivers import receiver_points
             order = [rx['name'] for rx in receiver_points(scene)]
-            N, times = fine_projected(Path(pair['murnaghan'], 'out'), order); L, _ = fine_projected(Path(pair['linear'], 'out'), order)
+            N, times = fine_projected(Path(pair['murnaghan'], 'out'), order); L, linear_times = fine_projected(Path(pair['linear'], 'out'), order)
+            require(N.shape == L.shape and np.array_equal(times, linear_times), '线性与非线性标签的接收点或时间轴不一致。')
             manifest = {d: json.loads((Path(pair[d]).parents[1] / 'manifest.json').read_text(encoding='utf-8')) for d in ('murnaghan',)}
             fine_cost = [c for c in manifest['murnaghan']['cases'] if c['case_id'] == Path(pair['murnaghan']).name][0]
             pairs.append(dict(pair, split=split, scene=scene, names=order, times=times, fine_N=N, fine_I=N - L, frequency_mhz=scene['source']['frequency_mhz'],
                               fine_nodes=fine_cost['nodes'], fine_layers=fine_cost['internal_steps'], fine_elapsed_s=fine_cost['elapsed_s'],
-                              label_sha256={'linear': digest(Path(pair['linear'], 'out', 'result.json')), 'murnaghan': digest(Path(pair['murnaghan'], 'out', 'result.json'))}))
+                              label_sha256={'linear': digest(Path(pair['linear'], 'out', 'result.json')), 'murnaghan': digest(Path(pair['murnaghan'], 'out', 'result.json'))},
+                              input_sha256={law: {name: digest(Path(pair[law]) / name) for name in ('scene.json', 'out/result.json', 'out/lines.npz')}
+                                            for law in ('linear', 'murnaghan')}))
     return pairs
 
 
-def train(problem, train_pairs, validation_pairs, iterations, log, mu=1e-2, step=1e-6, theta0=None, stall=1e-2):
-    n = problem.parameterization.size; theta = np.zeros(n) if theta0 is None else np.asarray(theta0, dtype=float).copy()
-    r = problem.residuals([theta], train_pairs)[0]; loss = float(r @ r)
-    val = problem.residuals([theta], validation_pairs)[0]; best = {'theta': theta.copy(), 'validation_loss': float(val @ val), 'iteration': 0}
-    history = [{'iteration': 0, 'train_loss': loss, 'validation_loss': best['validation_loss'], 'mu': mu, 'theta': theta.tolist(), 'evaluations': problem.evaluations}]; log(history[-1])
-    stalls = 0
-    for it in range(1, iterations + 1):
+def train(problem, train_pairs, validation_pairs, iterations, log, mu=1e-2, step=1e-6, theta0=None, stall=1e-2,
+          resume=None, checkpoint=None):
+    """Optimize up to a total iteration target; checkpoints never depend on test pairs.
+
+    `resume` is the restored optimizer state from load_checkpoint. `checkpoint`
+    receives a complete state at initialization and after each accepted step.
+    """
+    require(iterations >= 0, '总迭代上限不能为负。')
+    require(resume is None or theta0 is None, '恢复检查点与初始参数不能同时提供。')
+    n = problem.parameterization.size
+    if resume is None:
+        theta = np.zeros(n) if theta0 is None else np.asarray(theta0, dtype=float).copy()
+        r = problem.residuals([theta], train_pairs)[0]; loss = float(r @ r)
+        val = problem.residuals([theta], validation_pairs)[0]; vl = float(val @ val)
+        best = {'theta': theta.copy(), 'validation_loss': vl, 'iteration': 0}
+        history = [{'iteration': 0, 'train_loss': loss, 'validation_loss': vl, 'mu': mu, 'theta': theta.tolist(), 'evaluations': problem.evaluations}]
+        log(history[-1]); iteration = 0; stalls = 0; stopped = None
+    else:
+        state = copy.deepcopy(resume); iteration = state['iteration']
+        require(iterations >= iteration, '总迭代上限小于检查点迭代数。')
+        theta = state['current']['theta']; r = state['current']['residual']; loss = state['current']['train_loss']
+        vl = state['current']['validation_loss']; best = state['best']; history = state['history']
+        mu = state['mu']; stalls = state['stalls']; stopped = state.get('stopped'); problem.evaluations = state['evaluations']
+        if state.get('recompute_residual'):
+            r = problem.residuals([theta], train_pairs)[0]; loss = float(r @ r)
+        log({'resumed_iteration': iteration, 'evaluations': problem.evaluations,
+             'recomputed_residual': bool(state.get('recompute_residual'))})
+
+    def save():
+        if checkpoint:
+            checkpoint({'iteration': iteration, 'mu': mu, 'stalls': stalls, 'evaluations': problem.evaluations,
+                        'stopped': stopped, 'current': {'theta': theta.copy(), 'train_loss': loss,
+                                                       'validation_loss': vl, 'residual': r.copy()},
+                        'best': copy.deepcopy(best), 'history': copy.deepcopy(history)})
+
+    save()
+    if stopped is not None: return best, history
+    for it in range(iteration + 1, iterations + 1):
         h = step * np.maximum(1, np.abs(theta)); trial = [theta + np.eye(n)[k] * h[k] for k in range(n)]
         J = np.stack([(rk - r) / h[k] for k, rk in enumerate(problem.residuals(trial, train_pairs))], 1)
         A = J.T @ J; g = J.T @ r; accepted = False
@@ -203,58 +253,118 @@ def train(problem, train_pairs, validation_pairs, iterations, log, mu=1e-2, step
             if lc < loss:
                 improvement = (loss - lc) / loss; theta, r, loss = candidate, rc, lc; mu = max(mu / 3, 1e-8); accepted = True; break
             mu *= 4
-        if not accepted: log({'iteration': it, 'stopped': 'no decrease after 8 damping increases', 'mu': mu}); break
+        iteration = it
+        if not accepted:
+            stopped = 'no decrease after 8 damping increases'
+            log({'iteration': it, 'stopped': stopped, 'mu': mu}); save(); break
         val = problem.residuals([theta], validation_pairs)[0]; vl = float(val @ val)
         if vl < best['validation_loss']: best = {'theta': theta.copy(), 'validation_loss': vl, 'iteration': it}
         history.append({'iteration': it, 'train_loss': loss, 'validation_loss': vl, 'mu': mu, 'theta': theta.tolist(), 'evaluations': problem.evaluations}); log(history[-1])
         stalls = stalls + 1 if improvement < stall else 0
-        if stalls >= 2: log({'iteration': it, 'stopped': f'relative train improvement below {stall:g} twice'}); break
+        if stalls >= 2: stopped = f'relative train improvement below {stall:g} twice'
+        save()
+        if stopped is not None: log({'iteration': it, 'stopped': stopped}); break
     return best, history
 
 
-def main():
+def argument_parser():
     parser = argparse.ArgumentParser(description=__doc__.split('\n')[0])
     parser.add_argument('--labels', type=Path, nargs='+', required=True); parser.add_argument('--splits', type=Path, required=True)
     parser.add_argument('--degree', type=int, default=3); parser.add_argument('--h-mm', type=float, default=3.); parser.add_argument('--cfl', type=float, default=.3)
-    parser.add_argument('--increment-weight', type=float, default=1.); parser.add_argument('--iterations', type=int, default=30); parser.add_argument('--workers', type=int, default=3)
+    parser.add_argument('--increment-weight', type=float, default=1.)
+    parser.add_argument('--iterations', type=int, default=30, help='total iteration target, including iterations before --resume (default 30)')
+    parser.add_argument('--workers', type=int, default=3)
     parser.add_argument('--harmonic-weight', type=float, default=0., help='weight of the per-receiver f/2f residuals (0 = time-domain loss only)')
     parser.add_argument('--stall', type=float, default=1e-2, help='stop after two accepted steps that each improve the training loss by less than this fraction')
-    parser.add_argument('--axes', choices=['shared', 'per_axis'], default='shared'); parser.add_argument('--init', type=Path, help='start from a trained model.json (shared parameters are copied to every axis)')
+    parser.add_argument('--axes', choices=['shared', 'per_axis'], default='shared')
+    start = parser.add_mutually_exclusive_group()
+    start.add_argument('--init', type=Path, help='start an independent run from model.json (shared parameters are copied to every axis)')
+    start.add_argument('--resume', action='store_true', help='resume OUTPUT/checkpoint.json after interruption; completed test runs require --init and a new output directory')
     parser.add_argument('--output', type=Path, required=True)
-    args = parser.parse_args(); args.output.mkdir(parents=True, exist_ok=True); started = time.monotonic()
+    return parser
+
+
+def main(argv=None):
+    args = argument_parser().parse_args(argv); started = time.monotonic()
+    require(args.iterations >= 0 and args.workers > 0, '迭代数必须非负，进程数必须为正。')
+    require(all(np.isfinite(v) and v >= 0 for v in (args.increment_weight, args.harmonic_weight, args.stall)), '损失权重和停止阈值必须是非负有限值。')
+    checkpoint_path = args.output / 'checkpoint.json'
+    if args.resume: require(checkpoint_path.is_file(), '--resume 需要输出目录中的 checkpoint.json。')
+    else:
+        require(not any((args.output / name).exists() for name in ('checkpoint.json', 'model.json', 'evaluation.json', 'training-log.jsonl')),
+                '输出目录已有训练结果；中断任务使用 --resume，独立训练请换新目录。')
+    args.output.mkdir(parents=True, exist_ok=True)
     pairs = load_pairs(args.labels, args.splits, args.degree, args.h_mm, args.cfl)
     split = {s: [p for p in pairs if p['split'] == s] for s in ('train', 'validation', 'test')}
     require(split['train'] and split['validation'] and split['test'], '训练、验证、测试集都不能为空。')
+    config = {'degree': args.degree, 'h_mm': args.h_mm, 'cfl': args.cfl, 'axes': args.axes,
+              'increment_weight': args.increment_weight, 'harmonic_weight': args.harmonic_weight, 'stall': args.stall,
+              'difference_step': 1e-6, 'initial_mu': 1e-2, 'max_stability': 1.5, 'harmonic_floor': .1,
+              'energy_weights_sha256': digest(REPO / 'offline/model/weights.npz'),
+              'network_metadata_sha256': {name: digest(REPO / 'offline/model' / name) for name in ('model.json', 'config.json')},
+              'source_sha256': training_source_hashes()}
+    identity = training_identity(config, pairs, json.loads(args.splits.read_text(encoding='utf-8')))
+    P = parameterization(args.degree, args.axes)
+    resumed = load_checkpoint(checkpoint_path, identity, P, args.iterations) if args.resume else None
+    metadata = copy.deepcopy(resumed['metadata']) if resumed else {'created_at_utc': datetime.now(timezone.utc).isoformat(), 'resume_count': 0}
+    prior_elapsed = metadata.get('elapsed_s', 0.)
+    if resumed: metadata['resume_count'] = metadata.get('resume_count', 0) + 1
+    initial_model = resumed['initial_model'] if resumed else None
+    latest = {'state': resumed['state']} if resumed else {}
     log_path = args.output / 'training-log.jsonl'
     def log(row):
         print(json.dumps(row), flush=True)
         with log_path.open('a', encoding='utf-8') as handle: handle.write(json.dumps(row) + '\n')
-    log({'pairs': {s: [p['key'] for p in v] for s, v in split.items()}, 'degree': args.degree, 'h_mm': args.h_mm, 'cfl': args.cfl})
+    log({'pairs': {s: [p['key'] for p in v] for s, v in split.items()}, 'degree': args.degree, 'h_mm': args.h_mm, 'cfl': args.cfl,
+         'training_identity_sha256': identity['sha256'], 'iterations_total_target': args.iterations})
+
+    def persist(state, phase='training'):
+        latest['state'] = state
+        metadata['elapsed_s'] = prior_elapsed + time.monotonic() - started
+        save_checkpoint(checkpoint_path, identity, state, P, phase=phase, iterations_target=args.iterations,
+                        initial_model=initial_model, metadata=metadata)
+
     with ProcessPoolExecutor(max_workers=args.workers) as pool:
         problem = Problem(pairs, args.degree, args.h_mm, args.cfl, args.increment_weight, pool, axes=args.axes, w_harmonic=args.harmonic_weight); theta0 = None
         if args.init:
-            start = json.loads(args.init.read_text(encoding='utf-8')); require(start['degree'] == args.degree, '初始模型的阶次不同。')
-            from .run import local_theta  # the stored operators in this machine's parameter basis
+            from .run import load_model, local_theta
+            start, _ = load_model(args.init); require(start['degree'] == args.degree, '初始模型的阶次不同。')
             theta0 = local_theta(start); theta0 = problem.parameterization.from_shared(theta0) if args.axes == 'per_axis' and start.get('axes', 'shared') == 'shared' else theta0
-            require(len(theta0) == problem.parameterization.size, '初始模型参数个数不符。'); log({'initialized_from': str(args.init), 'theta0': theta0.tolist()})
-        best, history = train(problem, split['train'], split['validation'], args.iterations, log, theta0=theta0, stall=args.stall)
-        P = problem.parameterization; frozen = best['theta']
-        evaluation = evaluate(problem, pairs, {'baseline_gll': np.zeros(P.size), 'learned': frozen}, args.output)
+            require(len(theta0) == problem.parameterization.size, '初始模型参数个数不符。')
+            initial_model = {'path': str(args.init), 'sha256': digest(args.init), 'snapshot': operator_snapshot(P, theta0, args.axes),
+                             'evaluation_scope': 'initial operators on this run\'s grid, time step and labels'}
+            log({'initialized_from': initial_model['path'], 'initial_model_sha256': initial_model['sha256'], 'theta0': theta0.tolist()})
+        if resumed and resumed['phase'] == 'frozen':
+            best = resumed['state']['best']; history = resumed['state']['history']; problem.evaluations = resumed['state']['evaluations']
+            log({'resuming_frozen_evaluation': True, 'selected_iteration': best['iteration']})
+        else:
+            best, history = train(problem, split['train'], split['validation'], args.iterations, log, theta0=theta0, stall=args.stall,
+                                  resume=resumed['state'] if resumed else None, checkpoint=persist)
+        frozen = best['theta']; persist(latest['state'], phase='frozen')
+        candidates = {'baseline_gll': np.zeros(P.size), 'learned': frozen}
+        if initial_model is not None: candidates['initial_model'] = restore_operators(initial_model['snapshot'], P, args.axes)[0]
+        evaluation = evaluate(problem, pairs, candidates, args.output)
     D, q, m = P.unpack(frozen); probe = Coarse(pairs[0]['scene'], args.degree, args.h_mm, args.cfl)
     summary = summarize(evaluation)
     model = {'schema': 'workai.coarsegraph.model.v1', 'degree': args.degree, 'h_mm': args.h_mm, 'cfl': args.cfl, 'axes': args.axes, 'parameter_count': P.size, 'theta': frozen.tolist(),
-             'initialized_from': str(args.init) if args.init else None,
+             'initialized_from': initial_model['path'] if initial_model else None,
+             'initial_model_sha256': initial_model['sha256'] if initial_model else None,
              'operators': {'derivative': D.tolist(), 'quadrature_weights': q.tolist(), 'mass_weights': m.tolist(), 'gll_weights': P.w.tolist(), 'gll_nodes': P.x.tolist()},
              'constraints': P.check(frozen), 'selected_iteration': best['iteration'], 'validation_loss': best['validation_loss'],
              'energy_network': 'frozen graph network quadratic/cubic tensors and state weights (offline/model/weights.npz)',
-             'training': {'increment_weight': args.increment_weight, 'harmonic_weight': args.harmonic_weight, 'stall': args.stall, 'iterations_requested': args.iterations, 'function_evaluations': problem.evaluations, 'elapsed_s': time.monotonic() - started,
-                          'labels': [{'key': p['key'], 'split': p['split'], 'label_sha256': p['label_sha256']} for p in pairs], 'test_used_for_selection': False},
+             'training': {'increment_weight': args.increment_weight, 'harmonic_weight': args.harmonic_weight, 'stall': args.stall,
+                          'iterations_requested': args.iterations, 'iterations_run': latest['state']['iteration'], 'iterations_semantics': 'total target',
+                          'function_evaluations': problem.evaluations, 'elapsed_s': prior_elapsed + time.monotonic() - started,
+                          'resume_count': metadata['resume_count'], 'training_identity_sha256': identity['sha256'], 'checkpoint': 'checkpoint.json',
+                          'initial_model_evaluation': initial_model['evaluation_scope'] if initial_model else None,
+                          'labels': [{'key': p['key'], 'split': p['split'], 'label_sha256': p['label_sha256'], 'input_sha256': p['input_sha256']} for p in pairs], 'test_used_for_selection': False},
              'cost': {'coarse_nodes': len(probe.mesh['points']), 'coarse_layers': probe.steps, 'fine_nodes_layers_examples': [{'key': p['key'], 'nodes': p['fine_nodes'], 'layers': p['fine_layers'], 'elapsed_s': p['fine_elapsed_s']} for p in pairs[:3]]},
              'summary': summary, 'source_sha256': {f'coarsegraph/{p.name}': digest(p) for p in sorted((REPO / 'coarsegraph').glob('*.py'))},
              'created_at_utc': datetime.now(timezone.utc).isoformat(), 'accepted_for_solver_routing': False}
-    (args.output / 'model.json').write_text(json.dumps(model, ensure_ascii=False, indent=1, allow_nan=False) + '\n', encoding='utf-8')
-    (args.output / 'evaluation.json').write_text(json.dumps(evaluation, ensure_ascii=False, indent=1, allow_nan=False) + '\n', encoding='utf-8')
-    (args.output / 'history.json').write_text(json.dumps(history, indent=1) + '\n', encoding='utf-8')
+    atomic_json(args.output / 'model.json', model)
+    atomic_json(args.output / 'evaluation.json', evaluation)
+    atomic_json(args.output / 'history.json', history)
+    persist(latest['state'], phase='completed')
     log({'done': True, 'summary': summary})
 
 
