@@ -91,12 +91,16 @@ def templates():
 V2 = 'workai.hyperelastic.solid.v2'
 
 
-def validate_v2_request(body, controls=3):
+def validate_v2_request(body, controls=3, trained=False):
     """Version-2 scenes for the v2 input layer: any planar-face sources, signals, profiles, symmetry and absorbing faces.
 
-    Geometry, material and mesh-size bounds stay those of the offline package; every v2 job runs as a
+    Geometry and material bounds stay those of the offline package; every v2 job runs as a
     chunked record (bounded memory, resumable). Accuracy is governed by the mesh: check it with
-    `sweep converge` rather than relying on the original 14 μs acceptance."""
+    `sweep converge` rather than relying on the original 14 μs acceptance.
+
+    Element sizes: 0.1–2.5 mm; `trained` (the trained time layer, the fast engine) keeps 0.8–2.5 mm (offline/automesh.py)."""
+    from .automesh import H_MAX, H_MIN, H_MIN_TRAINED, size_range
+    h_min = H_MIN_TRAINED if trained else H_MIN
     from graphnet.model import load
     from graphnet.inputs import network_scene
     from physics.scene import sources
@@ -117,12 +121,12 @@ def validate_v2_request(body, controls=3):
         # The software chooses the degree and element size (offline/automesh.py); any h_mm in the scene is replaced.
         from .automesh import choose
         if not isinstance(raw.get('numerics'), dict): raise ValueError('场景需要 numerics。')
-        s, report = choose(raw, lambda trial, degree: _bounded_network_scene(trial, degree, load(degree, long_record=True)['material']), controls=controls)
+        s, report = choose(raw, lambda trial, degree: _bounded_network_scene(trial, degree, load(degree, long_record=True)['material']), controls=controls, h_min=h_min)
         degree = report['degree']
     else:
         h = raw.get('numerics', {}).get('h_mm')
-        if type(h) not in (int, float) or not .8 <= h <= 2.5:
-            raise ValueError('网格尺寸需要在 0.8–2.5 mm 之间。')
+        if type(h) not in (int, float) or not h_min <= h <= H_MAX:
+            sizes, note = size_range(h_min); raise ValueError(f'网格尺寸需要在 {sizes} 之间。{note}')
         degree = body['degree']
         s = _bounded_network_scene(raw, degree, load(degree, long_record=True)['material'])
     for src in sources(s):
@@ -191,11 +195,12 @@ def validate_request(body):
         raise ValueError('记录方式设置需要 v2 场景。')
     if 'time_stepping' in options and not (body.get('engine', 'network') == 'network' and v2):
         raise ValueError('时间层设置只用于 v2 场景的冻结网络引擎；快速引擎使用模型训练时的时间层。')
-    return dict(_validate_request(body, len(CONTROL_SETS[options.get('controls', 'all')])), **options)
+    return dict(_validate_request(body, len(CONTROL_SETS[options.get('controls', 'all')]), options.get('time_stepping') == 'frozen'), **options)
 
 
-def _validate_request(body, controls=3):
-    """`controls`: how many constitutive controls will run (the automatic mesh's memory limit depends on it)."""
+def _validate_request(body, controls=3, trained=False):
+    """`controls`: how many constitutive controls will run (the automatic mesh's memory limit depends on it).
+    `trained`: the trained time layer was asked for, which keeps the element sizes it was validated on."""
     auto = body.get('mesh') == 'auto'
     if 'mesh' in body and not auto:
         raise ValueError('mesh 只能为 auto（软件自动选择网格）。')
@@ -219,16 +224,16 @@ def _validate_request(body, controls=3):
         check(body['scene'], name)  # the engine's own limits first, so a refusal names them
         if auto:
             # The fast engine runs on its model's own coarse grid: validate the scene at the accuracy-based size, without the fine-mesh budget.
-            from .automesh import DEGREE, H_MAX, H_MIN, accuracy_h
+            from .automesh import DEGREE, H_MAX, H_MIN_TRAINED, accuracy_h
             scene = copy.deepcopy(body['scene'])
             if not isinstance(scene.get('numerics'), dict): raise ValueError('场景需要 numerics。')
-            scene['numerics']['h_mm'] = round(min(H_MAX, max(H_MIN, accuracy_h(scene))), 4)
-            result = dict(validate_v2_request({'scene': scene, 'degree': DEGREE}), mesh='auto')
-        else: result = validate_v2_request({k: v for k, v in body.items() if k in ('scene', 'degree')})
+            scene['numerics']['h_mm'] = round(min(H_MAX, max(H_MIN_TRAINED, accuracy_h(scene))), 4)
+            result = dict(validate_v2_request({'scene': scene, 'degree': DEGREE}, trained=True), mesh='auto')
+        else: result = validate_v2_request({k: v for k, v in body.items() if k in ('scene', 'degree')}, trained=True)
         check(result['scene'], name)
         return dict(result, engine='coarse', coarse_model=name)
     if isinstance(body['scene'], dict) and body['scene'].get('schema') == V2:
-        return validate_v2_request({k: v for k, v in body.items() if k in ('scene', 'degree', 'mesh')}, controls)
+        return validate_v2_request({k: v for k, v in body.items() if k in ('scene', 'degree', 'mesh')}, controls, trained)
     raw = copy.deepcopy(body['scene'])
     signal = raw.pop('signal', {'kind': 'hann'})
     if not isinstance(signal, dict):
