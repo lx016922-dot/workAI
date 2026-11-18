@@ -39,7 +39,7 @@ import json, math, sys
 import numpy as np
 from pathlib import Path
 from harness import JOBS, RESULTS, series
-from cases_s1s2 import ABSORB, CASES, CL, HALF, LENGTH, frequency_mhz
+from cases_s1s2 import ABSORB, CASES, CL, HALF, HALVES, LENGTH, frequency_mhz
 from scipy.interpolate import CubicSpline, RectBivariateSpline
 from theory_shg_lamb import burst_table, pair
 
@@ -91,13 +91,13 @@ def burst_at_receivers(xs, t, lin, x0, table, span=.14):
     power = np.abs(u1) ** 2; group = 1 / np.polyfit(xs, (power * times[:, None]).sum(0) / power.sum(0), 1)[0]; square = u1 ** 2; norm = (np.abs(square) ** 2).sum(0)
     a, b = np.meshgrid(np.arange(m), np.arange(m), indexing='ij'); ka, kb = k1[a], k1[b]; dk = ka + kb - table['k2'](w[a] + w[b])
     sums = np.exp(1j * np.outer(times, 2 * w[0] + (w[1] - w[0]) * np.arange(2 * m - 1)))                        # e^{i(ωa+ωb)t}: the pairs with the same sum share a bin
-    out = {'group_velocity': float(group), 'slope': {}}
+    out = {'group_velocity': float(group), 'slope': {}, 'r': {}}
     for part in PARTS:
         pairs = np.conj(table['kappa'][part](w[a], w[b])) * c0[a] * c0[b]; r = []
         for i, x in enumerate(xs):
             coefficient = np.zeros(2 * m - 1, dtype=complex); np.add.at(coefficient, a + b, pairs * np.exp(-1j * (ka + kb) * x) * np.conj(growth_factor(dk, x - x0)))
             r.append(((sums @ coefficient) * square[:, i].conj()).sum() / norm[i])
-        out['slope'][part] = complex(line(xs, np.array(r))[0])
+        out['r'][part] = np.array(r); out['slope'][part] = complex(line(xs, out['r'][part])[0])
     return out
 
 
@@ -118,13 +118,16 @@ def burst_in_field(grid, u1, use, table, span=.14):
     k = k[keep]; C = np.fft.fft(u1)[keep] / n * np.exp(-1j * k * grid[0]); w = table['omega_of_k1'](k); xs = grid[use]
     a, b = np.meshgrid(np.arange(len(k)), np.arange(len(k)), indexing='ij'); dk = (k[a] + k[b] - table['k2'](w[a] + w[b])).ravel(); phase = np.exp(1j * np.outer(xs, (k[a] + k[b]).ravel()))
     grow = np.stack([growth_factor(dk, x) for x in xs]); primary = np.exp(1j * np.outer(xs, k)) @ C
-    return {part: train_fit(xs, primary, (phase * grow) @ (table['kappa'][part](w[a], w[b]) * C[a] * C[b]).ravel()) for part in PARTS}
+    out = {}
+    for part in PARTS:
+        u2 = (phase * grow) @ (table['kappa'][part](w[a], w[b]) * C[a] * C[b]).ravel(); out[part] = dict(train_fit(xs, primary, u2), local=u2 / primary ** 2)
+    return out
 
 
 def analyse(name, half=HALF, job=None, data=None):
-    """`data`: (times_us, linear, stvk, full) of u_x at the receivers when the record was not written by the worker."""
+    """`half`: the half thickness (mm) of the case's plate. `data`: (times_us, linear, stvk, full) of u_x at the receivers when the record was not written by the worker."""
     f = frequency_mhz(half) * 1e6; omega = 2 * math.pi * f; k = omega / CL
-    scene = CASES[name](); points = [r['point_mm'] for r in scene['receivers']]; xs = np.array([p[0] for p in points]) * (half / HALF) * 1e-3
+    scene = CASES[name](); points = [r['point_mm'] for r in scene['receivers']]; xs = np.array([p[0] for p in points]) * 1e-3
     if data is None:
         job = job or JOBS / name
         t, lin = series(job, 'linear', points); _, stv = series(job, 'stvk', points); _, ful = series(job, 'full', points)
@@ -150,15 +153,15 @@ def analyse(name, half=HALF, job=None, data=None):
         explained = float(1 - ((np.abs(u2 - r * square) ** 2).sum(0) / (np.abs(u2) ** 2).sum(0)).mean())   # how much of the 2f band follows u1²
         out['parts'][part] = {'slope_per_m2': [slope.real, slope.imag], 'theory_per_m2': [expected.real, expected.imag], 'magnitude_difference': abs(slope) / abs(expected) - 1,
                               'phase_difference_deg': math.degrees(np.angle(slope / expected)), 'fit_residual': residual, 'slope_standard_error': uncertainty, 'slope_over_k_squared': abs(slope) / (k * k),
-                              'theory_over_k_squared': abs(expected) / (k * k), 'r_abs_per_m': np.abs(r).tolist(), 'follows_square_of_primary': explained,
+                              'theory_over_k_squared': abs(expected) / (k * k), 'r_per_m': [r.real.tolist(), r.imag.tolist()], 'intercept_per_m': [intercept.real, intercept.imag], 'follows_square_of_primary': explained,
                               'A2_m': np.abs(increment.T @ C2w * 2 / len(t)).tolist(), 'peak_ratio_to_primary': float(np.abs(u2).max() / amplitude.max())}
     out['A1_m'] = np.abs(C1 * 2 / len(t)).tolist()
     # The same analysis of the theory summed over the burst's spectrum; every pair grows from the source (the comb's centre, or the loaded end).
-    x0 = scene['source']['center_mm'][0] * (half / HALF) * 1e-3; expected = burst_at_receivers(xs, t, lin, x0, burst(half))
+    x0 = scene['source']['center_mm'][0] * 1e-3; expected = burst_at_receivers(xs, t, lin, x0, burst(half))
     out['group_velocity'].update(burst_theory=expected['group_velocity'], difference_from_burst=group / expected['group_velocity'] - 1)
     for part in PARTS:
         p = out['parts'][part]; slope = complex(*p['slope_per_m2']); e = expected['slope'][part]
-        p.update(burst_theory_per_m2=[e.real, e.imag], burst_over_single_frequency=abs(e) / abs(theory['growth'][part]) - 1, burst_phase_deg=math.degrees(np.angle(e / np.conj(theory['growth'][part]))),
+        p.update(burst_r_per_m=[expected['r'][part].real.tolist(), expected['r'][part].imag.tolist()], burst_theory_per_m2=[e.real, e.imag], burst_over_single_frequency=abs(e) / abs(theory['growth'][part]) - 1, burst_phase_deg=math.degrees(np.angle(e / np.conj(theory['growth'][part]))),
                  magnitude_difference_from_burst=abs(slope) / abs(e) - 1, phase_difference_from_burst_deg=math.degrees(np.angle(slope / e)))
     return out, {'t': t, 'lin': lin, 'stv': stv, 'ful': ful}
 
@@ -236,7 +239,9 @@ def snapshot(name, half=HALF, job=None, fields=None, points=None, time_us=None, 
                                   # the same fit of the theory summed over the pairs of components of this train
                                   'burst_theory_per_m2': [b['slope'].real, b['slope'].imag], 'burst_over_single_frequency': abs(b['slope']) / abs(expected) - 1, 'burst_phase_deg': math.degrees(np.angle(b['slope'] / expected)),
                                   'burst_origin_mm': b['origin'] * 1e3, 'magnitude_difference_from_burst': abs(fit['slope']) / abs(b['slope']) - 1, 'phase_difference_from_burst_deg': math.degrees(np.angle(fit['slope'] / b['slope'])),
-                                  'ratio_difference_from_burst': abs(fit['ratio']) / abs(b['ratio']) - 1, 'ratio_phase_difference_from_burst_deg': math.degrees(np.angle(fit['ratio'] / b['ratio']))}
+                                  'ratio_difference_from_burst': abs(fit['ratio']) / abs(b['ratio']) - 1, 'ratio_phase_difference_from_burst_deg': math.degrees(np.angle(fit['ratio'] / b['ratio'])),
+                                  # u2 / u1² along the train (every 40th point), software and burst theory
+                                  'local_x_mm': (xs[::40] * 1e3).tolist(), 'local_ratio_abs_per_m': np.abs(u2[use] / u1[use] ** 2)[::40].tolist(), 'burst_local_ratio_abs_per_m': np.abs(b['local'])[::40].tolist()}
     # mode shapes through the thickness, relative to u_x on the top face: S1 in the linear field at k, S2 in the increment at 2k
     zt = theory['z']
     for label, parts, centre, U in (('S1', ('linear', None), k, theory['U1']), ('S2', ('full', 'linear'), 2 * k, theory['U2'])):
@@ -255,6 +260,15 @@ def scaling(a, b):
     out = {'linear': float(np.linalg.norm(a['lin']) / np.linalg.norm(b['lin']))}
     for part, (p, q) in {'total': ('ful', 'lin'), 'geometric': ('stv', 'lin'), 'material': ('ful', 'stv')}.items():
         out[part] = float(np.linalg.norm(a[p] - a[q]) / np.linalg.norm(b[p] - b[q]))
+    return out
+
+
+def similarity(a, b, s):
+    """Run b is run a with every length and time divided by s and the same traction: sample for sample its displacements are those
+    of a divided by s. The relative differences of the linear response and of the increments."""
+    out = {'linear': float(np.linalg.norm(a['lin'] - s * b['lin']) / np.linalg.norm(a['lin']))}
+    for part, (p, q) in {'total': ('ful', 'lin'), 'geometric': ('stv', 'lin'), 'material': ('ful', 'stv')}.items():
+        out[part] = float(np.linalg.norm((a[p] - a[q]) - s * (b[p] - b[q])) / np.linalg.norm(a[p] - a[q]))
     return out
 
 
@@ -283,8 +297,12 @@ if __name__ == '__main__':
     results, raw = {}, {}
     for name in CASES:
         if (JOBS / name / 'key').exists():
-            results[name], raw[name] = analyse(name); results[name]['snapshots'] = [snapshot(name, index=i) for i in ((1, 2) if name.startswith('N4') else (1,))]; print(summary(results[name]), flush=True)
+            half = HALVES.get(name, HALF); results[name], raw[name] = analyse(name, half)
+            results[name]['elapsed_s'] = float((JOBS / name / 'elapsed_s').read_text()); results[name]['nodes'] = int(len(np.load(JOBS / name / 'record' / 'mesh.npz')['points']))
+            results[name]['snapshots'] = [snapshot(name, half, index=i) for i in ((1, 2) if name.startswith('N4') else (1,))]; print(summary(results[name]), flush=True)
     for full, halved in (('N3-e3', 'N3-half'), ('N4-e3', 'N4-half')):
         if full in raw and halved in raw:
             results[f'amplitude_scaling_{full[:2]}'] = scaling(raw[full], raw[halved]); print(full[:2], '2 MPa / 1 MPa:', {k: round(v, 4) for k, v in results[f'amplitude_scaling_{full[:2]}'].items()})
+    if 'N3-e3' in raw and 'N3-2mm' in raw:
+        results['similarity_N3'] = similarity(raw['N3-e3'], raw['N3-2mm'], HALF / HALVES['N3-2mm']); print('8 mm plate against 4 × the 2 mm plate:', {k: f'{v:.1e}' for k, v in results['similarity_N3'].items()})
     (RESULTS / 'results-s1s2.json').write_text(json.dumps(results, default=float))

@@ -16,12 +16,13 @@ driven and observed in-plane, and the receivers take u_x on the top face. Two ex
 The workbench accepts element sizes of 0.8–2.5 mm, and the second harmonic needs about three elements over the
 half thickness, so the plate here is 8 mm thick (0.4448 MHz). Elasticity without dissipation has no length scale:
 with every length and time multiplied by s and the same traction, displacements multiply by s and strains are
-unchanged, so this is the 2 mm plate at 1.779 MHz in other units (`scaled` runs that plate outside the workbench's
-size limit to check it, see analyze_s1s2.py).
+unchanged, so this is the 2 mm plate at 1.779 MHz in other units. N3-2mm is that plate itself (elements of
+0.333 mm), run through relaxed_worker.py, which differs from the workbench's worker only in the size rule.
 
     python cases_s1s2.py N3-e3 N4-e3      # 3 elements over the half thickness (2f resolution 9.6 in the workbench's measure)
     python cases_s1s2.py N3-e4 N4-e4      # 4 elements (12.9)
     python cases_s1s2.py N3-half          # half the amplitude on the first mesh
+    python cases_s1s2.py N3-2mm           # the 2 mm plate at 1.779 MHz, outside the workbench's element-size rule
 """
 import math, sys
 from harness import scene, run
@@ -69,8 +70,10 @@ def endface(elements, amplitude=2., half=HALF):
 
 
 CASES = {'N3-e3': lambda: s1s2(3), 'N3-e4': lambda: s1s2(4), 'N3-e5': lambda: s1s2(5), 'N3-half': lambda: s1s2(3, amplitude=1.),
-         'N4-e3': lambda: endface(3), 'N4-e4': lambda: endface(4), 'N4-half': lambda: endface(3, amplitude=1.)}
+         'N4-e3': lambda: endface(3), 'N4-e4': lambda: endface(4), 'N4-half': lambda: endface(3, amplitude=1.),
+         'N3-2mm': lambda: s1s2(3, half=1.)}
+HALVES = {'N3-2mm': 1.}                                # half thickness (mm) of the cases that are not the 8 mm plate
 
 if __name__ == '__main__':
     for name in sys.argv[1:] or CASES:
-        job = run(name, CASES[name]()); print(name, 'done', (job / 'elapsed_s').read_text(), flush=True)
+        job = run(name, CASES[name](), relaxed=name in HALVES); print(name, 'done', (job / 'elapsed_s').read_text(), flush=True)

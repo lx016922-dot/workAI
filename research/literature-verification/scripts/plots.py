@@ -61,6 +61,36 @@ def fig_echo(e):
     fig.tight_layout(); fig.savefig(OUT / 'fig4-absorbing-echo.png'); plt.close(fig)
 
 
+def fig_s1s2(r):
+    """The synchronous pair: growth at the receivers (comb), growth along the wave train (end face), mode shapes."""
+    fig, ax = plt.subplots(1, 3, figsize=(11, 3.1)); labels = {'total': '完整', 'geometric': '几何', 'material': '材料'}; colours = {'total': INK, 'geometric': BLUE, 'material': ORANGE}
+    comb = r.get('N3-e4') or r['N3-e3']; x = np.array(comb['x_mm']); k2 = comb['k_squared']
+    for part in ('material', 'total', 'geometric'):
+        p = comb['parts'][part]; a = ax[0]; col = colours[part]
+        a.plot(x, np.hypot(*p['r_per_m']) / k2 * 1e3, 'o', ms=3, color=col, label=f'软件：{labels[part]}'); a.plot(x, np.hypot(*p['burst_r_per_m']) / k2 * 1e3, '-', lw=1, color=col)
+        slope = complex(*p['theory_per_m2']); origin = -complex(*p['intercept_per_m']) / complex(*p['slope_per_m2']); a.plot(x, abs(slope) * (x * 1e-3 - origin.real) / k2 * 1e3, ':', lw=.8, color=col)
+    a.plot([], [], '-', color='gray', lw=1, label='理论：本次脉冲的频谱'); a.plot([], [], ':', color='gray', lw=.8, label='理论：单一频率 κ₂·(x − x₀)')
+    a.set(xlabel='接收点 x (mm)', ylabel=r'$|u_2/u_1^2|/k^2$ (mm)', title='梳状激励：二次谐波随距离增长'); a.legend(fontsize=6)
+    end = r.get('N4-e4') or r.get('N4-e3'); a = ax[1]
+    if end:
+        k2 = end['k_squared']
+        for s, marker in zip(end['snapshots'], ('o', 's')):
+            for part in ('material', 'total', 'geometric'):
+                p = s['parts'][part]; xs = np.array(p['local_x_mm']); col = colours[part]
+                a.plot(xs, np.array(p['local_ratio_abs_per_m']) / k2 * 1e3, marker, ms=2.5, color=col, label=f"软件：{labels[part]}" if marker == 'o' else None)
+                a.plot(xs, np.array(p['burst_local_ratio_abs_per_m']) / k2 * 1e3, '-', lw=1, color=col); a.plot(xs, np.hypot(*p['theory_per_m2']) * xs * 1e-3 / k2 * 1e3, ':', lw=.8, color=col)
+        a.set(xlabel='沿波包 x (mm)，x = 0 为加载端', ylabel=r'$|u_2/u_1^2|/k^2$ (mm)', title=f"端面激励：{end['snapshots'][0]['time_us']:.0f} 与 {end['snapshots'][-1]['time_us']:.0f} μs 的整场"); a.legend(fontsize=6)
+    a = ax[2]; shapes = (end or comb)['snapshots'][0]['mode_shapes']
+    for label, col in (('S1', BLUE), ('S2', ORANGE)):
+        m = shapes[label]; z = np.array(m['z_mm'])
+        for key, style, name in (('ux', '-', 'uₓ'), ('uz', '--', 'u_z')):
+            # the mode shapes are real up to a common phase: uz is a quarter period from ux
+            measured = np.array(m[key]); expected = np.array(m[key + '_theory']); axis = 0 if key == 'ux' else 1
+            a.plot(expected[:, axis], z, style, color=col, lw=1, label=f'{label} {name} 理论'); a.plot(measured[:, axis], z, 'o', ms=3, color=col)
+    a.set(xlabel='相对上表面 uₓ 的位移', ylabel='z (mm)，0 为中面', title='板厚方向模态形状（点 = 软件）'); a.legend(fontsize=6)
+    fig.tight_layout(); fig.savefig(OUT / 'fig5-s1s2-synchronous-pair.png'); plt.close(fig)
+
+
 if __name__ == '__main__':
     for f in ('Noto Sans CJK SC', 'WenQuanYi Zen Hei', 'SimHei'):
         if any(f in x.name for x in matplotlib.font_manager.fontManager.ttflist): plt.rcParams['font.family'] = f; break
@@ -69,4 +99,6 @@ if __name__ == '__main__':
     if r2: fig_lamb(r2)
     if r2 and 'echo' in r2: fig_echo(r2['echo'])
     if s: fig_shg(s)
+    s1s2 = load('results-s1s2.json')
+    if s1s2 and 'N3-e3' in s1s2: fig_s1s2(s1s2)
     print(sorted(p.name for p in OUT.glob('*.png')))
