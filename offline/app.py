@@ -21,6 +21,7 @@ from urllib.parse import urlsplit, parse_qs, unquote
 from .domain import ROOT, ALL_PARTS, digest, model_info, templates, validate_request
 from .recording import traces, manifest
 from .preview import preview
+from .scan import Busy, ID as SCAN_ID, Scans, plan as scan_plan
 
 REPOSITORY = ROOT.parent
 # Desktop application version (the frozen network keeps its own model version in offline/model).
@@ -66,6 +67,10 @@ class Application:
             target = self.jobs / p.parent.name
             if not target.exists():
                 shutil.copytree(p.parent, target)
+        self.scans = Scans(self)   # parameter scans: queues of ordinary jobs (offline/scan.py)
+
+    def busy(self):
+        return self.process is not None and self.process.poll() is None
 
     def path(self, job):
         if not re.fullmatch(r'local-[a-f0-9]{32}', job):
@@ -99,18 +104,21 @@ class Application:
             except subprocess.TimeoutExpired:
                 pass
 
-    def submit(self, value):
+    def submit(self, value, scan=None):
+        """Start a computation. `scan`: {'id', 'index', 'count'} when it is a combination of a parameter scan (kept in its status)."""
         request = validate_request(value)
         self.settle()
+        if scan is None and self.scans.active():   # between two combinations of a scan nothing runs, but the queue is taken
+            raise Busy('参数扫描正在进行：请先暂停扫描，或等它完成。')
         with self.lock:
-            if self.closed or (self.process is not None and self.process.poll() is None):
-                raise ValueError('已有任务正在运行，请等待完成。')
+            if self.closed or self.busy():
+                raise Busy('已有任务正在运行，请等待完成。')
             job = 'local-' + secrets.token_hex(16)
             directory = self.jobs / job
             directory.mkdir()
             save(directory / 'request.json', request)
             save(directory / 'status.json', {'job_id': job, 'name': request['scene']['name'], 'phase': 'starting',
-                 'started_at_utc': datetime.now(timezone.utc).isoformat(), 'controls_completed': 0, 'elapsed_s': 0})
+                 'started_at_utc': datetime.now(timezone.utc).isoformat(), 'controls_completed': 0, 'elapsed_s': 0, **({'scan': scan} if scan else {})})
             self.launch(job)
             return {'job_id': job}
 
@@ -151,7 +159,9 @@ class Application:
             status.update(phase='starting',message='正在校验记录并继续计算。')
             save(directory/'status.json',status)
             self.launch(job)
-            return {'job_id':job}
+        if status.get('scan'):   # a combination of a paused scan continued from its own record: the scan runs again
+            self.scans.job_resumed(status['scan'])
+        return {'job_id':job}
 
     def fail(self, job, message):
         status = self.status(job)
@@ -169,6 +179,10 @@ class Application:
             self.fail(job, '计算超过 90 分钟预算，已停止。')
         if self.process is process:
             self.fail(job, '计算进程退出，未生成完整结果。请查看任务目录中的 worker.log。')
+        try:
+            self.scans.advance()   # the next combination of a running parameter scan
+        except Exception as error:   # the queue must not die with a thread: the scan stays where it is and can be continued
+            print(f'参数扫描未能启动下一个组合：{error}', file=sys.stderr, flush=True)
 
     def close(self):
         with self.lock:
@@ -225,6 +239,19 @@ def handler(application):
                 if url.path == '/api/jobs':
                     rows = [application.status(p.name) for p in application.jobs.iterdir() if re.fullmatch(r'local-[a-f0-9]{32}', p.name)]
                     return self.reply(200, sorted(rows, key=lambda x: x['started_at_utc'], reverse=True))
+                if url.path == '/api/scans':
+                    return self.reply(200, application.scans.list())
+                match = re.fullmatch(r'/api/scans/(' + SCAN_ID + r')(?:/(summary|summary\.csv))?', url.path)
+                if match:
+                    scan, kind = match.groups()
+                    if not kind:
+                        return self.reply(200, application.scans.detail(scan))
+                    query = parse_qs(url.query); window = None
+                    if 'start_us' in query or 'end_us' in query:
+                        window = [float(query['start_us'][0]), float(query['end_us'][0])]
+                    if kind == 'summary':
+                        return self.reply(200, application.scans.summary(scan, window))
+                    return self.reply(200, application.scans.summary_csv(scan, window), 'text/csv; charset=utf-8', attachment=scan + '.csv')
                 match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})(?:/(result|field|export|request))?', url.path)
                 if match:
                     job, kind = match.groups()
@@ -288,7 +315,8 @@ def handler(application):
             try:
                 self.local_request()
                 match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume)',self.path)
-                if self.path not in ('/api/jobs', '/api/preview', '/api/shutdown', '/api/interpret', '/api/defect') and not match:
+                scan = re.fullmatch(r'/api/scans/(' + SCAN_ID + r')/(pause|resume|retry)', self.path)
+                if self.path not in ('/api/jobs', '/api/preview', '/api/shutdown', '/api/interpret', '/api/defect', '/api/scans', '/api/scans/plan') and not match and not scan:
                     raise FileNotFoundError()
                 if not secrets.compare_digest(self.headers.get('X-WorkAI-Token', ''), application.token):
                     raise PermissionError('请刷新应用页面后重试。')
@@ -308,6 +336,12 @@ def handler(application):
                         with application.trace_lock:
                             return self.reply(200,traces(application.path(job)/'record',body['part'],body['points']))
                     return self.reply(202,application.control(job,action))
+                if scan:
+                    return self.reply(202, application.scans.control(*scan.groups()))
+                if self.path == '/api/scans/plan':
+                    return self.reply(200, scan_plan(body, application.data))
+                if self.path == '/api/scans':
+                    return self.reply(202, application.scans.create(body))
                 if self.path == '/api/preview':
                     return self.reply(200, preview(body, application.data))
                 if self.path == '/api/interpret':

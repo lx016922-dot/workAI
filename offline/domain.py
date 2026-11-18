@@ -132,8 +132,22 @@ def validate_v2_request(body, controls=3, trained=False):
     for src in sources(s):
         if sample * 2 * highest_frequency_mhz(src) > 1 / 8 + 1e-12:
             raise ValueError(f'{src.get("name", "主激励")}：二次谐波最高频率至少需要 8 个输出采样点/周期。')
+    _receivers_inside(s)
     if report is None: return {'scene': s, 'degree': degree}
     return {'scene': s, 'degree': degree, 'mesh': 'auto', 'mesh_report': report}
+
+
+def _receivers_inside(scene):
+    """Every receiver lies in the plate or the pipe wall (a point in a hole or a notch is found when the mesh is searched)."""
+    g = scene['geometry']
+    for rx in scene['receivers']:
+        x, y, z = rx['point_mm']; where = f"接收点 {rx['name']}（{x:g}, {y:g}, {z:g}）mm"
+        if g['kind'] == 'pipe':
+            r = math.hypot(y, z)
+            if not (-1e-9 <= x <= g['length_mm'] + 1e-9 and g['inner_radius_mm'] - 1e-9 <= r <= g['outer_radius_mm'] + 1e-9):
+                raise ValueError(f"{where} 不在管壁内：x 需在 0–{g['length_mm']:g} mm，到管轴的距离需在 {g['inner_radius_mm']:g}–{g['outer_radius_mm']:g} mm。")
+        elif not all(-1e-9 <= v <= size + 1e-9 for v, size in zip((x, y, z), (g['length_mm'], g['width_mm'], g['thickness_mm']))):
+            raise ValueError(f"{where} 在板外：板的范围是 0–{g['length_mm']:g} × 0–{g['width_mm']:g} × 0–{g['thickness_mm']:g} mm。")
 
 
 def _bounded_network_scene(raw, degree, material):

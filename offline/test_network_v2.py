@@ -32,6 +32,9 @@ class NetworkV2Requests(unittest.TestCase):
             bad = v2_plate(); mutate(bad)
             with self.assertRaises(ValueError): validate_request({'scene': bad, 'degree': 3})
         with self.assertRaises(ValueError): validate_request({'scene': v2_plate(), 'degree': 2})
+        outside = v2_plate(); outside['receivers'][0]['point_mm'] = [12., 1.75, .9]   # the plate is 10 mm long: found before the computation, not during it
+        with self.assertRaises(ValueError) as refused: validate_request({'scene': outside, 'degree': 3})
+        self.assertIn('在板外', str(refused.exception)); self.assertIn(outside['receivers'][0]['name'], str(refused.exception))
 
     def test_long_v2_records_are_accepted_up_to_20_ms(self):
         for duration, step in ((5000., .2), (20000., .1), (1200., .05)):
