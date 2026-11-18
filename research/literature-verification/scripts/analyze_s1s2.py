@@ -27,6 +27,12 @@ which removes the other modes, and gives
     train is built up over ten wavelengths of source, so the distance travelled differs along the train and this
     fit does not apply; N3 is compared at the receivers only.)
 
+The burst has 20 cycles: its spectrum is ±5 % wide at half height, and over that band the pair detunes and its
+coupling changes by tens of per cent (theory_shg_lamb.burst_table). So each measurement is compared twice: with κ₂
+of the single frequency, and with what the same analysis gives when the theory is summed over the pairs of
+frequencies of the burst the software sent (`burst_at_receivers`, `burst_in_field`). The second comparison is the
+test of the software; the difference between the two is a property of the burst, not of the software.
+
     python analyze_s1s2.py            # every finished case → results/results-s1s2.json
 """
 import json, math, sys
@@ -34,7 +40,8 @@ import numpy as np
 from pathlib import Path
 from harness import JOBS, RESULTS, series
 from cases_s1s2 import ABSORB, CASES, CL, HALF, LENGTH, frequency_mhz
-from theory_shg_lamb import pair
+from scipy.interpolate import CubicSpline, RectBivariateSpline
+from theory_shg_lamb import burst_table, pair
 
 MATERIAL = dict(rho=2700., lam=58.1e9, mu=26.1e9, l=-143e9, m=-297e9, n=-345e9)   # the software's aluminium (docs/aluminum-material.md)
 PARTS = ('total', 'geometric', 'material')
@@ -51,6 +58,67 @@ def line(x, y):
     """Complex least-squares line y = slope·x + intercept; relative residual."""
     M = np.stack([x, np.ones_like(x)], 1).astype(complex); coef, *_ = np.linalg.lstsq(M, y, rcond=None)
     return coef[0], coef[1], float(np.linalg.norm(M @ coef - y) / np.linalg.norm(y - y.mean()))
+
+
+def burst(half, span=.16, count=17):
+    """The pair over the band of the burst as functions: k₁(ω), ω(k₁), k₂(ω), κ[part](ωa, ωb). The table is kept beside the job records."""
+    path = JOBS / f'burst-table-{2 * half:g}mm-{span:g}-{count}.npz'
+    if not path.exists():
+        t = burst_table(2 * half * 1e-3, **MATERIAL, span=span, count=count); JOBS.mkdir(parents=True, exist_ok=True)
+        np.savez(path, omega=t['omega'], eps=t['eps'], eps2=t['eps2'], k1=t['k1'], k2=t['k2'], **t['kappa'])
+    z = np.load(path); w0 = float(z['omega']); eps = z['eps']; fine = w0 * (1 + np.linspace(eps[0], eps[-1], 4001)); k1 = CubicSpline(w0 * (1 + eps), z['k1'])
+    def kappa(part):
+        re, im = RectBivariateSpline(eps, eps, z[part].real), RectBivariateSpline(eps, eps, z[part].imag)
+        return lambda wa, wb: re.ev(wa / w0 - 1, wb / w0 - 1) + 1j * im.ev(wa / w0 - 1, wb / w0 - 1)
+    return {'omega': w0, 'k1': k1, 'omega_of_k1': lambda k: np.interp(k, k1(fine), fine), 'k2': CubicSpline(2 * w0 * (1 + z['eps2']), z['k2']), 'kappa': {part: kappa(part) for part in PARTS}}
+
+
+def growth_factor(dk, d):
+    """(1 − e^{−iΔk·d}) / (iΔk): the distance d when Δk = 0."""
+    small = np.abs(dk * d) < 1e-7
+    return np.where(small, d, (1 - np.exp(-1j * dk * d)) / (1j * np.where(small, 1., dk)))
+
+
+def burst_at_receivers(xs, t, lin, x0, table, span=.14):
+    """What the receiver analysis gives for this burst according to the theory: the slope of r(x) of every part (in the convention
+    of the analytic signals in time, as in `analyse`), and the group velocity of the envelope's centroid.
+
+    The spectrum of S1 is the linear record at the exact wavenumber k₁(ω): the mean over the receivers of its coefficients times
+    e^{ik₁x}, which leaves the other modes out. Every pair of components grows from x0."""
+    n = len(t); dt = (t[1] - t[0]) * 1e-6; w = 2 * math.pi * np.fft.fftfreq(n, dt); w0 = table['omega']; keep = np.flatnonzero((w > w0 * (1 - span)) & (w < w0 * (1 + span))); w = w[keep]; m = len(w)
+    k1 = table['k1'](w); c0 = (np.fft.fft(lin, axis=0)[keep] * 2 / n * np.exp(1j * np.outer(k1, xs))).mean(1)      # u1ₐ(x, t) = Σ c0 e^{i(ωt − k₁x)}
+    times = np.arange(n) * dt; u1 = np.exp(1j * np.outer(times, w)) @ (c0[:, None] * np.exp(-1j * np.outer(k1, xs)))
+    power = np.abs(u1) ** 2; group = 1 / np.polyfit(xs, (power * times[:, None]).sum(0) / power.sum(0), 1)[0]; square = u1 ** 2; norm = (np.abs(square) ** 2).sum(0)
+    a, b = np.meshgrid(np.arange(m), np.arange(m), indexing='ij'); ka, kb = k1[a], k1[b]; dk = ka + kb - table['k2'](w[a] + w[b])
+    sums = np.exp(1j * np.outer(times, 2 * w[0] + (w[1] - w[0]) * np.arange(2 * m - 1)))                        # e^{i(ωa+ωb)t}: the pairs with the same sum share a bin
+    out = {'group_velocity': float(group), 'slope': {}}
+    for part in PARTS:
+        pairs = np.conj(table['kappa'][part](w[a], w[b])) * c0[a] * c0[b]; r = []
+        for i, x in enumerate(xs):
+            coefficient = np.zeros(2 * m - 1, dtype=complex); np.add.at(coefficient, a + b, pairs * np.exp(-1j * (ka + kb) * x) * np.conj(growth_factor(dk, x - x0)))
+            r.append(((sums @ coefficient) * square[:, i].conj()).sum() / norm[i])
+        out['slope'][part] = complex(line(xs, np.array(r))[0])
+    return out
+
+
+def train_fit(xs, u1, u2):
+    """Least squares of u2 = (slope·x + intercept)·u1² over a wave train: slope, origin −intercept/slope, relative residual; and the whole
+    train as one number, u2 = ratio·u1² at the centre of |u1|⁴."""
+    square = u1 ** 2; M = np.stack([xs * square, square], 1); coef, *_ = np.linalg.lstsq(M, u2, rcond=None); weight = np.abs(square) ** 2
+    return {'slope': complex(coef[0]), 'origin': float(np.real(-coef[1] / coef[0])), 'residual': float(np.linalg.norm(M @ coef - u2) / np.linalg.norm(u2)),
+            'ratio': complex((u2 * square.conj()).sum() / weight.sum()), 'centre': float((xs * weight).sum() / weight.sum())}
+
+
+def burst_in_field(grid, u1, use, table, span=.14):
+    """What `train_fit` gives for this wave train according to the theory, every pair of its components growing from x = 0.
+
+    `u1`: the linear field on the top face limited to wavenumbers around k (complex, on the uniform periodic `grid`). Its Fourier
+    coefficients are components of S1 with ω = ω(k₁)."""
+    n = len(grid); k = 2 * math.pi * np.fft.fftfreq(n, grid[1] - grid[0]); w0 = table['omega']; keep = np.flatnonzero((k > table['k1'](w0 * (1 - span))) & (k < table['k1'](w0 * (1 + span))))
+    k = k[keep]; C = np.fft.fft(u1)[keep] / n * np.exp(-1j * k * grid[0]); w = table['omega_of_k1'](k); xs = grid[use]
+    a, b = np.meshgrid(np.arange(len(k)), np.arange(len(k)), indexing='ij'); dk = (k[a] + k[b] - table['k2'](w[a] + w[b])).ravel(); phase = np.exp(1j * np.outer(xs, (k[a] + k[b]).ravel()))
+    grow = np.stack([growth_factor(dk, x) for x in xs]); primary = np.exp(1j * np.outer(xs, k)) @ C
+    return {part: train_fit(xs, primary, (phase * grow) @ (table['kappa'][part](w[a], w[b]) * C[a] * C[b]).ravel()) for part in PARTS}
 
 
 def analyse(name, half=HALF, job=None, data=None):
@@ -85,6 +153,13 @@ def analyse(name, half=HALF, job=None, data=None):
                               'theory_over_k_squared': abs(expected) / (k * k), 'r_abs_per_m': np.abs(r).tolist(), 'follows_square_of_primary': explained,
                               'A2_m': np.abs(increment.T @ C2w * 2 / len(t)).tolist(), 'peak_ratio_to_primary': float(np.abs(u2).max() / amplitude.max())}
     out['A1_m'] = np.abs(C1 * 2 / len(t)).tolist()
+    # The same analysis of the theory summed over the burst's spectrum; every pair grows from the source (the comb's centre, or the loaded end).
+    x0 = scene['source']['center_mm'][0] * (half / HALF) * 1e-3; expected = burst_at_receivers(xs, t, lin, x0, burst(half))
+    out['group_velocity'].update(burst_theory=expected['group_velocity'], difference_from_burst=group / expected['group_velocity'] - 1)
+    for part in PARTS:
+        p = out['parts'][part]; slope = complex(*p['slope_per_m2']); e = expected['slope'][part]
+        p.update(burst_theory_per_m2=[e.real, e.imag], burst_over_single_frequency=abs(e) / abs(theory['growth'][part]) - 1, burst_phase_deg=math.degrees(np.angle(e / np.conj(theory['growth'][part]))),
+                 magnitude_difference_from_burst=abs(slope) / abs(e) - 1, phase_difference_from_burst_deg=math.degrees(np.angle(slope / e)))
     return out, {'t': t, 'lin': lin, 'stv': stv, 'ful': ful}
 
 
@@ -149,17 +224,19 @@ def snapshot(name, half=HALF, job=None, fields=None, points=None, time_us=None, 
         local = np.gradient(np.unwrap(np.angle(signal[use] * np.exp(-1j * centre * xs))), xs); weight = np.abs(signal[use]) ** 2
         out[label + '_difference'] = float((local * weight).sum() / weight.sum() / centre)
     if end:
-        square = u1[use] ** 2
+        expected_burst = burst_in_field(grid, u1, use, burst(half))
         for part, u2 in second.items():
-            # least squares of u2 = (slope·x + intercept)·u1² over the train
-            M = np.stack([xs * square, square], 1); coef, *_ = np.linalg.lstsq(M, u2[use], rcond=None); expected = theory['growth'][part]
-            ratio = (u2[use] * square.conj()).sum() / (np.abs(square) ** 2).sum(); centre_x = float((xs * np.abs(square) ** 2).sum() / (np.abs(square) ** 2).sum())
-            out['parts'][part] = {'slope_per_m2': [coef[0].real, coef[0].imag], 'theory_per_m2': [expected.real, expected.imag], 'magnitude_difference': abs(coef[0]) / abs(expected) - 1,
-                                  'phase_difference_deg': math.degrees(np.angle(coef[0] / expected)), 'slope_over_k_squared': abs(coef[0]) / (k * k), 'theory_over_k_squared': abs(expected) / (k * k),
-                                  'fit_residual': float(np.linalg.norm(M @ coef - u2[use]) / np.linalg.norm(u2[use])), 'origin_mm': float(np.real(-coef[1] / coef[0]) * 1e3),
-                                  # the whole train as one number: u2 = ratio·u1² at its centre; from the loaded end the theory gives κ₂·centre
-                                  'ratio_per_m': [ratio.real, ratio.imag], 'train_centre_mm': centre_x * 1e3, 'ratio_difference_from_end': abs(ratio) / (abs(expected) * centre_x) - 1,
-                                  'peak_ratio_to_primary': float(np.abs(u2[use]).max() / envelope[use].max())}
+            fit = train_fit(xs, u1[use], u2[use]); expected = theory['growth'][part]; b = expected_burst[part]
+            out['parts'][part] = {'slope_per_m2': [fit['slope'].real, fit['slope'].imag], 'theory_per_m2': [expected.real, expected.imag], 'magnitude_difference': abs(fit['slope']) / abs(expected) - 1,
+                                  'phase_difference_deg': math.degrees(np.angle(fit['slope'] / expected)), 'slope_over_k_squared': abs(fit['slope']) / (k * k), 'theory_over_k_squared': abs(expected) / (k * k),
+                                  'fit_residual': fit['residual'], 'origin_mm': fit['origin'] * 1e3,
+                                  # the whole train as one number: u2 = ratio·u1² at its centre; from the loaded end the single-frequency theory gives κ₂·centre
+                                  'ratio_per_m': [fit['ratio'].real, fit['ratio'].imag], 'train_centre_mm': fit['centre'] * 1e3, 'ratio_difference_from_end': abs(fit['ratio']) / (abs(expected) * fit['centre']) - 1,
+                                  'peak_ratio_to_primary': float(np.abs(u2[use]).max() / envelope[use].max()),
+                                  # the same fit of the theory summed over the pairs of components of this train
+                                  'burst_theory_per_m2': [b['slope'].real, b['slope'].imag], 'burst_over_single_frequency': abs(b['slope']) / abs(expected) - 1, 'burst_phase_deg': math.degrees(np.angle(b['slope'] / expected)),
+                                  'burst_origin_mm': b['origin'] * 1e3, 'magnitude_difference_from_burst': abs(fit['slope']) / abs(b['slope']) - 1, 'phase_difference_from_burst_deg': math.degrees(np.angle(fit['slope'] / b['slope'])),
+                                  'ratio_difference_from_burst': abs(fit['ratio']) / abs(b['ratio']) - 1, 'ratio_phase_difference_from_burst_deg': math.degrees(np.angle(fit['ratio'] / b['ratio']))}
     # mode shapes through the thickness, relative to u_x on the top face: S1 in the linear field at k, S2 in the increment at 2k
     zt = theory['z']
     for label, parts, centre, U in (('S1', ('linear', None), k, theory['U1']), ('S2', ('full', 'linear'), 2 * k, theory['U2'])):
@@ -182,19 +259,23 @@ def scaling(a, b):
 
 
 def summary(r):
+    g = r['group_velocity']
     lines = [f"{r['case']}: fd {r['fd_mhz_mm']:.4f} MHz·mm, cp {r['phase_velocity']['software']:.1f} m/s ({r['phase_velocity']['difference']:+.3%}), "
-             f"cg {r['group_velocity']['software']:.1f} m/s ({r['group_velocity']['difference']:+.2%}), primary peak varies {r['primary_peak_variation']:.1%} along x, peak strain {r['peak_strain']:.1e}"]
+             f"cg {g['software']:.1f} m/s ({g['difference']:+.2%} from the single frequency, {g['difference_from_burst']:+.2%} from the burst's {g['burst_theory']:.1f}), "
+             f"primary peak varies {r['primary_peak_variation']:.1%} along x, peak strain {r['peak_strain']:.1e}"]
     for part in PARTS:
         p = r['parts'][part]
-        lines.append(f"  receivers {part:9s} κ₂/k² software {p['slope_over_k_squared']:.4f}, theory {p['theory_over_k_squared']:.4f}: magnitude {p['magnitude_difference']:+.2%} ± {p['slope_standard_error']:.1%}, phase {p['phase_difference_deg']:+.2f}°, "
+        lines.append(f"  receivers {part:9s} κ₂/k² software {p['slope_over_k_squared']:.4f}; single frequency {p['theory_over_k_squared']:.4f}: {p['magnitude_difference']:+.2%}, {p['phase_difference_deg']:+.2f}°; "
+                     f"this burst ({p['burst_over_single_frequency']:+.2%}, {p['burst_phase_deg']:+.2f}°): {p['magnitude_difference_from_burst']:+.2%} ± {p['slope_standard_error']:.1%}, {p['phase_difference_from_burst_deg']:+.2f}°; "
                      f"{p['follows_square_of_primary']:.1%} of the 2f band follows u1², 2f peak / f peak {p['peak_ratio_to_primary']:.2e}")
     for s in r['snapshots']:
         lines.append(f"  field at {s['time_us']:.0f} μs over {s['wavelengths']:.1f} wavelengths ({s['x_range_mm'][0]:.0f}–{s['x_range_mm'][1]:.0f} mm): k {s['k_primary_difference']:+.1e}, 2k {s['k_second_difference']:+.1e}; "
                      f"mode shapes S1 {s['mode_shapes']['S1']['difference']:.2%}, S2 {s['mode_shapes']['S2']['difference']:.2%}")
         for part in PARTS if s['parts'] else ():
             p = s['parts'][part]
-            lines.append(f"    {part:9s} κ₂/k² software {p['slope_over_k_squared']:.4f}, theory {p['theory_over_k_squared']:.4f}: magnitude {p['magnitude_difference']:+.2%}, phase {p['phase_difference_deg']:+.2f}°, "
-                         f"fit residual {p['fit_residual']:.3f}, origin {p['origin_mm']:+.1f} mm; whole train at {p['train_centre_mm']:.0f} mm against κ₂·x from the end: {p['ratio_difference_from_end']:+.2%}")
+            lines.append(f"    {part:9s} κ₂/k² software {p['slope_over_k_squared']:.4f}; single frequency {p['theory_over_k_squared']:.4f}: {p['magnitude_difference']:+.2%}, {p['phase_difference_deg']:+.2f}°; "
+                         f"this burst ({p['burst_over_single_frequency']:+.2%}, {p['burst_phase_deg']:+.2f}°): {p['magnitude_difference_from_burst']:+.2%}, {p['phase_difference_from_burst_deg']:+.2f}°; fit residual {p['fit_residual']:.3f}, "
+                         f"origin {p['origin_mm']:+.1f} mm (burst {p['burst_origin_mm']:+.1f}); whole train at {p['train_centre_mm']:.0f} mm: {p['ratio_difference_from_burst']:+.2%}, {p['ratio_phase_difference_from_burst_deg']:+.2f}° from the burst")
     return '\n'.join(lines)
 
 

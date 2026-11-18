@@ -33,6 +33,17 @@ What is compared with the software is the complex ratio of surface displacements
     κ₂ = (da/dx) · U²ₓ(h) / (U¹ₓ(h))²         so that     u²ₓ(h) = Re[κ₂ · x · (U¹ₓ(h) e^{i(kx−ωt)})²],
 
 which does not depend on how the mode shapes are scaled.
+
+A burst is not one frequency. Away from the synchronism point the pair detunes (2k₁(ω) ≠ k₂(2ω): the group
+velocities are equal there, so the mismatch is quadratic in the frequency offset) and the coupling changes quickly,
+about 9 % per 1 % of frequency for aluminium. Two components ωa, ωb of the primary, with surface amplitudes Aa, Ab,
+drive S2 at ωa + ωb:
+
+    u²ₓ(h) = Re[ κ(ωa, ωb) · Aa Ab · e^{i((ka+kb)x − (ωa+ωb)t)} · (1 − e^{−iΔk·x}) / (iΔk) ],   Δk = ka + kb − k₂(ωa + ωb),
+
+summed over all pairs (κ(ω, ω) = κ₂, and the last factor is x when Δk = 0). `burst_table` follows both branches
+over a band of frequencies and tabulates k₁, k₂ and κ; analyze_s1s2.py sums it over the spectrum of the burst the
+software actually sent, to know what a measurement with that burst should give.
 """
 import math
 import numpy as np
@@ -119,15 +130,36 @@ class Plate:
         group = float(np.real(u.conj() @ dK @ u) / (2 * w[i] * np.real(u.conj() @ self.M @ u)))
         return float(w[i]), u, group
 
-    def forcing(self, U1, k, l, m, n):
-        """F at wavenumber 2k for the primary shape U1 at wavenumber k: − Σ w G(2k)ᴴ ½P²(H̃)."""
+    def mixing(self, Ua, ka, Ub, kb, l, m, n):
+        """F at wavenumber ka + kb for two primaries: − Σ w G(ka+kb)ᴴ ½B(H̃a, H̃b), B the symmetric bilinear form with B(H, H) = P²(H)."""
         F = np.zeros(2 * self.nodes, dtype=complex)
         for point in self.points:
-            G, _ = self.gradient(point, k); G2, _ = self.gradient(point, 2 * k); d = self.dofs(point[1]); g = G @ U1[d]
-            H = np.zeros((3, 3), dtype=complex); H[0, 0], H[0, 2], H[2, 0], H[2, 2] = g
-            P = .5 * quadratic_stress(H, self.lam, self.mu, l, m, n)
-            F[d] -= point[0] * G2.conj().T @ np.array([P[0, 0], P[0, 2], P[2, 0], P[2, 2]])
+            d = self.dofs(point[1]); H = []
+            for U, k in ((Ua, ka), (Ub, kb)):
+                g = self.gradient(point, k)[0] @ U[d]; H.append(np.zeros((3, 3), dtype=complex)); H[-1][0, 0], H[-1][0, 2], H[-1][2, 0], H[-1][2, 2] = g
+            P = .125 * (quadratic_stress(H[0] + H[1], self.lam, self.mu, l, m, n) - quadratic_stress(H[0] - H[1], self.lam, self.mu, l, m, n))
+            F[d] -= point[0] * self.gradient(point, ka + kb)[0].conj().T @ np.array([P[0, 0], P[0, 2], P[2, 0], P[2, 2]])
         return F
+
+    def forcing(self, U1, k, l, m, n):
+        """F at wavenumber 2k for the primary shape U1 at wavenumber k: − Σ w G(2k)ᴴ ½P²(H̃)."""
+        return self.mixing(U1, k, U1, k, l, m, n)
+
+    def follow(self, k, U, omega, targets):
+        """A branch followed from (k, ω) with shape U to the angular frequencies `targets`: {ω: (k, shape with unit surface uₓ, group velocity)}.
+
+        The mode at each step is the one most like the previous shape (in the mass inner product), so crossings with other branches do not matter."""
+        out = {}; targets = np.sort(np.asarray(targets, dtype=float)); start = (k, U)
+        for side in (targets[targets >= omega], targets[targets < omega][::-1]):
+            k, U = start
+            for target in side:
+                for _ in range(80):
+                    w, V = self.modes(k); i = int(np.argmax(np.abs(V.conj().T @ (self.M @ U)))); u = V[:, i]; _, dK = self.stiffness(k)
+                    group = float(np.real(u.conj() @ dK @ u) / (2 * w[i] * np.real(u.conj() @ self.M @ u)))
+                    if abs(w[i] / target - 1) < 1e-13: break
+                    k += (target - w[i]) / group
+                U = u; out[float(target)] = (float(k), u / self.surface(u)[0], group)
+        return out
 
     def surface(self, U):
         """(uₓ, u_z) at the top face z = h."""
@@ -152,6 +184,26 @@ def pair(thickness, rho, lam, mu, l, m, n, order=1, elements=24, degree=8):
     return out
 
 
+def burst_table(thickness, rho, lam, mu, l, m, n, span=.16, count=17, order=1, elements=12, degree=6):
+    """The pair over a band of frequencies ω₀(1 + ε), ε from −span to span (`count` values, odd):
+
+    `k1`, `group_1` of the primary branch at ω₀(1 + ε); `k2`, `group_2` of the secondary branch at 2ω₀(1 + ε2), ε2 on the grid of
+    half the step; `kappa[part][i, j]` = κ(ω₀(1 + εᵢ), ω₀(1 + εⱼ)) for surface amplitudes (mode shapes with unit surface uₓ)."""
+    r = pair(thickness, rho, lam, mu, l, m, n, order, elements, degree); plate = Plate(thickness, rho, lam, mu, elements, degree); w0 = 2 * math.pi * r['f_hz']
+    eps = np.linspace(-span, span, count); eps2 = np.linspace(-span, span, 2 * count - 1)
+    first = plate.follow(r['k_rad_m'], r['U1'], w0, w0 * (1 + eps)); first = [first[float(w)] for w in np.sort(w0 * (1 + eps))]
+    second = plate.follow(2 * r['k_rad_m'], r['U2'], 2 * w0, 2 * w0 * (1 + eps2)); second = [second[float(w)] for w in np.sort(2 * w0 * (1 + eps2))]
+    kappa = {part: np.zeros((count, count), dtype=complex) for part in ('geometric', 'total')}
+    for i in range(count):
+        for j in range(i, count):
+            (ka, Ua, _), (kb, Ub, _), (k2, U2, _) = first[i], first[j], second[i + j]; _, dK = plate.stiffness(k2)
+            for part, constants in (('geometric', (0., 0., 0.)), ('total', (l, m, n))):
+                kappa[part][i, j] = kappa[part][j, i] = 1j * (U2.conj() @ plate.mixing(Ua, ka, Ub, kb, *constants)) / (U2.conj() @ dK @ U2)
+    kappa['material'] = kappa['total'] - kappa['geometric']
+    return {'omega': w0, 'eps': eps, 'eps2': eps2, 'k1': np.array([b[0] for b in first]), 'group_1': np.array([b[2] for b in first]),
+            'k2': np.array([b[0] for b in second]), 'group_2': np.array([b[2] for b in second]), 'kappa': kappa}
+
+
 def self_test(rho=2700., lam=58.1e9, mu=26.1e9, l=-143e9, m=-297e9, n=-345e9):
     """Checks of this file against closed forms. Returns the largest relative deviations."""
     out = {}
@@ -172,6 +224,10 @@ def self_test(rho=2700., lam=58.1e9, mu=26.1e9, l=-143e9, m=-297e9, n=-345e9):
     out['mode_frequency'] = max(abs(r['omega_error']), abs(r['omega2_error'])); out['group_mismatch'] = abs(r['group_2'] / r['group_1'] - 1)
     coarse = pair(2e-3, rho, lam, mu, l, m, n, elements=12, degree=6)
     out['discretisation'] = max(abs(coarse['growth'][p] / r['growth'][p] - 1) for p in r['growth'])
+    # 4. The table over frequencies: its centre is the pair, and the two-frequency coupling is the mean of the neighbours to second order.
+    t = burst_table(2e-3, rho, lam, mu, l, m, n, span=.001, count=3)
+    out['table_centre'] = max(max(abs(t['kappa'][p][1, 1] / r['growth'][p] - 1) for p in r['growth']), abs(t['k1'][1] / r['k_rad_m'] - 1), abs(t['k2'][2] / (2 * r['k_rad_m']) - 1))
+    out['table_group'] = max(abs((t['eps'][2] - t['eps'][0]) * t['omega'] / (t['k1'][2] - t['k1'][0]) / r['group_1'] - 1), abs(t['group_1'][1] / r['group_1'] - 1))
     return out, r
 
 
