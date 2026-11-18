@@ -1,0 +1,80 @@
+{
+    "case":  "D7-part-width-crack",
+    "mode":  "full",
+    "workai_revision":  "b785b19fd2983d9ffb0f58363da39b46aae17192",
+    "comsol_version":  "COMSOL Multiphysics 6.4 (开发版本: 429)",
+    "element":  {
+                    "shape":  "hexahedral, mapped and swept",
+                    "order":  "quartic serendipity",
+                    "discretization":  "small-strain linear elastic displacement"
+                },
+    "max_element_size_mm":  {
+                                "x":  0.40000000,
+                                "y":  0.33333333,
+                                "z":  0.40000000
+                            },
+    "near_defect_x_target_mm":  0.20000000,
+    "mesh_scale":  1.0000000,
+    "elements":  3744,
+    "dofs":  186174,
+    "min_hex_quality":  0.7985,
+    "integration_order":  "COMSOL automatic full integration",
+    "time_stepping":  {
+                          "method":  "generalized-alpha",
+                          "rho_infinity":  1.0,
+                          "max_step_us":  0.0050000000,
+                          "output_step_us":  0.050000000,
+                          "steps":  "strict",
+                          "max_logged_step_us":  0.005
+                      },
+    "tolerances":  {
+                       "time_relative":  1E-06,
+                       "time_absolute_m":  1E-15,
+                       "contact_newton_tolerance_factor":  null
+                   },
+    "load":  {
+                 "type":  "fixed direction nominal traction per reference area",
+                 "amplitude_mpa":  1
+             },
+    "absorbing": {
+    "method": "none (zero applied damping body load)",
+    "alpha_max_per_s": 0,
+    "ramp_power": null,
+    "effective": false,
+    "configured": {
+      "method": "three-component mass-proportional body load",
+      "alpha_max_per_s": 17660492,
+      "ramp_power": 3
+    },
+    "verification": "Saved COMSOL model uses ForceVolume with forceReferenceVolume [0,0,0]. The intended damping expression is stored under F and is inactive for this load type."
+  },
+    "material":  {
+                     "rho_kg_m3":  2700,
+                     "lambda_pa":  58100000000,
+                     "mu_pa":  26100000000
+                 },
+    "defect":  {
+                   "type":  "open slit",
+                   "x_mm":  30,
+                   "y_range_mm":  [
+                                      1,
+                                      2
+                                  ],
+                   "z_range_mm":  [
+                                      0.8,
+                                      1.6
+                                  ]
+               },
+    "runs":  {
+                 "linear":  {
+                                "solve_time_s":  2637.092722,
+                                "output_times":  701,
+                                "time_steps":  7000
+                            }
+             },
+    "checks":  {
+                   "max_abs_displacement_m":  2.1715176023980912E-08,
+                   "max_abs_uy_m":  1.0124478341815466E-24
+               },
+    "model_source_sha256":  "ccf88611d4debfb777c3a31e8d169bd73c81a703ec041d238ca93db29991041c"
+}
