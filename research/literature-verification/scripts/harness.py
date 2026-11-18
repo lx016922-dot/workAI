@@ -26,10 +26,9 @@ def scene(length, width, thickness, h, duration, step=.05, boundaries=(), source
     return s
 
 
-def run(name, s, degree=4, relaxed=False):
-    """Run once; reuse a completed job with the identical request. `relaxed`: through relaxed_worker.py (element sizes under 0.8 mm)."""
-    if relaxed: import relaxed_worker
-    job = JOBS / name; request = (relaxed_worker.validate_request if relaxed else validate_request)({'scene': s, 'degree': degree})
+def run(name, s, degree=4):
+    """Run once; reuse a completed job with the identical request."""
+    job = JOBS / name; request = validate_request({'scene': s, 'degree': degree})
     key = hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest()
     status = job / 'status.json'
     if status.exists() and json.loads(status.read_text()).get('phase') == 'completed' and (job / 'key').exists() and (job / 'key').read_text() == key:
@@ -44,7 +43,7 @@ def run(name, s, degree=4, relaxed=False):
         pending.write_text(key)
     (job / 'request.json').write_text(json.dumps(request)); status.write_text(json.dumps({'job_id': name, 'phase': 'starting'}))
     started = time.monotonic()
-    done = subprocess.run([sys.executable, '-X', 'utf8', *((str(HERE / 'relaxed_worker.py'),) if relaxed else ('-m', 'offline.worker')), '--job-dir', str(job)], cwd=REPO, capture_output=True, text=True)
+    done = subprocess.run([sys.executable, '-X', 'utf8', '-m', 'offline.worker', '--job-dir', str(job)], cwd=REPO, capture_output=True, text=True)
     st = json.loads(status.read_text())
     if done.returncode or st.get('phase') != 'completed': raise RuntimeError(f'{name}: {st.get("message")} {done.stderr[-1500:]}')
     (job / 'key').write_text(key); (job / 'elapsed_s').write_text(f'{time.monotonic() - started:.1f}')

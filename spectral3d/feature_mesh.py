@@ -23,7 +23,7 @@ from solid.schema import require
 from .mesh import gll, make_mesh as frozen_make_mesh
 
 AXES = 'xyz'
-CUT_GAP_MM = .08
+CUT_GAP_MM = .08       # the thinnest element layer between two grid lines: 0.08 mm, or a tenth of the element size when that is smaller
 FRONT_FRACTION = .25   # refinement cut lines at ± this fraction of h around a front inside the material
 
 
@@ -108,7 +108,13 @@ def _edge_index(edge, value_mm):
     return i
 
 
-def _front_cuts(splits, cuts, size_mm, delta):
+def cut_gap(h_mm):
+    """The smallest distance (mm) between two grid lines for elements of size h. 0.08 mm for the sizes of 0.8 mm and more that the
+    rule was written for; smaller elements keep the same proportion, so a mesh is the same mesh at every scale."""
+    return min(CUT_GAP_MM, .1 * h_mm)
+
+
+def _front_cuts(splits, cuts, size_mm, delta, gap=CUT_GAP_MM):
     """Grid lines at ± delta around every split front that lies inside the material (a crack tip, a delamination edge),
     across the front in the split plane and across the plane itself, so the elements touching the front are about
     delta wide. The field there is singular (r^1/2 displacement), and with the defect's own cut lines alone the front
@@ -127,7 +133,7 @@ def _front_cuts(splits, cuts, size_mm, delta):
             for v in (centre - delta, centre + delta):
                 v = round(float(v), 9)
                 if not 0 < v < size_mm[axis]: continue
-                if min(abs(v - c) for c in cuts[axis]) < max(delta / 2, CUT_GAP_MM): continue
+                if min(abs(v - c) for c in cuts[axis]) < max(delta / 2, gap): continue
                 cuts[axis][v] = '缺陷前沿加密'
 
 
@@ -150,13 +156,13 @@ def featured_mesh(scene, degree, h_mm):
         for axis, (a, b) in enumerate(hole['block_mm']):
             add(axis, a, label); add(axis, b, label)
             if axis != hole['axis'] and math.ceil((b - a) / h_mm) < 2: add(axis, (a + b) / 2, label)
-    _front_cuts(prims['splits'], cuts, size_mm, FRONT_FRACTION * h_mm)
+    gap = cut_gap(h_mm); _front_cuts(prims['splits'], cuts, size_mm, FRONT_FRACTION * h_mm, gap)
     values = []
     for axis in range(3):
         row = sorted(cuts[axis])
         for a, b in zip(row[:-1], row[1:]):
-            require(b - a >= CUT_GAP_MM, f'{cuts[axis][a]} 与 {cuts[axis][b]} 的边界在 {AXES[axis]} 方向只相距 {b - a:.3g} mm，'
-                                         f'会产生极薄的单元层；请让它们对齐或至少相距 {CUT_GAP_MM} mm。')
+            require(b - a >= gap - 1e-12, f'{cuts[axis][a]} 与 {cuts[axis][b]} 的边界在 {AXES[axis]} 方向只相距 {b - a:.3g} mm，'
+                                          f'会产生极薄的单元层；请让它们对齐或至少相距 {gap:g} mm。')
         values.append(row)
     edges, axes = zip(*[_edges(row, h_mm, x) for row in values])
     index = np.arange(np.prod([len(a) for a in axes])).reshape(*(len(a) for a in axes))
