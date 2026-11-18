@@ -118,9 +118,10 @@ def burst_in_field(grid, u1, use, table, span=.14):
     k = k[keep]; C = np.fft.fft(u1)[keep] / n * np.exp(-1j * k * grid[0]); w = table['omega_of_k1'](k); xs = grid[use]
     a, b = np.meshgrid(np.arange(len(k)), np.arange(len(k)), indexing='ij'); dk = (k[a] + k[b] - table['k2'](w[a] + w[b])).ravel(); phase = np.exp(1j * np.outer(xs, (k[a] + k[b]).ravel()))
     grow = np.stack([growth_factor(dk, x) for x in xs]); primary = np.exp(1j * np.outer(xs, k)) @ C
-    out = {}
+    # the centroid of |u1|² moves at the mean of the group velocity dω/dk₁ over the energy of the components
+    out = {'group_velocity': float((np.abs(C) ** 2 / table['k1'](w, 1)).sum() / (np.abs(C) ** 2).sum())}
     for part in PARTS:
-        u2 = (phase * grow) @ (table['kappa'][part](w[a], w[b]) * C[a] * C[b]).ravel(); out[part] = dict(train_fit(xs, primary, u2), local=u2 / primary ** 2)
+        u2 = (phase * grow) @ (table['kappa'][part](w[a], w[b]) * C[a] * C[b]).ravel(); out[part] = dict(train_fit(xs, primary, u2), local=u2 / primary ** 2, u2=u2)
     return out
 
 
@@ -223,11 +224,13 @@ def snapshot(name, half=HALF, job=None, fields=None, points=None, time_us=None, 
            'primary_peak_m': float(envelope[use].max()), 'peak_strain': float(envelope[use].max() * k), 'parts': {}, 'mode_shapes': {}}
     second = {part: along(a, top, 0, 2 * k) - along(b, top, 0, 2 * k) for part, (a, b) in {'total': ('full', 'linear'), 'geometric': ('stvk', 'linear'), 'material': ('full', 'stvk')}.items()}
     # wavenumbers of the two components: the |amplitude|²-weighted mean of the local wavenumber over the train
-    for label, signal, centre in (('k_primary', u1, k), ('k_second', second['total'], 2 * k)):
-        local = np.gradient(np.unwrap(np.angle(signal[use] * np.exp(-1j * centre * xs))), xs); weight = np.abs(signal[use]) ** 2
-        out[label + '_difference'] = float((local * weight).sum() / weight.sum() / centre)
+    def wavenumber(signal, centre):
+        local = np.gradient(np.unwrap(np.angle(signal * np.exp(-1j * centre * xs))), xs); weight = np.abs(signal) ** 2
+        return float((local * weight).sum() / weight.sum() / centre)
+    out['k_primary_difference'] = wavenumber(u1[use], k); out['k_second_difference'] = wavenumber(second['total'][use], 2 * k)
     if end:
-        expected_burst = burst_in_field(grid, u1, use, burst(half))
+        expected_burst = burst_in_field(grid, u1, use, burst(half)); out['k_second_difference_burst'] = wavenumber(expected_burst['total']['u2'], 2 * k)
+        out['centroid_mm'] = float((grid * envelope ** 2).sum() / (envelope ** 2).sum() * 1e3); out['burst_group_velocity'] = expected_burst['group_velocity']
         for part, u2 in second.items():
             fit = train_fit(xs, u1[use], u2[use]); expected = theory['growth'][part]; b = expected_burst[part]
             out['parts'][part] = {'slope_per_m2': [fit['slope'].real, fit['slope'].imag], 'theory_per_m2': [expected.real, expected.imag], 'magnitude_difference': abs(fit['slope']) / abs(expected) - 1,
@@ -283,13 +286,15 @@ def summary(r):
                      f"this burst ({p['burst_over_single_frequency']:+.2%}, {p['burst_phase_deg']:+.2f}°): {p['magnitude_difference_from_burst']:+.2%} ± {p['slope_standard_error']:.1%}, {p['phase_difference_from_burst_deg']:+.2f}°; "
                      f"{p['follows_square_of_primary']:.1%} of the 2f band follows u1², 2f peak / f peak {p['peak_ratio_to_primary']:.2e}")
     for s in r['snapshots']:
-        lines.append(f"  field at {s['time_us']:.0f} μs over {s['wavelengths']:.1f} wavelengths ({s['x_range_mm'][0]:.0f}–{s['x_range_mm'][1]:.0f} mm): k {s['k_primary_difference']:+.1e}, 2k {s['k_second_difference']:+.1e}; "
-                     f"mode shapes S1 {s['mode_shapes']['S1']['difference']:.2%}, S2 {s['mode_shapes']['S2']['difference']:.2%}")
+        lines.append(f"  field at {s['time_us']:.0f} μs over {s['wavelengths']:.1f} wavelengths ({s['x_range_mm'][0]:.0f}–{s['x_range_mm'][1]:.0f} mm): k {s['k_primary_difference']:+.1e}, 2k {s['k_second_difference']:+.1e}"
+                     + (f" (burst {s['k_second_difference_burst']:+.1e})" if 'k_second_difference_burst' in s else '') + f"; mode shapes S1 {s['mode_shapes']['S1']['difference']:.2%}, S2 {s['mode_shapes']['S2']['difference']:.2%}")
         for part in PARTS if s['parts'] else ():
             p = s['parts'][part]
             lines.append(f"    {part:9s} κ₂/k² software {p['slope_over_k_squared']:.4f}; single frequency {p['theory_over_k_squared']:.4f}: {p['magnitude_difference']:+.2%}, {p['phase_difference_deg']:+.2f}°; "
                          f"this burst ({p['burst_over_single_frequency']:+.2%}, {p['burst_phase_deg']:+.2f}°): {p['magnitude_difference_from_burst']:+.2%}, {p['phase_difference_from_burst_deg']:+.2f}°; fit residual {p['fit_residual']:.3f}, "
-                         f"origin {p['origin_mm']:+.1f} mm (burst {p['burst_origin_mm']:+.1f}); whole train at {p['train_centre_mm']:.0f} mm: {p['ratio_difference_from_burst']:+.2%}, {p['ratio_phase_difference_from_burst_deg']:+.2f}° from the burst")
+                         f"origin {p['origin_mm']:+.1f} mm (burst {p['burst_origin_mm']:+.1f}); whole train at {p['train_centre_mm']:.0f} mm: {p['ratio_difference_from_end']:+.2%} from κ₂·x, {p['ratio_difference_from_burst']:+.2%}, {p['ratio_phase_difference_from_burst_deg']:+.2f}° from the burst")
+    if 'group_velocity_field' in r:
+        g = r['group_velocity_field']; lines.append(f"  centroid of the S1 train between the two fields: {g['software']:.1f} m/s, the burst's components {g['burst_theory']:.1f} ({g['difference']:+.2%})")
     return '\n'.join(lines)
 
 
@@ -299,7 +304,11 @@ if __name__ == '__main__':
         if (JOBS / name / 'key').exists():
             half = HALVES.get(name, HALF); results[name], raw[name] = analyse(name, half)
             results[name]['elapsed_s'] = float((JOBS / name / 'elapsed_s').read_text()); results[name]['nodes'] = int(len(np.load(JOBS / name / 'record' / 'mesh.npz')['points']))
-            results[name]['snapshots'] = [snapshot(name, half, index=i) for i in ((1, 2) if name.startswith('N4') else (1,))]; print(summary(results[name]), flush=True)
+            results[name]['snapshots'] = shots = [snapshot(name, half, index=i) for i in ((1, 2) if name.startswith('N4') else (1,))]
+            if name.startswith('N4'):
+                speed = (shots[1]['centroid_mm'] - shots[0]['centroid_mm']) / (shots[1]['time_us'] - shots[0]['time_us']) * 1e3; expected = .5 * (shots[0]['burst_group_velocity'] + shots[1]['burst_group_velocity'])
+                results[name]['group_velocity_field'] = {'software': speed, 'burst_theory': expected, 'difference': speed / expected - 1}
+            print(summary(results[name]), flush=True)
     for full, halved in (('N3-e3', 'N3-half'), ('N4-e3', 'N4-half')):
         if full in raw and halved in raw:
             results[f'amplitude_scaling_{full[:2]}'] = scaling(raw[full], raw[halved]); print(full[:2], '2 MPa / 1 MPa:', {k: round(v, 4) for k, v in results[f'amplitude_scaling_{full[:2]}'].items()})
