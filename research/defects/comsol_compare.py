@@ -18,7 +18,9 @@ frequency, and the same for the scattered field (the defect run minus the intact
 The delivery of 2026-11-14 behaves as a plate with free ends: its intact run equals the software without absorbing
 layers to 0.02–0.08 % at every receiver and differs from the specified scene (absorbing layers) as soon as the end
 reflections arrive. The comparison that tests the defects is therefore the one with free ends on both sides; the
-one with the specified scene is kept to show the difference.
+one with the specified scene is kept to show the difference. The delivery of 2026-11-18 (D4, D7, D7 mesh2) records the
+cause in its metadata: the saved models apply the body load with zero components, the damping expression sits in an
+inactive field.
 """
 import csv
 import json
@@ -123,15 +125,25 @@ def pair(pairs, names, reference, other, reference0, other0, dt):
     return row
 
 
+def harmonics(pairs, names, reference, other, dt):
+    """2f / f and 3f / f of each solver at every compared component (closed defects: the contact makes the harmonics)."""
+    def ratio(trace, k):
+        n = 1 << 16; spec = np.abs(np.fft.rfft(trace * np.hanning(len(trace)), n)); freqs = np.fft.rfftfreq(n, dt)
+        pick = lambda f: spec[np.argmin(np.abs(freqs - f))]
+        return float(pick(k * F_MHZ) / pick(F_MHZ))
+    return {f'{names[r]}_u{AXES[a]}': {f'{k}f_over_f': {'comsol': ratio(reference[:, r, a], k), 'software': ratio(other[:, r, a], k)} for k in (2, 3)} for r, a in pairs}
+
+
 def variant(folder):
     """Every case computed in `folder` against COMSOL (the base mesh, and mesh2 where it was delivered)."""
     cases = sorted(p.stem for p in folder.glob('*.npz')); out = {}
     t, c0, names, _, _ = comsol(INTACT); _, s0, software_names = software(INTACT, folder); dt = t[1] - t[0]; assert names == software_names and len(t) == len(s0)
     pairs = components(c0)
     for case in cases:
-        _, c, _, meta, _ = comsol(case); _, s, _ = software(case, folder); info = json.loads((folder / f'{case}.json').read_text(encoding='utf-8')); defect = case != INTACT
-        row = {'comsol': {'elements': meta['elements'], 'dofs': meta['dofs'], 'solve_time_s': meta['runs']['linear']['solve_time_s'], 'max_abs_uy_m': meta['checks']['max_abs_uy_m']},
+        _, c, _, meta, delivery = comsol(case); _, s, _ = software(case, folder); info = json.loads((folder / f'{case}.json').read_text(encoding='utf-8')); defect = case != INTACT
+        row = {'comsol': {'delivery': delivery, 'elements': meta['elements'], 'dofs': meta['dofs'], 'solve_time_s': meta['runs']['linear']['solve_time_s'], 'max_abs_uy_m': meta['checks']['max_abs_uy_m']},
                'software': {k: info[k] for k in ('nodes', 'degree', 'h_mm', 'time_layer', 'seconds', 'energy_balance')}, **pair(pairs, names, c, s, c0 if defect else None, s0, dt)}
+        if 'contact' in meta and meta['contact']: row['comsol']['contact'] = meta['contact']; row['harmonics'] = harmonics(pairs, names, c, s, dt)
         try:
             _, fine, _, fine_meta, _ = comsol(case + '_mesh2')
             row['comsol_mesh2'] = {'elements': fine_meta['elements'], 'dofs': fine_meta['dofs'], 'solve_time_s': fine_meta['runs']['linear']['solve_time_s'],
@@ -172,7 +184,15 @@ def markdown(cases):
         for h, fine in row.get('software_refined', {}).items():
             extra += [f'| {case}：软件自动网格 对 软件 h {h} mm | ' + ' | '.join(cells(fine['software'])) + ' |', f'| {case}：COMSOL 基准网格 对 软件 h {h} mm | ' + ' | '.join(cells(fine['comsol'])) + ' |']
             if 'comsol_mesh2' in fine: extra.append(f'| {case}：COMSOL mesh2 对 软件 h {h} mm | ' + ' | '.join(cells(fine['comsol_mesh2'])) + ' |')
-    return '\n'.join(lines + (['', '网格收敛（每行以后者为准）：', ''] + HEADER + extra if extra else []))
+    closed = []
+    for case, row in cases.items():
+        if 'harmonics' in row:
+            for k in (2, 3):
+                values = [v[f'{k}f_over_f'] for v in row['harmonics'].values()]
+                ratios = [v['software'] / v['comsol'] - 1 for v in values]
+                closed.append(f'| {case} | {k}f / f | {min(v["comsol"] for v in values):.4f}–{max(v["comsol"] for v in values):.4f} | {min(ratios):+.1%} 到 {max(ratios):+.1%} |')
+    tail = ['', '闭合缺陷的谐波（各接收点、各分量）：', '', '| 工况 | 谐波 | COMSOL 的范围 | 软件 / COMSOL − 1 |', '|---|---|---|---|'] + closed if closed else []
+    return '\n'.join(lines + (['', '网格收敛（每行以后者为准）：', ''] + HEADER + extra if extra else []) + tail)
 
 
 def figures():
@@ -184,7 +204,7 @@ def figures():
         print('matplotlib is not installed: no figures'); return
     target = HERE / 'figures'; target.mkdir(exist_ok=True)
     t, c0, names, _, _ = comsol(INTACT); _, s0, _ = software(INTACT, FREE)
-    defects = [c for c in ('D1-open-crack', 'D2-open-delamination', 'D3-side-drilled-hole') if (FREE / f'{c}.npz').exists()]
+    defects = [c for c in ('D1-open-crack', 'D2-open-delamination', 'D3-side-drilled-hole', 'D4-closed-crack-1MPa', 'D7-part-width-crack') if (FREE / f'{c}.npz').exists()]
     picks = [('top_20', 2), ('top_40', 2), ('mid_20', 0), ('mid_40', 0)]
     if defects:
         fig, axes = plt.subplots(len(defects), len(picks), figsize=(16, 3 * len(defects)), sharex=True, squeeze=False)

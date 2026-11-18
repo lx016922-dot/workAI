@@ -201,18 +201,18 @@ D3 没有分开的节点，前沿加密对它不起作用，结果不变。
 
 开口裂纹、分层和闭合接触已经用独立的二维有限元核对（第 1 节），孔已经用解析解核对（第 2 节）。D7 的三维裂纹前沿还没有独立求解器核对，这是 COMSOL 唯一建议补算的工况，见[运行要求](../../docs/comsol/defects/README.md)。
 
-## 4. 与 COMSOL 的对照（2026-11-14 交付：D0、D1、D1 mesh2、D2、D3）
+## 4. 与 COMSOL 的对照（D0、D1、D1 mesh2、D2、D3：2026-11-14 交付；D4、D7、D7 mesh2：2026-11-18 交付）
 
-COMSOL 数据在 `comsol-results/20261114/`：四阶六面体单元，小应变线性弹性，广义 α 法（ρ∞ = 1，步长 0.005 μs），每次运行 1.1–4.7 小时。软件用同一场景走应用程序的记录通道（自动网格、自动时间层、只算线性控制），每个工况 5–15 秒。
+COMSOL 数据在 `comsol-results/20261114/` 和 `comsol-results/20261118/`：四阶六面体单元，小应变线性弹性，广义 α 法（ρ∞ = 1，步长 0.005 μs）。开口缺陷每次运行 0.7–4.7 小时；闭合裂纹 D4 用 COMSOL 的 Crack Closure 罚函数接触（罚刚度 1.4 × 10¹⁵ Pa/m，零间隙、无预压、无摩擦），算了 61 小时。软件用同一场景走应用程序的记录通道（自动网格、自动时间层、只算线性控制），每个工况 5–15 秒。
 
 ```sh
-python research/defects/comsol_compare.py run --free-ends D0-intact D1-open-crack D2-open-delamination D3-side-drilled-hole
-python research/defects/comsol_compare.py run --free-ends --h 1.0 D0-intact D1-open-crack D2-open-delamination D3-side-drilled-hole   # 软件自身的网格收敛
+python research/defects/comsol_compare.py run --free-ends D0-intact D1-open-crack D2-open-delamination D3-side-drilled-hole D4-closed-crack-1MPa D7-part-width-crack
+python research/defects/comsol_compare.py run --free-ends --h 1.0 D0-intact D1-open-crack D2-open-delamination D3-side-drilled-hole D4-closed-crack-1MPa D7-part-width-crack   # 软件自身的网格收敛
 python research/defects/comsol_compare.py run D0-intact D1-open-crack D2-open-delamination D3-side-drilled-hole                        # 按要求的场景（带吸收层）
 python research/defects/comsol_compare.py report      # → comsol-results/comparison.json
 ```
 
-逐接收点的数值在 `comsol-results/comparison.json`；软件每次计算的网格、时间层、耗时和能量收支在 `comsol-results/software*/*.json`。软件的接收点波形（同目录的 `*.npz`）不入库，用上面的命令重算，共约 3 分钟。
+逐接收点的数值在 `comsol-results/comparison.json`；软件每次计算的网格、时间层、耗时和能量收支在 `comsol-results/software*/*.json`。软件的接收点波形（同目录的 `*.npz`）不入库，用上面的命令重算，共约 6 分钟。
 
 ### 4.1 先说明一件事：这批 COMSOL 运行里吸收层没有起作用
 
@@ -222,7 +222,7 @@ python research/defects/comsol_compare.py report      # → comsol-results/compa
 - 与软件“带吸收层”的结果，在端面反射到达之前逐点接近（例如 top_20 的 u_z 在 2–10 μs 每隔 2 μs 的采样值相差不超过 1%），之后完全不同，整段波形差最大 100%；
 - 开始出现差别的时刻随接收点离端面的路程增加而推迟（x = 20 mm 处 u_z 在 13.5 μs，x = 45 mm 处在 21.6 μs）。
 
-按估算，阻尼哪怕只有要求值的万分之一，反射波也会差 0.1% 以上，所以阻尼体载荷实际上没有加上，而不是偏弱。原因要在 COMSOL 模型里查（体载荷节点是否启用、选择的域、速度变量和单位）；软件这边看不到模型文件。
+按估算，阻尼哪怕只有要求值的万分之一，反射波也会差 0.1% 以上，所以阻尼体载荷实际上没有加上，而不是偏弱。2026-11-18 交付的元数据确认了原因：保存的模型用的体载荷类型取的是全为零的分量，阻尼表达式写在一个对这种载荷不起作用的字段里。
 
 ![D0：COMSOL 与有、无吸收层的软件（x = 45 mm 上表面 u_z）](figures/comsol-d0-boundaries.png)
 
@@ -239,13 +239,16 @@ python research/defects/comsol_compare.py report      # → comsol-results/compa
 | D1 开口裂纹：软件 对 COMSOL mesh2 | **0.05%** | **0.06%** | 0.09° | 0.1% | 0.1% |
 | D2 开口分层：软件 对 COMSOL 基准网格 | 1.39% | 1.73% | 0.90° | 2.0% | 0.9% |
 | D3 横孔：软件 对 COMSOL 基准网格 | 0.64% | 1.95% | 0.46° | 1.9% | 1.9% |
+| D4 闭合裂纹（接触）：软件 对 COMSOL 基准网格 | 2.48% | 3.22% | 0.96° | 2.3% | 1.7% |
+| D7 部分宽度裂纹：软件 对 COMSOL 基准网格 | 1.29% | 6.94% | 3.46° | 2.2% | 2.3% |
+| D7 部分宽度裂纹：软件 对 COMSOL mesh2 | **0.06%** | **0.22%** | 0.25° | 0.3% | 0.3% |
 
 ![散射场：COMSOL、COMSOL mesh2 与软件，两端自由](figures/comsol-scattered.png)
 
 图由 `comsol_compare.py report` 生成（只要已经运行过 `run --free-ends` 和 `run D0-intact`）。
 
 - 波形差全部在 5% 门槛内（最大 2.04%）。
-- f 幅值差只有一处超过 5%：D1 的 top_45 u_x 对 COMSOL 基准网格为 6.55%。这是 COMSOL 基准网格自己的误差：它与 COMSOL mesh2 在同一处相差 6.09%，而软件与 mesh2 只差 0.06%。
+- f 幅值差超过 5% 的只有两处，都是对 COMSOL 基准网格、在接收点最弱的 u_x 分量上：D1 的 top_45（6.55%）和 D7 的 top_35（6.94%）。这是 COMSOL 基准网格自己的误差：它与 COMSOL mesh2 在同一处相差 6.09% 和 7.22%，而软件与 mesh2 只差 0.06% 和 0.22%。
 - D2 的散射场一栏只统计散射场不小于完好板的波的 5% 的分量。另有 5 个板厚中面的 u_x 分量，散射场只有完好板的波的 0.2–3.7%（分层在中面附近，几乎不散射对称模态），相对差 2.5–7.8%，折合完好板的波的 0.01–0.19%。
 
 ### 4.3 网格收敛：差别来自哪一边
@@ -265,14 +268,37 @@ python research/defects/comsol_compare.py report      # → comsol-results/compa
 | D2：COMSOL 基准网格 对 软件 h 1.0 | 2.31% | 2.88% | 3.2% |
 | D3：软件自动网格 对 软件 h 1.0 | 0.03% | 0.13% | 0.2% |
 | D3：COMSOL 基准网格 对 软件 h 1.0 | 0.62% | 1.86% | 2.0% |
+| D4：软件自动网格 对 软件 h 1.0 | 1.83% | 2.07% | 1.7% |
+| D4：COMSOL 基准网格 对 软件 h 1.0 | 3.36% | 5.13% | 3.1% |
+| D7：COMSOL 基准网格 对 COMSOL mesh2 | 1.27% | 7.22% | 2.1% |
+| D7：软件自动网格 对 COMSOL mesh2 | 0.06% | 0.22% | 0.3% |
+| D7：软件自动网格 对 软件 h 1.0 | 0.83% | 4.69% | 1.4% |
+| D7：COMSOL mesh2 对 软件 h 1.0 | 0.85% | 4.92% | 1.4% |
+| D7：COMSOL 基准网格 对 软件 h 1.0 | 2.11% | 12.49% | 3.5% |
 
 - **完好板和孔**：软件已经收敛（0.03–0.04%）。孔与 COMSOL 相差 0.6%；这是 COMSOL 基准网格的误差还是两边模型的差别，没有 mesh2 无法区分。
 - **裂纹**：四个解按网格从粗到细排成一列——COMSOL 基准网格、COMSOL mesh2 与软件自动网格（两者重合到 0.05%）、软件 h 1.0，相邻两级相差 1.3–2%。裂纹尖端的场是奇异的，收敛慢，第 1 节的平面应变核对也看到同样的慢收敛。软件自动网格的离散误差约 1.3%（波形），最敏感的一个分量上 f 幅值约 4%，在门槛内。
 - **分层**：软件自动网格的离散误差约 0.9%。COMSOL 基准网格离软件细网格更远（2.3%），与裂纹的情形相同；D2 没有 mesh2，这一点只是推断。
-- 软件与 COMSOL mesh2 在裂纹上重合到 0.05%，是两套独立的三维离散（谱元节点分裂 对 COMSOL 的裂纹边界）在相近分辨率下给出同一个解。
+- **部分宽度裂纹 D7**：与 D1 的情形完全相同——软件自动网格与 COMSOL mesh2 重合到 0.06%，COMSOL 基准网格更粗一级。这是二维核对覆盖不到的三维裂纹前沿（含 y 方向的端点），现在也有了独立核对。
+- **闭合裂纹 D4**：软件对 COMSOL 基准网格 2.5%，与开口裂纹 D1 对基准网格的 2.0% 同一量级；软件细网格离 COMSOL 基准网格更远（3.4%），说明这 2.5% 主要也是 COMSOL 基准网格的误差。D4 的 COMSOL mesh2 还在算。
+- 软件与 COMSOL mesh2 在两种裂纹上都重合到 0.06% 以内，是两套独立的三维离散（谱元节点分裂 对 COMSOL 的裂纹边界）在相近分辨率下给出同一个解。
 
-### 4.4 还没有的
+### 4.4 闭合裂纹的谐波（接触非线性）
 
-- D4、D5（闭合裂纹，接触）和 D7、D7 mesh2（部分宽度裂纹）还在算；到了以后用同一个脚本按两端自由对照。D7 是二维核对覆盖不到的工况。
+两个求解器的接触算法不同：软件是节点对上的单边无摩擦罚函数弹簧，罚刚度取时间层稳定所允许的最大值（第 3 节）；COMSOL 是 Crack Closure 罚函数接触（1.4 × 10¹⁵ Pa/m，最大穿透 0.5 nm，最大接触压力 0.73 MPa）。
+
+| 谐波 | COMSOL 的范围（20 个分量） | 软件 / COMSOL − 1 |
+|---|---|---|
+| 2f / f | 0.015–0.34 | −2.5% 到 +2.8% |
+| 3f / f，3f / f ≥ 0.01 的 3 个分量 | 0.012–0.049 | −0.2% 到 +5.9% |
+| 3f / f，其余 17 个分量 | 0.001–0.010 | −4.4% 到 +12.8% |
+
+- 二次谐波在每个接收点、每个分量上都在 3% 以内。这是闭合裂纹非线性的主要指标，第 1 节平面应变用精确接触得到的也是 3% 以内。
+- 三次谐波只有基频的 0.1–5%。较大的 3 个分量在 6% 以内；其余的只有基频的 1% 以下，相对差可到 13%，折合基频的 0.03% 以下。
+- 线性的开口裂纹 D1 在同一批接收点上 2f / f 只有 0.0002–0.0035，所以 D4 的谐波全部来自接触。
+
+### 4.5 还没有的
+
+- D5（闭合裂纹 2 MPa）和 D4 mesh2 还在算；到了以后用同一个脚本按两端自由对照。
 - D2、D3 没有 COMSOL mesh2。
 - 吸收层在三维里没有得到这批 COMSOL 数据的核对（它在 P1 和平面应变核对里核对过）。
