@@ -36,6 +36,11 @@ class Definition(unittest.TestCase):
         self.assertEqual(label(scan['axes'], rows[4]), 'frequency_mhz=0.25, amplitude_mpa=2'); self.assertTrue(request['scene']['name'].endswith(' · frequency_mhz=0.25, amplitude_mpa=2'))
         self.assertEqual(scan['request']['scene']['source']['amplitude_mpa'], model()['scene']['source']['amplitude_mpa'])   # the scan's own request is untouched
         self.assertEqual(request['mesh'], 'auto'); self.assertLessEqual(len(request['scene']['name']), 100)
+        named = validate_scan({'request': model(), 'axes': [{'path': 'source.frequency_mhz', 'values': [.2, .25], 'label': '频率', 'unit': 'MHz'}, {'path': 'source.cycles', 'values': [3.], 'label': '周期数'}]})
+        self.assertEqual(label(named['axes'], [.25, 3.]), '频率 0.25 MHz，周期数 3'); self.assertTrue(case_request(named, [.25, 3.])['scene']['name'].endswith(' · 频率 0.25 MHz，周期数 3'))
+        from .scan import heading
+        self.assertEqual([heading(a) for a in named['axes']], ['频率 (MHz)', '周期数']); self.assertEqual(heading(scan['axes'][0]), 'source.frequency_mhz')
+        with self.assertRaises(ValueError): validate_scan({'request': model(), 'axes': [{'path': 'source.cycles', 'values': [3.], 'label': 'x' * 61}]})
 
     def test_what_is_not_a_scan_is_refused_with_the_reason(self):
         ok = [{'path': 'source.amplitude_mpa', 'values': [1., 2.]}]
@@ -63,6 +68,12 @@ class Definition(unittest.TestCase):
         self.assertEqual((planned['count'], planned['valid']), (4, 4)); self.assertTrue(all(c['ok'] and c['nodes'] > 0 and c['seconds'] > 0 for c in planned['cases']))
         self.assertAlmostEqual(planned['seconds_total'], sum(c['seconds'] for c in planned['cases'])); self.assertEqual(planned['memory_bytes_max'], max(c['memory_bytes'] for c in planned['cases']))
         self.assertEqual(planned['cases'][1]['label'], 'frequency_mhz=0.2, amplitude_mpa=2')
+        # the disk estimate is the record and the result files (the animation of five responses), and it is compared with the free space
+        case = planned['cases'][0]; self.assertEqual((case['record'], planned['full_records'], planned['free_bytes'], planned['disk_short']), ('full', 4, None, False))
+        frames = 401
+        self.assertGreater(case['disk_bytes'], frames * case['nodes'] * 3 * 8 * 3); self.assertLess(case['disk_bytes'], 2.2 * frames * case['nodes'] * 3 * 8 * 3)
+        with tempfile.TemporaryDirectory() as tmp:
+            here = plan({'request': model(), 'axes': [{'path': 'source.frequency_mhz', 'values': [.2]}]}, tmp); self.assertGreater(here['free_bytes'], 0); self.assertEqual(here['disk_short'], here['disk_bytes_total'] > here['free_bytes'])
         # 3 MHz needs more output samples per period than the record has: that combination is marked, the others stay valid
         planned = plan({'request': model(), 'axes': [{'path': 'source.frequency_mhz', 'values': [.2, 3.]}]})
         self.assertEqual((planned['count'], planned['valid']), (2, 1)); self.assertFalse(planned['cases'][1]['ok']); self.assertTrue(planned['cases'][1]['errors'])
@@ -108,7 +119,7 @@ class Queue(unittest.TestCase):
                 windowed = app.scans.summary(scan['scan_id'], [2., 18.]); self.assertEqual(windowed['window_us'], [2., 18.]); self.assertNotEqual(windowed['rows'][0]['receivers'][0]['a1_m'], a['receivers'][0]['a1_m'])
                 rows = list(csv.reader(io.StringIO(app.scans.summary_csv(scan['scan_id']).decode('utf-8-sig'))))
                 self.assertEqual(len(rows), 1 + 2 + 2 + 1 + 1); self.assertEqual(rows[0][:4], ['组合', 'defects.0.x_mm', 'source.amplitude_mpa', '状态']); self.assertEqual(len({len(r) for r in rows}), 1)
-                self.assertEqual(float(rows[3][rows[0].index('A1 完整 (m)')]), b['receivers'][0]['a1_m']); self.assertEqual(rows[5][3], 'failed')
+                self.assertEqual(float(rows[3][rows[0].index('A1 完整 (m)')]), b['receivers'][0]['a1_m']); self.assertEqual((rows[1][3], rows[5][3]), ('已完成', '未完成'))
                 # retry: the failed combinations run again as new jobs (and fail again, for the same reason)
                 old = scan['cases'][2]['job_id']; app.scans.control(scan['scan_id'], 'retry'); scan = wait(app, scan['scan_id'])
                 self.assertEqual((scan['cases'][2]['phase'], scan['cases'][2]['attempts'], scan['cases'][2]['previous_jobs']), ('failed', 2, [old])); self.assertNotEqual(scan['cases'][2]['job_id'], old)

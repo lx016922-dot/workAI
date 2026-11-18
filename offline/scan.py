@@ -41,6 +41,7 @@ ROOTS = ('source', 'sources', 'geometry', 'defects', 'material', 'boundaries', '
 PATH = re.compile(r'[a-z_]+(\.[a-z_0-9]+){1,4}')
 DIMENSIONS = {'geometry.length_mm': 0, 'geometry.width_mm': 1, 'geometry.thickness_mm': 2}
 TERMINAL = ('completed', 'failed', 'paused')
+PHASE_WORDS = {'queued': '排队', 'running': '计算中', 'completed': '已完成', 'failed': '未完成', 'paused': '已暂停'}
 
 
 class Busy(ValueError):
@@ -92,9 +93,12 @@ def validate_scan(body):
         raise ValueError(f'参数扫描需要 1–{MAX_AXES} 个参数。')
     out = []; count = 1
     for axis in axes:
-        if not isinstance(axis, dict) or set(axis) != {'path', 'values'} or not isinstance(axis['path'], str) or not PATH.fullmatch(axis['path']) or axis['path'].split('.')[0] not in ROOTS:
+        if (not isinstance(axis, dict) or not {'path', 'values'} <= set(axis) <= {'path', 'values', 'label', 'unit'} or not isinstance(axis['path'], str) or not PATH.fullmatch(axis['path'])
+                or axis['path'].split('.')[0] not in ROOTS):
             raise ValueError('扫描参数需要 path（场景里的数值字段，例如 source.frequency_mhz）和 values（取值列表）。')
-        path = axis['path']
+        path = axis['path']; words = {key: axis[key].strip() for key in ('label', 'unit') if key in axis and isinstance(axis[key], str) and axis[key].strip()}
+        if set(words) != {'label', 'unit'} & set(axis) or len(words.get('label', '')) > 60 or len(words.get('unit', '')) > 12 or any(c in v for v in words.values() for c in '\r\n\t'):
+            raise ValueError(f'参数 {path} 的名称（label，最多 60 字）或单位（unit，最多 12 字）无效。')
         try: current = get_path(scene, path)
         except (KeyError, IndexError, ValueError, TypeError): raise ValueError(f'当前模型里没有参数 {path}。') from None
         if not number(current): raise ValueError(f'参数 {path} 不是数值，不能扫描。')
@@ -104,7 +108,7 @@ def validate_scan(body):
             raise ValueError(f'参数 {path} 需要 1–{MAX_VALUES} 个有限数值。')
         values = [float(v) for v in values]
         if len(set(values)) != len(values): raise ValueError(f'参数 {path} 的取值有重复。')
-        out.append({'path': path, 'values': values}); count *= len(values)
+        out.append({'path': path, 'values': values, **words}); count *= len(values)
     if count > MAX_CASES: raise ValueError(f'组合数 {count} 超过上限 {MAX_CASES}：请减少取值，或分几次扫描。')
     name = body.get('name', scene.get('name') or '参数扫描')
     if not isinstance(name, str) or not 1 <= len(name.strip()) <= 100: raise ValueError('扫描名称需为 1–100 个字符。')
@@ -112,8 +116,16 @@ def validate_scan(body):
 
 
 def label(axes, values):
-    """`frequency_mhz=0.3, amplitude_mpa=2` for one combination."""
-    return ', '.join(f"{axis['path'].split('.')[-1] if not axis['path'].split('.')[-1].isdigit() else axis['path']}={value:g}" for axis, value in zip(axes, values))
+    """One combination in words: `频率 0.3 MHz，幅值 2 MPa` with the names the interface gave the axes, else `frequency_mhz=0.3, amplitude_mpa=2`."""
+    def one(axis, value):
+        if axis.get('label'): return f"{axis['label']} {value:g}{' ' + axis['unit'] if axis.get('unit') else ''}"
+        return f"{axis['path'].split('.')[-1] if not axis['path'].split('.')[-1].isdigit() else axis['path']}={value:g}"
+    return ('，' if all(axis.get('label') for axis in axes) else ', ').join(one(axis, value) for axis, value in zip(axes, values))
+
+
+def heading(axis):
+    """Column heading of an axis: its name and unit, else its path."""
+    return f"{axis['label']}{' (' + axis['unit'] + ')' if axis.get('unit') else ''}" if axis.get('label') else axis['path']
 
 
 def combinations(scan):
@@ -131,18 +143,33 @@ def case_request(scan, values):
     return request
 
 
+def result_bytes(cost, nodes):
+    """Size of the result files a job writes beside its record (the animation of every response), before compression."""
+    from spectral3d.display import FRAMES
+    from .domain import parts_for
+    from .resources import BROWSER_NODES
+    parts = len(parts_for(cost['controls']))
+    if cost['record'] == 'full' and nodes <= BROWSER_NODES:   # the computation mesh itself, float64, within the 192 MiB display budget of one response
+        return parts * max(2, min(FRAMES, cost['frames'], (192 * 1024 ** 2) // (nodes * 24))) * nodes * 24
+    return parts * min(FRAMES, cost['frames']) * min(BROWSER_NODES, nodes) * 12   # the display mesh, float32
+
+
 def plan(body, data_directory=None):
     """What a scan would compute, without starting it: every combination checked like the model itself, with its mesh
-    and estimated cost, and the totals."""
+    and estimated cost, and the totals. `disk_bytes` is the record and the result files of a combination; every
+    combination of a scan keeps both."""
+    import shutil
     from .preview import preview
     scan = validate_scan(body); rows = []
     for index, values in enumerate(combinations(scan)):
         checked = preview(case_request(scan, values), data_directory); cost = checked.get('estimate') or {}; mesh = checked.get('mesh') or {}
+        disk = cost['disk_bytes'] + result_bytes(cost, mesh['nodes']) if cost and mesh.get('nodes') else None
         rows.append({'index': index, 'values': values, 'label': label(scan['axes'], values), 'ok': bool(checked['ok']), 'errors': checked['errors'], 'warnings': checked['warnings'],
-                     'nodes': mesh.get('nodes'), 'h_mm': (mesh.get('auto') or {}).get('h_mm'), 'seconds': cost.get('seconds'), 'memory_bytes': cost.get('memory_bytes'), 'disk_bytes': cost.get('disk_bytes')})
+                     'nodes': mesh.get('nodes'), 'h_mm': (mesh.get('auto') or {}).get('h_mm'), 'seconds': cost.get('seconds'), 'memory_bytes': cost.get('memory_bytes'), 'disk_bytes': disk, 'record': cost.get('record')})
     valid = [r for r in rows if r['ok']]; total = lambda key, combine: combine([r[key] for r in valid if r[key] is not None] or [0])
-    return {'axes': scan['axes'], 'name': scan['name'], 'count': len(rows), 'valid': len(valid), 'cases': rows,
-            'seconds_total': total('seconds', sum), 'memory_bytes_max': total('memory_bytes', max), 'disk_bytes_total': total('disk_bytes', sum)}
+    free = shutil.disk_usage(data_directory).free if data_directory else None; disk = total('disk_bytes', sum)
+    return {'axes': scan['axes'], 'name': scan['name'], 'count': len(rows), 'valid': len(valid), 'cases': rows, 'seconds_total': total('seconds', sum), 'memory_bytes_max': total('memory_bytes', max),
+            'disk_bytes_total': disk, 'free_bytes': free, 'disk_short': bool(free is not None and disk > free), 'full_records': sum(1 for r in valid if r['record'] == 'full')}
 
 
 def harmonics(times_us, values, frequency_mhz, window_us=None):
@@ -161,22 +188,42 @@ def harmonics(times_us, values, frequency_mhz, window_us=None):
     return out
 
 
+def receiver_series(record, points):
+    """(times_us, {control: samples × points × 3}) at points of a finished record, read in one pass over its chunks. A compact
+    record holds the waveforms of its receivers; a complete record is interpolated at the points."""
+    from .recording import chunks, controls_of, is_compact, manifest
+    m = manifest(record); controls = controls_of(m); values = {name: np.empty((m['frame_count'], len(points), 3)) for name in controls}
+    if is_compact(m):
+        rows = []
+        for p in points:
+            hit = [i for i, r in enumerate(m['receivers']) if max(abs(a - b) for a, b in zip(r['point_mm'], p)) <= 1e-6]
+            if not hit: raise ValueError('精简记录里没有这个接收点的波形。')
+            rows.append(hit[0])
+        for row, data in chunks(record, m):
+            probes = data['probes'][:, rows]   # samples × receivers × controls × xyz
+            for i, name in enumerate(controls): values[name][row['first_frame']:row['first_frame'] + row['frame_count']] = probes[:, :, i]
+    else:
+        from spectral3d.mesh import interpolation
+        with np.load(record / 'mesh.npz', allow_pickle=False) as data: mesh = dict(data)
+        locations = [interpolation(mesh, p) for p in points]
+        for row, data in chunks(record, m):
+            start = row['first_frame']; end = start + row['frame_count']
+            for name in controls:
+                field = data[name]
+                for j, (ids, w) in enumerate(locations): values[name][start:end, j] = np.einsum('n,tnc->tc', w, field[:, ids])
+    return np.arange(m['frame_count']) * m['sample_step_us'], values, m
+
+
 def case_summary(job, window_us=None):
     """Harmonics at the receivers of one finished job: {'frequency_mhz', 'nodes', 'elapsed_s', 'max_strain', 'receivers': [...]}."""
-    from .recording import manifest, traces, controls_of, available
+    from .domain import parts_for, response
+    from .recording import controls_of
     request = json.loads((job / 'request.json').read_text(encoding='utf-8')); status = json.loads((job / 'status.json').read_text(encoding='utf-8'))
-    scene = request['scene']; frequency = float(scene['source']['frequency_mhz']); record = job / 'record'; m = manifest(record)
-    receivers = scene['receivers']; points = [[float(v) for v in r['point_mm']] for r in receivers]
+    scene = request['scene']; frequency = float(scene['source']['frequency_mhz']); receivers = scene['receivers']; points = [[float(v) for v in r['point_mm']] for r in receivers]
     directions = [np.asarray(r['direction'], dtype=float) / np.linalg.norm(r['direction']) for r in receivers]
-    found = {}
-    for part in ('full', 'linear', 'nonlinear', 'geometric', 'material'):
-        try: available(m, part)
-        except ValueError: continue
-        rows = []
-        for i in range(0, len(points), 8):
-            t = traces(record, part, points[i:i + 8]); times = t['times_us']
-            rows += [harmonics(times, np.asarray(p['xyz_m']) @ directions[i + j], frequency, window_us) for j, p in enumerate(t['points'])]
-        found[part] = rows
+    times, values, m = receiver_series(job / 'record', points); controls = controls_of(m)
+    wanted = [part for part in ('full', 'linear', 'nonlinear', 'geometric', 'material') if part in parts_for(controls) or (part == 'nonlinear' and {'linear', 'murnaghan'} <= set(controls))]
+    found = {part: [harmonics(times, response(values, part)[:, j] @ directions[j], frequency, window_us) for j in range(len(points))] for part in wanted}
     out = []
     for i, receiver in enumerate(receivers):
         amplitude = lambda part, order: (found[part][i][order - 1] or {}).get('amplitude_m') if part in found else None
@@ -350,11 +397,11 @@ class Scans:
 
     def summary_csv(self, scan_id, window_us=None):
         table = self.summary(scan_id, window_us); out = io.StringIO(); writer = csv.writer(out)
-        writer.writerow(['组合', *[axis['path'] for axis in table['axes']], '状态', '计算记录', '接收点', 'x_mm', 'y_mm', 'z_mm', '方向 x', '方向 y', '方向 z', 'f (MHz)', 'A1 完整 (m)', 'A2 完整 (m)', 'A1 线性 (m)', 'A2 线性 (m)',
+        writer.writerow(['组合', *[heading(axis) for axis in table['axes']], '状态', '计算记录', '接收点', 'x_mm', 'y_mm', 'z_mm', '方向 x', '方向 y', '方向 z', 'f (MHz)', 'A1 完整 (m)', 'A2 完整 (m)', 'A1 线性 (m)', 'A2 线性 (m)',
                          'A2 非线性增量 (m)', 'A2 几何增量 (m)', 'A2 材料增量 (m)', 'A2/A1^2 (1/m)', 'A2/A1^2 所用的 A2', '节点', '用时 (s)', '最大应变', '说明'])
         blank = lambda v: '' if v is None else v
         for row in table['rows']:
-            head = [row['index'] + 1, *row['values'], row['phase'], blank(row['job_id'])]
+            head = [row['index'] + 1, *row['values'], PHASE_WORDS.get(row['phase'], row['phase']), blank(row['job_id'])]
             if not row.get('receivers'): writer.writerow(head + [''] * 17 + [blank(row.get('nodes')), blank(row.get('elapsed_s')), blank(row.get('max_strain')), row.get('error') or row.get('message') or '']); continue
             for r in row['receivers']:
                 writer.writerow(head + [r['name'], *r['point_mm'], *r['direction'], row['frequency_mhz']] + [blank(r[k]) for k in ('a1_m', 'a2_m', 'a1_linear_m', 'a2_linear_m', 'a2_nonlinear_m', 'a2_geometric_m', 'a2_material_m', 'a2_over_a1_squared_per_m')]

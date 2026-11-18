@@ -172,9 +172,16 @@ export function tree(scene) {
  * Hierarchical model-builder tree: model → component (geometry, material, physics with sources / boundaries /
  * receivers, mesh) → study (solver) → results (computed jobs). Node ids are the inspector selections.
  */
-export function treeNodes(scene, { degree = 4, engine = '物理 AI · 冻结网络', jobs = [], phases = {}, mesh = '' } = {}) {
+export function treeNodes(scene, { degree = 4, engine = '物理 AI · 冻结网络', jobs = [], phases = {}, mesh = '', scans = [], scan = '', scanCase = null } = {}) {
   const src = sourcesOf(scene), bnd = scene.boundaries || [], fixed = scene.boundary.fixed_face !== 'none', defects = scene.defects || [];
   const jobIcon = phase => phase === 'completed' ? 'job' : phase === 'failed' ? 'jobBad' : phase === 'paused' ? 'jobPaused' : 'jobRunning';
+  // `scanCase(scan, index)`: the words for a combination of a scan (scan.js); without it the tail of the job's name
+  const inScan = j => { const owner = scans.find(s => s.scan_id === j.scan.id); return `${j.scan.index + 1}. ${owner && scanCase ? scanCase(owner, j.scan.index) : String(j.name || '').split(' · ').at(-1)}`; };
+  const jobNode = j => ({ id: `job:${j.job_id}`, label: j.scan ? inScan(j) : j.name || j.job_id, icon: jobIcon(j.phase), detail: phases[j.phase] || j.phase });
+  // A parameter scan is a folder of its combinations (jobs that carry its id), in the order of the grid; the other jobs follow.
+  const listed = new Set(scans.map(s => s.scan_id)), states = { running: '进行中', paused: '已暂停', completed: '已完成' };
+  const scanNodes = scans.map(s => ({ id: `scanrun:${s.scan_id}`, label: s.name, icon: 'scan', count: `${s.counts.completed}/${s.count}`, detail: `参数扫描 · ${states[s.state] || s.state}`,
+    children: jobs.filter(j => j.scan?.id === s.scan_id).sort((a, b) => a.scan.index - b.scan.index).map(jobNode) }));
   return { id: 'scene', label: scene.name, icon: 'document', children: [
     { id: 'component', label: '组件 1', icon: 'component', detail: KIND_LABELS[scene.geometry.kind], children: [
       { id: 'geometry', label: '几何 1', icon: 'geometry', detail: geometrySummary(scene.geometry) },
@@ -194,9 +201,9 @@ export function treeNodes(scene, { degree = 4, engine = '物理 AI · 冻结网�
     ] },
     { id: 'study', label: '研究 1 · 瞬态', icon: 'study', detail: `${scene.acquisition.duration_us} μs · Δt ${scene.acquisition.sample_step_us} μs`, children: [
       { id: 'engine', label: '求解器配置', icon: 'engine', detail: engine },
+      { id: 'scan', label: '参数扫描', icon: 'scan', detail: scan || '一次计算多个参数组合' },
     ] },
-    { id: 'results', label: '结果', icon: 'results', count: jobs.length, children: jobs.map(j =>
-      ({ id: `job:${j.job_id}`, label: j.name || j.job_id, icon: jobIcon(j.phase), detail: phases[j.phase] || j.phase })) },
+    { id: 'results', label: '结果', icon: 'results', count: jobs.length, children: [...scanNodes, ...jobs.filter(j => !listed.has(j.scan?.id)).map(jobNode)] },
   ] };
 }
 

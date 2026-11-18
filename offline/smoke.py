@@ -103,6 +103,22 @@ def main():
             defect_status = wait(defect_job, 1800)
             defect_result = request('/api/jobs/' + defect_job + '/result?part=full')
             assert defect_result['scene']['defects'][0]['closed'] is True and all(c['energy_balance_within_1_percent'] for c in defect_result['controls'])
+            # Parameter scan (offline/scan.py): the check of the combinations, two short combinations through the queue, the summary table and its file.
+            swept = json.loads(json.dumps(small)); swept['defects'] = []; swept['name'] = 'scan smoke'
+            axes = [{'path': 'source.amplitude_mpa', 'values': [1., 2.], 'label': '幅值', 'unit': 'MPa'}]
+            planned = request('/api/scans/plan', {'request': {'scene': swept, 'mesh': 'auto'}, 'axes': axes}, headers)
+            assert planned['count'] == planned['valid'] == 2 and planned['seconds_total'] > 0 and planned['disk_bytes_total'] > 0, planned
+            scan = request('/api/scans', {'request': {'scene': swept, 'mesh': 'auto'}, 'axes': axes}, headers)['scan_id']
+            deadline = time.monotonic() + 1800
+            while time.monotonic() < deadline:
+                scan_status = request('/api/scans/' + scan)
+                if scan_status['state'] != 'running': break
+                time.sleep(2)
+            assert scan_status['state'] == 'completed' and scan_status['counts']['completed'] == 2, scan_status
+            table = request('/api/scans/' + scan + '/summary'); one, two = (row['receivers'][0] for row in table['rows'])
+            assert abs(two['a1_m'] / one['a1_m'] - 2) < 1e-3 and abs(two['a2_nonlinear_m'] / one['a2_nonlinear_m'] - 4) < .05, (one, two)
+            sheet = request('/api/scans/' + scan + '/summary.csv').decode('utf-8-sig').splitlines()
+            assert len(sheet) == 3 and sheet[0].startswith('组合,幅值 (MPa),状态'), sheet[:1]
             for bad in [{'Content-Type': 'application/json'}, dict(headers, Origin='https://unrelated.example')]:
                 try:
                     request('/api/jobs', body, bad)
@@ -149,7 +165,7 @@ def main():
                               'original_weights_sha256': info['model']['weights_sha256'], 'elapsed_s': status['elapsed_s'],
                               'duration_us':5000,'full_samples':25001,'controls': 3, 'response_parts': 5, 'authentication_checks': 2, 'invalid_scene_rejected': True,
                               'fast_engine_models_checked': len(fast_models), 'fast_engine_elapsed_s': fast_status['elapsed_s'],
-                              'defect_job_elapsed_s': defect_status['elapsed_s'], 'text_box_operations': len(told['operations'])}), flush=True)
+                              'defect_job_elapsed_s': defect_status['elapsed_s'], 'text_box_operations': len(told['operations']), 'scan_combinations': scan_status['counts']['completed']}), flush=True)
         finally:
             server.terminate()
             server.wait(timeout=15)
