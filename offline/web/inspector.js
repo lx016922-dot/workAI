@@ -137,7 +137,7 @@ function engineForm(engine = 'network', coarseModel = DEFAULT_COARSE_MODEL, reco
 
 function meshForm(scene, auto) {
   const rule = '软件按每个激励的 −30 dB 带宽和二次谐波（2f）自动选择单元尺寸：2f 剪切波长内的节点数目标为 10（记录 ≥ 1 ms 时为 15，按 1 ms 平板实测末段误差约 0.1%），'
-    + '单元尺寸限定在网络验证过的 0.8–2.5 mm、阶次 4；网格线穿过每个缺陷的边缘（裂纹尖端、分层前沿、缺口角点、孔的 O 型网格）。节点数只受本机内存限制（三组控制都算时约 2–3 kB / 节点，只算完整响应约 1 kB / 节点；不超过物理内存的 80%）：放不下时才放粗，并在“消息”中提示。';
+    + '单元尺寸 0.1–2.5 mm、阶次 4（“训练时的时间层”和快速引擎为 0.8–2.5 mm）；网格线穿过每个缺陷的边缘（裂纹尖端、分层前沿、缺口角点、孔的 O 型网格）。节点数只受本机内存限制（三组控制都算时约 2–3 kB / 节点，只算完整响应约 1 kB / 节点；不超过物理内存的 80%）：放不下时才放粗，并在“消息”中提示。';
   if (!auto) return section('网格（自动）', '<p class="wb-note">正在根据当前模型选择网格…（模型有错误时显示在“消息”窗口）</p>', rule);
   const f = (v, d = 3) => (+v).toFixed(d).replace(/\.?0+$/, '');
   const rows = [['单元尺寸 h', `${f(auto.h_mm)} mm`], ['阶次 p', auto.degree], ['节点间距 h / p', `${f(auto.node_spacing_mm)} mm（最小 ${f(auto.min_node_spacing_mm)} mm）`],

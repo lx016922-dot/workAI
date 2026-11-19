@@ -26,6 +26,17 @@ def plate(L=12., W=2., T=1.6, duration=8.):
     return s
 
 
+def quarter(scene):
+    """The same problem with every length and time divided by four (a power of two, so the scaling is exact in binary)."""
+    s = copy.deepcopy(scene); g = s['geometry']
+    for key in ('length_mm', 'width_mm', 'thickness_mm'): g[key] /= 4
+    s['source'].update(center_mm=[v / 4 for v in s['source']['center_mm']], frequency_mhz=s['source']['frequency_mhz'] * 4, delay_us=s['source']['delay_us'] / 4)
+    s['acquisition'] = {k: v / 4 for k, v in s['acquisition'].items()}; s['numerics']['h_mm'] /= 4
+    for r in s['receivers']: r['point_mm'] = [v / 4 for v in r['point_mm']]
+    s['defects'] = [{k: v / 4 if type(v) is float else v for k, v in d.items()} for d in s.get('defects', [])]
+    return s
+
+
 def bar(sign, contact):
     """1 × 1 mm bar, unipolar 3 μs Hann traction on the x = 0 end (sign +1 compressive), optional closed interface at x = 12 mm."""
     s = plate(L=24., W=1., T=1., duration=8.); step = .05; t = np.arange(0, 3. + 1e-9, step)
@@ -82,6 +93,26 @@ class DefectMesh(unittest.TestCase):
         _front_cuts([delamination], cuts, size, .25)
         self.assertEqual(sorted(cuts[0]), [0., 3.75, 4., 4.25, 7.75, 8., 8.25, 12.])
         self.assertEqual(sorted(cuts[2]), [0., 1.25, 1.5, 1.6])              # 1.75 lies outside the plate; no sliver lines
+
+    def test_a_defect_mesh_and_its_record_are_the_same_at_a_quarter_of_the_size(self):
+        # Elasticity without dissipation has no length of its own: with the same traction, the displacements of the quarter-size
+        # problem are a quarter. The software must not bring a length in (the gap rule between grid lines once did: 0.08 mm).
+        from spectral3d.feature_mesh import cut_gap
+        from graphnet.rollout import read_record, rollout
+        self.assertEqual([cut_gap(h) for h in (2.5, .8, .25)], [.08, .08, .025])
+        raw = plate(L=8., duration=4.); raw['source'].update(frequency_mhz=.6); raw['defects'] = [{'type': 'crack', 'x_mm': 4., 'depth_mm': .8, 'closed': True}]
+        model = load(4, long_record=True); runs = []
+        with tempfile.TemporaryDirectory() as tmp:
+            for i, case in enumerate((raw, quarter(raw))):
+                scene = network_scene(case, 4, model['material']); mesh = make_mesh(scene, 4, scene['numerics']['h_mm'])
+                rollout(scene, mesh, model, Path(tmp) / str(i), {'t': 1}, time_plan='auto', controls=('linear', 'murnaghan')); runs.append((mesh, read_record(Path(tmp) / str(i))))
+        (a, ra), (b, rb) = runs
+        self.assertEqual(len(np.unique(a['points'][:, 0])), len(np.unique(make_mesh(network_scene(plate(L=8.), 4, model['material']), 4, 1.)['points'][:, 0])) + 8)   # two front lines beside the crack plane, at both sizes
+        self.assertTrue(np.array_equal(a['elements'], b['elements'])); self.assertTrue(np.array_equal(a['contact_a'], b['contact_a']))
+        self.assertTrue(np.allclose(a['points'], 4 * b['points'], rtol=1e-12, atol=0)); self.assertTrue(np.allclose(a['mass'], 64 * b['mass'], rtol=1e-12, atol=0))
+        for key in ('linear', 'murnaghan'):
+            self.assertGreater(np.abs(ra[key]).max(), 1e-9); self.assertLess(np.abs(ra[key] - 4 * rb[key]).max(), 1e-9 * np.abs(ra[key]).max(), key)
+        increment = ra['murnaghan'] - ra['linear']; self.assertLess(np.abs(increment - 4 * (rb['murnaghan'] - rb['linear'])).max(), 1e-6 * np.abs(increment).max())
 
     def test_network_equals_the_gll_solver_on_cracked_notched_and_holed_plates(self):
         from spectral3d.solver import solve
