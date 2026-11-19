@@ -306,3 +306,25 @@ body.wb { margin: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr)
 .nl-ops li > div { display: grid; gap: 2px; }
 .nl-ops small { color: #5d6f7c; }
 .wb-note.warn { color: #8a5a00; background: #fff8e6; border-left: 3px solid #e8a200; padding: 4px 8px; }
+
+/* ---------- parameter scans (scan.js) ---------- */
+.scan-axis { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto; gap: 6px 8px; align-items: start; margin: 8px 9px; padding-bottom: 8px; border-bottom: 1px solid #edf0f3; }
+.scan-axis > .wb-button { margin-top: 17px; padding: 0 5px; }
+.scan-err { color: var(--bad); }
+.scan-plan { max-height: 260px; overflow: auto; border: 1px solid #edf0f3; }
+.scan-plan tr.bad td { background: var(--bad-soft); }
+.scan-plan td:nth-child(2), .scan-plan th:nth-child(2) { text-align: left; }
+.scan-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 4px 0 10px; }
+.scan-controls input { width: 84px; }
+.scan-controls select { max-width: 320px; }
+.scan-h { font-size: 13px; margin: 12px 0 2px; }
+.scan-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; list-style: none; margin: 4px 0 0; padding: 0; font-size: 12px; color: var(--ink); }
+.scan-legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
+.scan-wrap { overflow-x: auto; margin-top: 10px; border: 1px solid #edf0f3; }
+.scan-table { min-width: 720px; }
+.scan-table thead th { position: sticky; top: 0; background: #f4f6f8; }
+.scan-table tbody tr.open { cursor: pointer; }
+.scan-table tbody tr.open:hover td { background: var(--accent-soft); }
+.scan-table td.scan-msg { text-align: left; color: var(--muted); white-space: normal; }
+.scan-table tr.failed td.scan-msg { color: var(--bad); }
+.wb-result-title h2 .ic { width: 18px; height: 18px; vertical-align: -3px; margin-right: 5px; }

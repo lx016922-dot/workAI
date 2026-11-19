@@ -12,6 +12,7 @@ import { materialDerivedMarkup } from './material-form.js';
 import { mountRibbon } from './ribbon.js';
 import { icon } from './icons.js';
 import { renderTreeView, popupMenu, createLog, dialog, initSplitters, previewMessages, renderMessages, fmtBytes, fmtDuration, estimateMarkup } from './shell.js';
+import { scanFormMarkup, bindScanForm, scanAxes, keepScan, scanPageMarkup, SCAN_STATES, axisText, caseText, gridValues } from './scan.js';
 
 const $ = s => document.querySelector(s);
 const PHASES = { starting: '准备中', meshing: '生成连接图', running: '计算中', exporting: '保存结果', completed: '已完成', failed: '未完成', paused: '已暂停' };
@@ -21,8 +22,10 @@ const ENGINE_LABELS = { network: '物理 AI · 冻结网络', coarse: '物理 AI
 const host = window.chrome?.webview || null;   // present inside the WorkAI desktop window (WebView2)
 const state = { scene: null, degree: 4, engine: 'network', coarseModel: DEFAULT_COARSE_MODEL, record: 'auto', timeStepping: 'auto', controls: 'all', selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
   view: { yaw: VIEWS.iso[0], pitch: VIEWS.iso[1], zoom: 1, exaggerate: true, grid: true, preset: 'iso' }, history: [], templates: {}, token: '', picks: [], submitting: false,
-  expanded: new Set(['scene', 'component', 'physics', 'sources', 'boundaries', 'receivers', 'study', 'results']), info: null, phases: {}, lastPreviewKey: '' };
-let previewTimer = 0, previewStamp = 0, poll = 0, generation = 0, viewer = null, pathViewer = null, ribbon = null, log = null;
+  expanded: new Set(['scene', 'component', 'physics', 'sources', 'boundaries', 'receivers', 'study', 'results']), info: null, phases: {}, lastPreviewKey: '',
+  // parameter scans: the definition being edited, the server's check of it, the stored scans and the one shown in the results window
+  scan: { axes: [] }, scanPlan: null, scans: [], scanStates: {}, scanOpen: '', scanView: { receiver: 0, quantity: 'a2_over_a1_squared_per_m', window: null, axis: null } };
+let previewTimer = 0, previewStamp = 0, poll = 0, generation = 0, viewer = null, pathViewer = null, ribbon = null, log = null, planTimer = 0, planStamp = 0;
 
 async function api(url, body) {
   const response = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WorkAI-Token': state.token }, body: JSON.stringify(body) } : undefined);
@@ -44,10 +47,13 @@ function takeEngine(d) {
   state.engine = d?.engine === 'coarse' ? 'coarse' : 'network'; state.coarseModel = COARSE_MODELS[d?.coarse_model] ? d.coarse_model : DEFAULT_COARSE_MODEL;
   state.record = RECORD_MODES[d?.record] ? d.record : 'auto'; state.timeStepping = TIME_LAYERS[d?.time_stepping] ? d.time_stepping : 'auto'; state.controls = CONTROL_SETS[d?.controls] ? d.controls : 'all';
 }
-function storeDraft() { try { localStorage.setItem(DRAFT, JSON.stringify(requestBody())); } catch { /* storage unavailable */ } }
+/** The model as it is saved to a file or kept as the draft: the request, and the scan definition when there is one. */
+function documentBody() { return { ...requestBody(), ...(state.scan.axes.length ? { scan: state.scan } : {}) }; }
+function storeDraft() { try { localStorage.setItem(DRAFT, JSON.stringify(documentBody())); } catch { /* storage unavailable */ } }
 function readDraft() { try { const d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); return d?.scene?.schema === V2 ? d : null; } catch { return null; } }
 const running = () => state.jobs.find(j => !['completed', 'failed', 'paused'].includes(j.phase));
-window.workaiBusy = () => Boolean(running());   // asked by the desktop window before it closes
+const scanRunning = () => state.scans.find(x => x.state === 'running');
+window.workaiBusy = () => Boolean(running() || scanRunning());   // asked by the desktop window before it closes
 
 // ---------- editing ----------
 function snapshot() { return JSON.stringify(requestBody()); }
@@ -67,11 +73,12 @@ function validSelection(id) {
   if (kind === 'defects') return s.geometry.kind === 'plate';
   if (kind === 'fixed') return s.boundary.fixed_face !== 'none';
   if (kind === 'job') return state.jobs.some(j => j.job_id === raw);
+  if (kind === 'scanrun') return state.scans.some(x => x.scan_id === raw);
   return true;
 }
 function loadScene(scene, degree = state.degree, keepHistory = true) {
   if (keepHistory && state.scene) remember();
-  state.scene = upgrade(scene); state.degree = degree; state.selection = 'geometry';
+  state.scene = upgrade(scene); state.degree = degree; state.selection = 'geometry'; state.scan = keepScan(state.scan, state.scene); state.scanPlan = null;
   renderAll(); schedulePreview(); storeDraft();
 }
 function changed(kind) {
@@ -150,18 +157,20 @@ function setKind(kind) {
 // ---------- rendering ----------
 const NODE_TITLES = { scene: '模型', component: '组件 1', geometry: '几何 1', material: '材料', physics: '超声导波（固体力学）', sources: '激励源', source: '激励源', boundaries: '边界条件',
   boundary: '边界条件', fixed: '固定面', receivers: '接收点', receiver: '接收点', mesh: '网格 1（自动）', study: '研究 1 · 瞬态', engine: '求解器配置', results: '结果', job: '计算记录',
-  defects: '缺陷', defect: '缺陷' };
+  defects: '缺陷', defect: '缺陷', scan: '参数扫描', scanrun: '参数扫描' };
 const NODE_ICONS = { scene: 'document', component: 'component', geometry: 'geometry', material: 'material', physics: 'physics', sources: 'folder', source: 'source', boundaries: 'folder',
-  boundary: 'boundary', fixed: 'fixed', receivers: 'folder', receiver: 'receiver', mesh: 'mesh', study: 'study', engine: 'engine', results: 'results', job: 'job', defects: 'folder', defect: 'crack' };
+  boundary: 'boundary', fixed: 'fixed', receivers: 'folder', receiver: 'receiver', mesh: 'mesh', study: 'study', engine: 'engine', results: 'results', job: 'job', defects: 'folder', defect: 'crack', scan: 'scan', scanrun: 'scan' };
 function select(id, focus = false) {
   state.selection = id; const kind = id.split(':')[0];
   if (kind === 'job') { setTab('result'); openJob(id.slice(4)); }
+  if (kind === 'scanrun') { setTab('result'); openScan(id.slice(8)); }
   renderTree(); renderInspector(); drawView(); ribbon?.refresh();
   if (focus) $('#tree').querySelector('.mb-row.sel')?.focus();
 }
 function renderTree() {
   const auto = state.preview?.mesh?.auto, meshDetail = state.engine === 'coarse' ? '快速引擎用模型自带网格' : auto ? `h ${+auto.h_mm.toFixed(3)} mm · p ${auto.degree} · ${auto.nodes.toLocaleString()} 节点` : '';
-  renderTreeView($('#tree'), treeNodes(state.scene, { engine: ENGINE_LABELS[state.engine], jobs: state.jobs, phases: PHASES, mesh: meshDetail }), {
+  const defined = scanAxes(state.scan, state.scene), scanDetail = defined.ready ? `${defined.count} 个组合` : state.scan.axes.length ? '定义未完成' : '';
+  renderTreeView($('#tree'), treeNodes(state.scene, { engine: ENGINE_LABELS[state.engine], jobs: state.jobs, phases: PHASES, mesh: meshDetail, scans: state.scans, scan: scanDetail, scanCase: (x, index) => caseText(x.axes, gridValues(x.axes, index)) }), {
     selected: state.selection, expanded: state.expanded,
     onSelect: (id, focus) => select(id, focus),
     onToggle: id => { state.expanded.has(id) ? state.expanded.delete(id) : state.expanded.add(id); renderTree(); },
@@ -183,12 +192,13 @@ function contextMenu(id, x, y) {
   if (kind === 'receivers') rows.push({ id: 'add:receiver', label: '添加接收点', icon: 'receiver' });
   if (kind === 'defects' || kind === 'geometry' && state.scene.geometry.kind === 'plate') rows.push(...defectMenu().map(r => ({ ...r, id: `add-defect:${r.id}`, label: `添加${r.label}` })), ...(kind === 'geometry' ? [{ sep: true }] : []));
   if (kind === 'job') rows.push({ id: 'open-job', label: '打开结果', icon: 'results' }, { id: 'reuse-job', label: '载入该计算的模型', icon: 'open' }, { id: 'export-result', label: '导出结果 ZIP', icon: 'export' });
-  if (kind === 'study' || kind === 'engine') rows.push({ id: 'run', label: '计算', icon: 'compute' });
+  if (kind === 'study' || kind === 'engine') rows.push({ id: 'run', label: '计算', icon: 'compute' }, { id: 'sel:scan', label: '参数扫描…', icon: 'scan' });
+  if (kind === 'scanrun') rows.push({ id: 'open-scan', label: '打开汇总表', icon: 'results' });
   if (kind === 'geometry') rows.push(...Object.entries(KIND_LABELS).map(([k, v]) => ({ id: `kind:${k}`, label: `改为${v}`, icon: 'geometry' })));
   const removable = ['source', 'boundary', 'receiver', 'fixed', 'defect'].includes(kind) && !(kind === 'source' && id === 'source:0') && !(kind === 'receiver' && state.scene.receivers.length < 2);
   if (removable) rows.push({ sep: true }, { id: 'remove', label: '删除', icon: 'remove' });
   if (!rows.length) return;
-  popupMenu(x, y, rows, cmd => cmd === 'remove' ? removeItem(id) : cmd === 'open-job' ? select(id) : cmd === 'reuse-job' ? reuseJob(id.slice(4)) : command(cmd));
+  popupMenu(x, y, rows, cmd => cmd === 'remove' ? removeItem(id) : cmd === 'open-job' || cmd === 'open-scan' ? select(id) : cmd === 'reuse-job' ? reuseJob(id.slice(4)) : command(cmd));
 }
 function nodeLabel(id) {
   const [kind, raw] = id.split(':'), i = Number(raw), s = state.scene;
@@ -197,6 +207,7 @@ function nodeLabel(id) {
   if (kind === 'receiver') return s.receivers[i]?.name || '接收点';
   if (kind === 'defect') return s.defects?.[i] ? defectName(s.defects[i], i) : '缺陷';
   if (kind === 'job') return state.jobs.find(j => j.job_id === raw)?.name || '计算记录';
+  if (kind === 'scanrun') return state.scans.find(x => x.scan_id === raw)?.name || '参数扫描';
   if (kind === 'scene') return s.name;
   return NODE_TITLES[kind] || '设置';
 }
@@ -207,6 +218,8 @@ function renderInspector() {
   const iconName = kind === 'boundary' ? state.scene.boundaries[index]?.type || 'boundary' : kind === 'defect' ? DEFECT_ICONS[state.scene.defects?.[index]?.type] : NODE_ICONS[kind];
   $('#inspector-head').innerHTML = `${icon(iconName)}<b>${escapeHtml(nodeLabel(state.selection))}</b>`;
   if (kind === 'job') { renderJobInspector(state.selection.slice(4)); return; }
+  if (kind === 'scan') { renderScanForm(); return; }
+  if (kind === 'scanrun') { renderScanInspector(state.selection.slice(8)); return; }
   $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, 4, { materials: state.materials, engine: state.engine, coarseModel: state.coarseModel, meshAuto: state.preview?.mesh?.auto, record: state.record, timeStepping: state.timeStepping, controls: state.controls });
   renderMaterialDerived(); renderEngineDerived();
   let before = snapshot();
@@ -226,6 +239,81 @@ function renderJobInspector(id) {
   $('#inspector').querySelector('[data-job-act="open"]').onclick = () => { setTab('result'); openJob(id); };
   $('#inspector').querySelector('[data-job-act="reuse"]').onclick = () => reuseJob(id);
 }
+// ---------- parameter scans ----------
+/** The definition form (settings window of “参数扫描”): edits go to state.scan; the server checks the combinations after each edit. */
+function renderScanForm() {
+  $('#inspector').innerHTML = scanFormMarkup(state.scene, state.scan, state.scanPlan, { busy: Boolean(running() || scanRunning() || state.submitting), engine: state.engine });
+  bindScanForm($('#inspector'), state.scan, () => { state.scanPlan = null; storeDraft(); renderTree(); renderScanForm(); }, startScan);
+  if (!state.scanPlan) schedulePlan();   // the server checks the combinations; the answer re-renders this form
+}
+function scanBody() { return { request: requestBody(), axes: scanAxes(state.scan, state.scene).axes, name: state.scene.name }; }
+function schedulePlan() {
+  clearTimeout(planTimer); const stamp = ++planStamp;
+  if (!scanAxes(state.scan, state.scene).ready) return;
+  planTimer = setTimeout(async () => {
+    let plan; try { plan = await api('/api/scans/plan', scanBody()); } catch (error) { plan = { error: error.message }; }
+    if (stamp !== planStamp) return;
+    state.scanPlan = plan; if (state.selection === 'scan') renderScanForm();
+  }, 350);
+}
+async function startScan() {
+  if (!state.scanPlan || state.scanPlan.error || state.scanPlan.valid !== state.scanPlan.count) return;
+  const plan = state.scanPlan, choice = await dialog({ title: '开始参数扫描', body: `<p>将依次计算 <b>${plan.count}</b> 个组合，预计共 ${fmtDuration(plan.seconds_total)}，记录约 ${fmtBytes(plan.disk_bytes_total)}。</p>
+      <p class="muted">扫描期间不能提交其他计算；可以随时暂停，之后继续。失败的组合不会中断扫描，结束后可以单独重算。</p>`, buttons: [{ id: 'start', label: '开始', primary: true }, { id: 'cancel', label: '取消' }] });
+  if (choice !== 'start') return;
+  state.submitting = true; ribbon.refresh();
+  try {
+    const d = await api('/api/scans', scanBody());
+    log.add('info', `已开始参数扫描：${state.scene.name}（${d.count} 个组合）。`);
+    await refreshJobs(); state.expanded.add('results'); state.expanded.add(`scanrun:${d.scan_id}`); state.selection = `scanrun:${d.scan_id}`;
+    renderTree(); renderInspector(); setTab('result'); setDock('progress'); await openScan(d.scan_id);
+  } catch (error) { fail(error); } finally { state.submitting = false; await refreshJobs().catch(fail); }
+}
+function renderScanInspector(id) {
+  const x = state.scans.find(v => v.scan_id === id); if (!x) { $('#inspector').innerHTML = ''; return; }
+  $('#inspector').innerHTML = `<section class="wb-section"><h3>参数扫描</h3><table class="wb-table">
+      <tr><th>名称</th><td>${escapeHtml(x.name)}</td></tr><tr><th>状态</th><td><span class="wb-phase ${x.state}">${SCAN_STATES[x.state] || escapeHtml(x.state)}</span> ${x.counts.completed} / ${x.count} 个组合已完成${x.counts.failed ? `，${x.counts.failed} 个未完成` : ''}</td></tr>
+      ${x.axes.map((a, i) => `<tr><th>参数 ${i + 1}</th><td>${escapeHtml(axisText(a))}：${a.values.map(v => +(+v).toPrecision(6)).join('、')}</td></tr>`).join('')}
+      <tr><th>开始</th><td>${new Date(x.created_at_utc).toLocaleString()}</td></tr><tr><th>编号</th><td><code>${escapeHtml(id)}</code></td></tr></table>
+      <div class="st-actions"><button type="button" class="wb-button" data-scan-open>${icon('results')}打开汇总表</button></div>
+      <p class="wb-note">每个组合是“结果”下这个扫描里的一条计算记录，可以单独打开、导出或载入它的模型。</p></section>`;
+  $('#inspector').querySelector('[data-scan-open]').onclick = () => { setTab('result'); openScan(id); };
+}
+async function scanAction(id, action) {
+  try {
+    await api(`/api/scans/${id}/${action}`, {});
+    log.add(action === 'pause' ? 'warn' : 'info', { pause: '参数扫描已暂停：当前组合保存检查点后停止。', resume: '继续参数扫描。', retry: '重算未完成的组合。' }[action]);
+    await refreshJobs(); await openScan(id);
+  } catch (error) { fail(error); }
+}
+/** The page of a scan in the results window: progress and commands, then the summary table and the curve; it refreshes while the scan runs. */
+async function openScan(id, quiet = false) {
+  clearTimeout(poll); const stamp = ++generation;
+  if (!quiet || state.scanOpen !== id) clearResults();
+  state.scanOpen = id; state.job = '';
+  try {
+    const view = state.scanView, query = view.window ? `?start_us=${view.window[0]}&end_us=${view.window[1]}` : '';
+    const detail = await api('/api/scans/' + id); if (stamp !== generation) return;
+    let page = scanPageMarkup(detail, null, view); $('#result-head').innerHTML = page.head;
+    const bindHead = () => $('#result-head').querySelectorAll('[data-scan-act]').forEach(b => b.addEventListener('click', () => scanAction(id, b.dataset.scanAct)));
+    bindHead(); if (!$('#results').children.length) $('#results').innerHTML = page.body;
+    const table = await api(`/api/scans/${id}/summary${query}`); if (stamp !== generation) return;
+    page = scanPageMarkup(detail, table, view); $('#result-head').innerHTML = page.head; bindHead();
+    const keep = $('#tab-result .wb-scroll')?.scrollTop; $('#results').innerHTML = page.body; if (keep) $('#tab-result .wb-scroll').scrollTop = keep;
+    $('#scan-receiver')?.addEventListener('change', ev => { view.receiver = +ev.target.value; openScan(id, true); });
+    $('#scan-quantity')?.addEventListener('change', ev => { view.quantity = ev.target.value; openScan(id, true); });
+    $('#scan-axis')?.addEventListener('change', ev => { view.axis = +ev.target.value; openScan(id, true); });
+    $('#scan-window')?.addEventListener('click', () => {
+      const a = Number($('#scan-start').value), b = Number($('#scan-end').value);
+      if ($('#scan-start').value === '' || $('#scan-end').value === '' || !(a < b)) return fail(Error('分析时间窗需要起点早于终点的两个时刻（μs）。'));
+      view.window = [a, b]; openScan(id, true);
+    });
+    $('#scan-window-clear')?.addEventListener('click', () => { view.window = null; openScan(id, true); });
+    $('#results').querySelectorAll('tr[data-job]').forEach(row => row.addEventListener('click', () => select(`job:${row.dataset.job}`)));
+    if (detail.state === 'running') poll = setTimeout(async () => { try { await refreshJobs(); if (state.scanOpen === id && state.selection === `scanrun:${id}`) await openScan(id, true); } catch (e) { fail(e); } }, 3000);
+  } catch (error) { if (stamp === generation) fail(error); }
+}
+
 function renderEngineDerived() {
   const box = $('#engine-derived'), e = state.preview?.engine; if (!box) return;
   if (state.engine !== 'coarse') { box.innerHTML = `<small>冻结网络：求导滤波器与时间层等价于 GLL 谱元，精度由节点间距决定；支持全部几何、材料和长记录。</small>${estimateMarkup(state.preview?.estimate)}`; return; }
@@ -266,8 +354,9 @@ function renderStatus() {
   ribbon?.refresh();
 }
 function renderStateText() {
-  const r = running(), el = $('#sb-state');
-  if (r) { const pct = r.duration_us ? Math.round(100 * (r.completed_time_us || 0) / r.duration_us) : 0; el.innerHTML = `${icon('jobRunning')}${PHASES[r.phase] || r.phase} ${pct}% · ${escapeHtml(r.name || '')}`; el.className = 'sb-state busy'; return; }
+  const r = running(), el = $('#sb-state'), sweep = scanRunning();
+  if (sweep && !r) { el.innerHTML = `${icon('jobRunning')}参数扫描 ${sweep.counts.completed + sweep.counts.failed} / ${sweep.count} · ${escapeHtml(sweep.name)}`; el.className = 'sb-state busy'; return; }
+  if (r) { const pct = r.duration_us ? Math.round(100 * (r.completed_time_us || 0) / r.duration_us) : 0; el.innerHTML = `${icon('jobRunning')}${r.scan ? `参数扫描 ${r.scan.index + 1} / ${r.scan.count} · ` : ''}${PHASES[r.phase] || r.phase} ${pct}% · ${escapeHtml(r.name || '')}`; el.className = 'sb-state busy'; return; }
   if (!state.preview) { el.innerHTML = '正在检查模型…'; el.className = 'sb-state'; return; }
   el.innerHTML = state.preview.ok ? `${icon('check')}就绪` : `${icon('error')}模型有 ${state.preview.errors.length} 个问题`; el.className = `sb-state ${state.preview.ok ? 'ok' : 'bad'}`;
 }
@@ -287,7 +376,7 @@ function setDock(name) {
 
 // ---------- preview ----------
 function schedulePreview() {
-  clearTimeout(previewTimer); state.preview = null; renderStatus();
+  clearTimeout(previewTimer); state.preview = null; state.scanPlan = null; renderStatus();
   previewTimer = setTimeout(async () => {
     const stamp = ++previewStamp;
     try {
@@ -295,13 +384,19 @@ function schedulePreview() {
       if (stamp !== previewStamp) return;
       state.preview = result; renderStatus(); drawView(); renderMaterialDerived(); renderEngineDerived(); if (state.tab === 'signal') renderSignals();
       renderTree(); if (state.selection === 'mesh') renderInspector();
+      if (state.selection === 'scan') renderScanForm();
     } catch (error) { if (stamp === previewStamp) { state.preview = { ok: false, errors: [error.message], signals: [] }; renderStatus(); } }
   }, 320);
 }
 
 // ---------- jobs and results ----------
 async function refreshJobs() {
-  state.jobs = await api('/api/jobs');
+  [state.jobs, state.scans] = await Promise.all([api('/api/jobs'), api('/api/scans')]);
+  for (const x of state.scans) {
+    const before = state.scanStates[x.scan_id];
+    if (before && before !== x.state) log.add(x.state === 'completed' ? (x.counts.failed ? 'warn' : 'ok') : x.state === 'paused' ? 'warn' : 'info', `参数扫描 ${x.name}：${SCAN_STATES[x.state] || x.state}${x.message ? `（${x.message}）` : ''}`);
+    state.scanStates[x.scan_id] = x.state;
+  }
   for (const j of state.jobs) {
     const before = state.phases[j.job_id];
     if (before && before !== j.phase) log.add(j.phase === 'completed' ? 'ok' : j.phase === 'failed' ? 'error' : j.phase === 'paused' ? 'warn' : 'info', `${j.name || j.job_id}：${PHASES[j.phase] || j.phase}${j.message ? `（${j.message}）` : ''}`);
@@ -309,13 +404,18 @@ async function refreshJobs() {
   }
   if (!validSelection(state.selection)) state.selection = 'results';
   renderTree(); renderProgress(); renderStateText(); ribbon?.refresh();
-  if (state.selection.startsWith('job:')) renderInspector();   // keep the record's status current
+  if (state.selection.startsWith('job:') || state.selection.startsWith('scanrun:')) renderInspector();   // keep the record's status current
+  const busy = Boolean(running() || scanRunning());   // the scan form only changes its start button: re-render it when that changes, not while values are typed
+  if (state.selection === 'scan' && busy !== state.scanBusy) renderInspector();
+  state.scanBusy = busy;
 }
 function renderProgress() {
-  const j = running() || state.jobs.find(x => x.job_id === state.job) || state.jobs[0], box = $('#dock-progress');
+  const j = running() || state.jobs.find(x => x.job_id === state.job) || state.jobs[0], box = $('#dock-progress'), sweep = scanRunning();
   if (!j) { box.innerHTML = '<p class="dock-empty">还没有计算。设置好模型后点击功能区的“计算”（F8）。</p>'; return; }
   const pct = j.phase === 'completed' ? 100 : j.duration_us ? 100 * (j.completed_time_us || 0) / j.duration_us : 0;
-  box.innerHTML = `<div class="pg"><div class="pg-head">${icon(j.phase === 'completed' ? 'job' : j.phase === 'failed' ? 'jobBad' : j.phase === 'paused' ? 'jobPaused' : 'jobRunning')}<b>${escapeHtml(j.name || j.job_id)}</b>
+  const total = sweep ? `<div class="pg"><div class="pg-head">${icon('scan')}<b>参数扫描：${escapeHtml(sweep.name)}</b><span class="wb-phase running">${sweep.counts.completed + sweep.counts.failed} / ${sweep.count}</span></div>
+      <div class="pg-bar"><span style="width:${(100 * (sweep.counts.completed + sweep.counts.failed) / sweep.count).toFixed(1)}%"></span></div></div>` : '';
+  box.innerHTML = `${total}<div class="pg"><div class="pg-head">${icon(j.phase === 'completed' ? 'job' : j.phase === 'failed' ? 'jobBad' : j.phase === 'paused' ? 'jobPaused' : 'jobRunning')}<b>${escapeHtml(j.name || j.job_id)}</b>
       <span class="wb-phase ${j.phase}">${PHASES[j.phase] || escapeHtml(j.phase)}</span><span class="muted">${new Date(j.started_at_utc).toLocaleString()}</span></div>
       <div class="pg-bar"><span style="width:${pct.toFixed(1)}%"></span></div><div class="pg-foot"><span>${pct.toFixed(0)}%${j.completed_time_us !== undefined && j.duration_us ? ` · 已算到 ${(+j.completed_time_us).toFixed(2)} / ${j.duration_us} μs` : ''}${j.remaining_s > 0 && !['completed', 'failed', 'paused'].includes(j.phase) ? ` · 预计还需 ${fmtDuration(j.remaining_s)}` : ''}</span>
       <span>${j.message ? escapeHtml(j.message) : ''}</span></div></div>`;
@@ -326,7 +426,7 @@ async function reuseJob(id) {
 }
 async function openJob(id, restore = false) {
   clearTimeout(poll); const stamp = ++generation, oldView = restore ? viewer?.snapshot() : null, oldPath = restore ? pathViewer?.snapshot() : null;
-  clearResults(); state.job = id; renderProgress(); ribbon?.refresh();
+  clearResults(); state.job = id; state.scanOpen = ''; renderProgress(); ribbon?.refresh();
   if (!id) { $('#result-head').innerHTML = '<p class="wb-empty">在模型开发器的“结果”下选择一条计算记录，或点击功能区的“计算”计算当前模型。</p>'; return; }
   try {
     const s = await api('/api/jobs/' + id); if (stamp !== generation) return;
@@ -402,9 +502,10 @@ async function command(id) {
       case 'template': { const t = state.templates[arg]; if (t) { loadScene(structuredClone(t.scene)); setTab('model'); log.add('info', `从模板新建：${t.label}`); } break; }
       case 'new': ribbon.showTab('home'); document.querySelector('[data-cmd="new"]')?.click(); break;
       case 'open': $('#import-scene').click(); break;
-      case 'save': download(`${(state.scene.name || 'workai-model').replace(/[\\/:*?"<>|]/g, '_')}.json`, requestBody()); log.add('info', '已保存模型文件。'); break;
+      case 'save': download(`${(state.scene.name || 'workai-model').replace(/[\\/:*?"<>|]/g, '_')}.json`, documentBody()); log.add('info', '已保存模型文件。'); break;
       case 'undo': undo(); break;
-      case 'sel': select(arg); if (['geometry', 'material', 'mesh', 'study', 'engine', 'sources', 'receivers', 'results'].includes(arg)) setTab(arg === 'results' ? 'result' : 'model'); break;
+      case 'sel': select(arg); if (['geometry', 'material', 'mesh', 'study', 'engine', 'sources', 'receivers', 'results', 'scan'].includes(arg)) setTab(arg === 'results' ? 'result' : 'model');
+        if (arg === 'scan') { state.expanded.add('study'); renderTree(); } break;
       case 'add': if (arg === 'defect') await addDefectOf('crack'); else addItem(arg); break;
       case 'add-defect': await addDefectOf(arg); break;
       case 'focus-command': $('#command-input').focus(); break;
@@ -413,7 +514,7 @@ async function command(id) {
       case 'run': if (!disabled('run')) await run(); break;
       case 'pause': { const j = running(); if (j) { await api(`/api/jobs/${j.job_id}/pause`, {}); log.add('warn', '当前分块保存后暂停。'); } break; }
       case 'resume': { const j = selectedJob(); if (j?.phase === 'paused') { await api(`/api/jobs/${j.job_id}/resume`, {}); log.add('info', `继续计算：${j.name}`); await refreshJobs(); await openJob(j.job_id); setDock('progress'); } break; }
-      case 'tab': setTab(arg); if (arg === 'result' && !state.job && state.jobs[0]) openJob(state.jobs[0].job_id); break;
+      case 'tab': setTab(arg); if (arg === 'result' && !state.job && !state.scanOpen && state.jobs[0]) openJob(state.jobs[0].job_id); break;
       case 'export-result': { const j = selectedJob(); if (j?.phase === 'completed') { const a = document.createElement('a'); a.href = `/api/jobs/${j.job_id}/export`; a.click(); log.add('info', `导出结果：${j.name}`); } break; }
       case 'refresh': await refreshJobs(); if (state.job) await openJob(state.job); break;
       case 'view': setView(arg); break;
@@ -437,7 +538,7 @@ async function command(id) {
 function disabled(id) {
   const [verb, arg] = id.split(':');
   if (verb === 'undo') return !state.history.length;
-  if (verb === 'run') return state.submitting || Boolean(running()) || !state.preview?.ok;
+  if (verb === 'run') return state.submitting || Boolean(running() || scanRunning()) || !state.preview?.ok;
   if (verb === 'pause') { const j = running(); return !j || !(j.resumable ?? j.duration_us >= 5000); }
   if (verb === 'resume') return selectedJob()?.phase !== 'paused' || Boolean(running());
   if (verb === 'export-result') return selectedJob()?.phase !== 'completed';
@@ -451,6 +552,7 @@ function active(id) {
   if (verb === 'toggle') return arg === 'grid' ? state.view.grid : arg === 'thin' ? state.view.exaggerate : arg === 'dock' ? !$('#desk').classList.contains('no-dock') : false;
   if (verb === 'kind') return state.scene?.geometry.kind === arg;
   if (verb === 'tab') return state.tab === arg;
+  if (id === 'sel:scan') return state.selection === 'scan';
   return false;
 }
 function renderGraphicsTools() {
@@ -477,6 +579,7 @@ async function showHelp() {
       <li><b>网格：</b>由软件按激励频率、记录时长和缺陷位置自动选择，“网格 1（自动）”节点显示所选尺寸和依据，不需要设置。模型大小只受本机内存、磁盘和时间限制，“消息”窗口给出预计耗时和内存；大模型自动保存精简记录（接收点完整波形 + 表面动画 + 快照），请先把关心的位置设为接收点。</li>
       <li><b>检查：</b>“消息”窗口实时列出模型检查结果、网格和记录大小、每个激励的 2f 分辨率，以及是否超出原验收范围。图形窗口显示几何、加载区、边界和接收点。</li>
       <li><b>计算：</b>点击“计算”（F8）。“进度”窗口显示计算进度；5 ms 及以上的长记录可“暂停”并在之后“继续”。首次计算需要几分钟编译。</li>
+      <li><b>参数扫描：</b>功能区“研究 → 参数扫描”：选 1–3 个参数（频率、幅值、板厚、缺陷尺寸等）并填入取值，软件逐个组合计算。可以暂停和继续；失败的组合不中断扫描，结束后可单独重算。“结果”下的扫描页给出汇总表（各接收点的 A₁、A₂、非线性增量的 A₂ 和 A₂/A₁²）、随参数变化的曲线，并可导出 CSV；点表中的一行打开那个组合的完整结果。</li>
       <li><b>结果：</b>在“结果”下选择计算记录：位移场动画、任意点波形与频谱、多点提取、五种响应（完整、线性、StVK、几何增量、材料增量），可导出全部结果 ZIP。</li>
       <li><b>精度：</b>自动网格的 2f 分辨率目标为 10（1 ms 及以上为 15）；模型太大时会放粗并提示。新模型的结果属于研究结果，应用细网格参考逐例核对。</li></ol>
       <p class="muted">快捷键：Ctrl+O 打开 · Ctrl+S 保存 · Ctrl+Z 撤销 · F8 计算 · F1 帮助</p>` });
@@ -527,7 +630,7 @@ async function start() {
     try {
       const file = ev.target.files[0]; if (!file) return; if (file.size > 65536) throw Error('模型文件不能超过 64 KiB。');
       const d = JSON.parse(await file.text()), scene = d.scene || d; if (!scene?.geometry || !scene.source) throw Error('模型文件格式不正确：需要 {scene, degree} 或场景对象。');
-      takeEngine(d); loadScene(scene); toast(`已打开模型：${file.name}`, 'info');
+      takeEngine(d); state.scan = { axes: Array.isArray(d.scan?.axes) ? d.scan.axes : [] }; loadScene(scene); toast(`已打开模型：${file.name}`, 'info');
     } catch (error) { fail(error); } finally { ev.target.value = ''; }
   });
   initSplitters($('#desk'), [
@@ -547,11 +650,11 @@ async function start() {
     $('#sb-app').textContent = `WorkAI ${info.app?.version || ''} · 物理 AI ${info.model.version || ''} · 本机离线`;
     $('#sb-app').title = `数据目录：${info.data_directory}`;
     const draft = readDraft();
-    if (draft) { state.scene = draft.scene; takeEngine(draft); } else { state.scene = structuredClone(state.templates.gaussian?.scene || Object.values(state.templates)[0].scene); }
+    if (draft) { state.scene = draft.scene; takeEngine(draft); state.scan = keepScan({ axes: Array.isArray(draft.scan?.axes) ? draft.scan.axes : [] }, state.scene); } else { state.scene = structuredClone(state.templates.gaussian?.scene || Object.values(state.templates)[0].scene); }
     log.add('info', `WorkAI ${info.app?.version || ''} 已启动。数据目录：${info.data_directory}`);
     renderAll(); schedulePreview(); setDock('messages');
     await refreshJobs(); await openJob(state.jobs[0]?.job_id || '');
-    setInterval(() => { if (running()) refreshJobs().catch(() => {}); }, 4000);
+    setInterval(() => { if (running() || scanRunning()) refreshJobs().catch(() => {}); }, 4000);
     document.body.dataset.ready = '1';
   } catch (error) { fail(error); document.body.dataset.ready = 'error'; }
 }
