@@ -7,6 +7,19 @@ P1 的运行计划共 24 次：
 
 物理定义（几何、材料、本构、载荷、吸收层、接收点）与 [仿真与数据要求](comsol-data-request.md) 第 2–3 节完全相同，这里只写剩余运行需要的额外约定。
 
+## 是否还需要运行（2026-11-20）
+
+**剩余 15 次运行都是核对，不是训练数据；按现有证据，可以不运行。** 依据在 [software-levels-20261120](../../research/comsol-p1-20261024/software-levels-20261120/README.md)，没有用到新的 COMSOL 计算：
+
+- **层级 3–4（dt2、mesh2，12 次，约 590–780 小时）：不必运行。**
+  - 软件一侧已经收敛：网格再加密一级，非线性增量的 2f 只变 0.0005%–0.054%；隐式参考求解器在步长趋于零时收敛到软件的结果。
+  - 软件与 COMSOL 的差（最差接收点 0.04%–2.8%）与 COMSOL 两次线性运行之间的差（0.07%–1.6%）同量级，工况 C 的最差点是同一个接收点。现有对照已经到了 COMSOL 在相对容差 1e-6 下的分辨率。
+  - 要让这些运行有意义，需要先收紧 COMSOL 的容差。
+- **层级 2（StVK，3 次，约 74 小时）：可以不运行。**
+  - 几何和材料两部分符号相反，在各接收点上的比例不同，所以增量一致已经把每一部分的比例误差限制在 0.24% 和 0.32% 以内（工况 C）。
+  - 需要“两部分分别对过 COMSOL”的直接证据时再算。
+- 软件对这 15 次运行的预测已经存档。以后运行了，用 `compare_remaining.py` 一条命令出对照，见第 6 节。
+
 ## 进度与更正（2026-11-09）
 
 **已完成 9 次，剩余 15 次。**
@@ -59,13 +72,13 @@ P1 的运行计划共 24 次：
 - 或由仓库重新生成，只生成剩余的层级 2–4：
 
 ```sh
-python research/comsol-p1-20261024/local_kit.py build --output p1-kit --tiers 2 3 4
+python research/comsol-p1-20261024/local_kit.py build --output p1-kit --tiers 0 2 3 4
 ```
 
-生成的 `p1-kit/` 含所选层级的作业文件夹、作业清单 `jobs.json` 和运行脚本。Windows 上：
+生成的 `p1-kit/` 含所选层级的作业文件夹、作业清单 `jobs.json` 和运行脚本。层级 0 是本构自检，只要几分钟；收集结果时要用它确认源码，所以重新生成的运行包要带上它。Windows 上：
 
 ```powershell
-.\run-all.ps1 -ComsolBin "C:\Program Files\COMSOL\COMSOL64\Multiphysics\bin\win64" -Tier 2,3
+.\run-all.ps1 -ComsolBin "C:\Program Files\COMSOL\COMSOL64\Multiphysics\bin\win64" -Tier 0,2
 ```
 
 脚本在每个文件夹里执行 `comsolcompile UltraResearch.java` 和 `comsolbatch -inputfile UltraResearch.class -batchlog solver.log`。已完成的作业会自动跳过，中断后重新执行同一条命令即可续跑。不要改动作业文件夹里的源码和输入，改动后哈希对不上，结果无法收集。
@@ -133,9 +146,18 @@ StVK 预计与 Murnaghan 相近。dt2 约为对应基准的 2 倍，mesh2 约 4�
   - 每个工况一个元数据 JSON。
   - 本构自检的三组 S 值。
 
-## 6. 拿到结果后我会做什么
+## 6. 拿到结果后做什么
 
-1. **复现检查：** 新线性与旧线性的差异，要求在 1e-6 以内。
-2. **COMSOL 收敛：** dt2、mesh2 与基准的差异，重点看非线性增量的 2f。
-3. **谱元核对：** 谱元标签与 COMSOL 的非线性增量 2f 对比，用 5% 门槛。
-4. **重新训练：** 两者一致后，把 C 族加入训练，重新训练 4 阶、h 3 mm 的粗网格算子，并用留出工况重新验收。
+前两步已由层级 0–1 完成（见上面的核对结果）。新结果用下面的命令对照：
+
+```sh
+python research/comsol-p1-20261024/local_kit.py collect p1-kit/runs --output p1-delivery
+python -m coarsegraph.comsol check p1-delivery --partial
+python research/comsol-p1-20261024/compare_remaining.py p1-delivery --output p1-remaining.json
+```
+
+1. **StVK：** 几何部分（StVK − 线性）和材料部分（Murnaghan − StVK）分别与软件的预测对比，5% 门槛。
+2. **COMSOL 收敛：** dt2、mesh2 与基准的差异，以及软件与加密前后两个结果的差。重点看非线性增量的 2f。
+3. 软件的预测在 [predictions/](../../research/comsol-p1-20261024/software-levels-20261120/predictions/)，写于这些运行存在之前，哈希记在同目录的 `levels.json` 里。
+
+粗网格算子的重新训练（把 C 族加入训练）用的是谱元标签，不用 COMSOL 结果。它以“标签与 COMSOL 一致”为前提，这个前提已由层级 1 满足，不依赖剩余的运行。
