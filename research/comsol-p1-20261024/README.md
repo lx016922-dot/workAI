@@ -1,5 +1,9 @@
 # COMSOL P1 数据任务（2026-10-24）
 
+> **2026-11-20：** 剩余 15 次运行（StVK、dt2、mesh2）没有做，按现有证据可以不做，见 [software-levels-20261120](software-levels-20261120/README.md)。
+> - 软件在四级网格上的结果、与 COMSOL 自身重复性的逐点对比、几何与材料两部分的误差上限，都不需要新的 COMSOL 计算。
+> - 软件对这 15 次运行的预测已存档；以后运行了，用 [compare_remaining.py](compare_remaining.py) 对照。重新生成运行包时带上层级 0：`local_kit.py build --tiers 0 2 3 4`。
+>
 > **2026-11-09：** 层级 0–1 共 7 个作业已完成，见 [serendipity-baselines-20261109](serendipity-baselines-20261109/README.md)。
 > - 包括本构自检，以及 A、B、C 三个工况的 Murnaghan 与线性重算。
 > - 使用修正版源码 `54e90010…`，即四阶 serendipity 单元。源码与运行包已归档在 [serendipity-54e90010](serendipity-54e90010/)，剩余运行用 `local_kit.py build --tiers 2 3 4` 生成，与归档运行包逐字节一致。本目录顶层的 `UltraResearch.java`（`c7140d6c…`）用的是 Lagrange 单元，只作历史记录，不要用于剩余运行。
