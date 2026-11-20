@@ -27,10 +27,12 @@ CYCLES = 10.
 # Table 2 of the paper: distance of the largest A2/A1² (mm) from its simulation and its experiment; `measured_mm` is the
 # range of distances with experimental points in its Figure 8, `simulated_mm` the range of its simulation in Figure 7
 # (case d: to 950 mm there, 940 mm here because a model of the software is at most 1000 mm long), `note` what Figure 8 shows.
+# The experimental points of Figure 8 are 25 mm apart; the positions of the smallest and largest point of case b are read
+# from that figure.
 CASES = {
     'a-300kHz-2.0mm': {'frequency_mhz': .30, 'thickness_mm': 2.0, 'paper_simulation_mm': 180., 'experiment_mm': 175., 'measured_mm': [100., 225.], 'simulated_mm': [20., 380.], 'reach_mm': 420.,
                        'note': '实验点在 175 mm 处最大，两侧各有下降的点'},
-    'b-300kHz-2.5mm': {'frequency_mhz': .30, 'thickness_mm': 2.5, 'paper_simulation_mm': 100., 'experiment_mm': 125., 'measured_mm': [150., 350.], 'simulated_mm': [5., 205.], 'reach_mm': 420.,
+    'b-300kHz-2.5mm': {'frequency_mhz': .30, 'thickness_mm': 2.5, 'paper_simulation_mm': 100., 'experiment_mm': 125., 'experiment_minimum_mm': 175., 'experiment_maximum_mm': 300., 'measured_mm': [150., 350.], 'simulated_mm': [5., 205.], 'reach_mm': 420.,
                        'note': '实验从 150 mm 起测：175 mm 处最小、300 mm 处最大，表中的 125 mm 是这两处的间距（半个拍长），第一个极大在测量范围之外'},
     'c-240kHz-2.5mm': {'frequency_mhz': .24, 'thickness_mm': 2.5, 'paper_simulation_mm': 240., 'experiment_mm': 250., 'measured_mm': [100., 325.], 'simulated_mm': [20., 380.], 'reach_mm': 420.,
                        'note': '实验点在 250–275 mm 处最大，两侧各有下降的点'},
