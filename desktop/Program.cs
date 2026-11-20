@@ -435,7 +435,13 @@ namespace WorkAI.Desktop
                     await Task.Delay(500);
                     ready = await core.ExecuteScriptAsync("(document.body && document.body.dataset.ready) || ''");
                 }
-                if (ready != "\"1\"") throw new InvalidOperationException("工作台未就绪：" + ready);
+                if (ready != "\"1\"")
+                {
+                    // what the page itself reports (its error message and log), so a failed start can be diagnosed from the smoke output
+                    string why = await core.ExecuteScriptAsync(
+                        "JSON.stringify({toast: (document.querySelector('#toast') || {}).textContent || '', log: ((document.querySelector('#dock-log') || {}).innerText || '').slice(0, 1500)})");
+                    throw new InvalidOperationException("工作台未就绪：" + ready + " " + Regex.Unescape(why.Trim('"')));
+                }
                 await Task.Delay(3000);   // let the model check and the 3-D view settle
                 string checks = await core.ExecuteScriptAsync(
                     "JSON.stringify({title: document.title, treeRows: document.querySelectorAll('.mb-row').length, ribbonButtons: document.querySelectorAll('.rb-btn').length, " +
