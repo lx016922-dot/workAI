@@ -134,29 +134,37 @@ def harmonics(pairs, names, reference, other, dt):
     return {f'{names[r]}_u{AXES[a]}': {f'{k}f_over_f': {'comsol': ratio(reference[:, r, a], k), 'software': ratio(other[:, r, a], k)} for k in (2, 3)} for r, a in pairs}
 
 
+def amplitude(case):
+    raw = json.loads((CASES / f'{case}.json').read_text(encoding='utf-8'))['scene']
+    return float(raw['source']['amplitude_mpa'])
+
+
 def variant(folder):
     """Every case computed in `folder` against COMSOL (the base mesh, and mesh2 where it was delivered)."""
     cases = sorted(p.stem for p in folder.glob('*.npz')); out = {}
     t, c0, names, _, _ = comsol(INTACT); _, s0, software_names = software(INTACT, folder); dt = t[1] - t[0]; assert names == software_names and len(t) == len(s0)
     pairs = components(c0)
     for case in cases:
+        # The scattered field subtracts the intact run at the same amplitude (D5 is driven at 2 MPa, the intact run at 1 MPa;
+        # every run is linear in the load except through contact, which is homogeneous of degree one).
+        scale = amplitude(case) / amplitude(INTACT); c0s, s0s = c0 * scale, s0 * scale
         _, c, _, meta, delivery = comsol(case); _, s, _ = software(case, folder); info = json.loads((folder / f'{case}.json').read_text(encoding='utf-8')); defect = case != INTACT
         row = {'comsol': {'delivery': delivery, 'elements': meta['elements'], 'dofs': meta['dofs'], 'solve_time_s': meta['runs']['linear']['solve_time_s'], 'max_abs_uy_m': meta['checks']['max_abs_uy_m']},
-               'software': {k: info[k] for k in ('nodes', 'degree', 'h_mm', 'time_layer', 'seconds', 'energy_balance')}, **pair(pairs, names, c, s, c0 if defect else None, s0, dt)}
+               'software': {k: info[k] for k in ('nodes', 'degree', 'h_mm', 'time_layer', 'seconds', 'energy_balance')}, **pair(pairs, names, c, s, c0s if defect else None, s0s, dt)}
         if 'contact' in meta and meta['contact']: row['comsol']['contact'] = meta['contact']; row['harmonics'] = harmonics(pairs, names, c, s, dt)
         try:
             _, fine, _, fine_meta, _ = comsol(case + '_mesh2')
             row['comsol_mesh2'] = {'elements': fine_meta['elements'], 'dofs': fine_meta['dofs'], 'solve_time_s': fine_meta['runs']['linear']['solve_time_s'],
-                                   'base': pair(pairs, names, fine, c, c0 if defect else None, c0, dt), 'software': pair(pairs, names, fine, s, c0 if defect else None, s0, dt)}
+                                   'base': pair(pairs, names, fine, c, c0s if defect else None, c0s, dt), 'software': pair(pairs, names, fine, s, c0s if defect else None, s0s, dt)}
         except StopIteration:
             pass
         finer = sorted(Path(str(folder)).parent.glob(folder.name + '-h*'))
         for other in finer:   # the software against itself on a finer mesh, and COMSOL against that
             if (other / f'{case}.npz').exists() and (other / f'{INTACT}.npz').exists():
-                _, f, _ = software(case, other); _, f0, _ = software(INTACT, other); fine_info = json.loads((other / f'{case}.json').read_text(encoding='utf-8'))
+                _, f, _ = software(case, other); _, f0, _ = software(INTACT, other); f0 = f0 * scale; fine_info = json.loads((other / f'{case}.json').read_text(encoding='utf-8'))
                 row.setdefault('software_refined', {})[other.name.rsplit('-h', 1)[1]] = {
-                    'nodes': fine_info['nodes'], 'seconds': fine_info['seconds'], 'software': pair(pairs, names, f, s, f0 if defect else None, s0, dt), 'comsol': pair(pairs, names, f, c, f0 if defect else None, c0, dt),
-                    **({'comsol_mesh2': pair(pairs, names, f, comsol(case + '_mesh2')[1], f0 if defect else None, c0, dt)} if 'comsol_mesh2' in row else {})}
+                    'nodes': fine_info['nodes'], 'seconds': fine_info['seconds'], 'software': pair(pairs, names, f, s, f0 if defect else None, s0s, dt), 'comsol': pair(pairs, names, f, c, f0 if defect else None, c0s, dt),
+                    **({'comsol_mesh2': pair(pairs, names, f, comsol(case + '_mesh2')[1], f0 if defect else None, c0s, dt)} if 'comsol_mesh2' in row else {})}
         out[case] = row
     return out
 
@@ -242,8 +250,28 @@ def report():
     for name, folder in VARIANTS.items():
         if (folder / f'{INTACT}.npz').exists():
             out['variants'][name] = variant(folder); print(f'\n## {name}（各接收点、各分量中的最大值）\n'); print(markdown(out['variants'][name]))
+    homogeneity(out)
     (RESULTS / 'comparison.json').write_text(json.dumps(out, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
     figures()
+
+
+def homogeneity(out, low='D4-closed-crack-1MPa', high='D5-closed-crack-2MPa'):
+    """Zero-gap, unloaded contact is positively homogeneous of degree one: the 2 MPa run is exactly twice the 1 MPa run.
+    Checked for each solver on its own (COMSOL to its iteration tolerance, the software to the bit)."""
+    try:
+        t, c_low, names, meta_low, _ = comsol(low); _, c_high, _, meta_high, _ = comsol(high)
+    except StopIteration:
+        return
+    pairs = components(comsol(INTACT)[1]); row = {}
+    for label, a, b in (('comsol', c_low, c_high), *((('software', software(low, FREE)[1], software(high, FREE)[1]),) if (FREE / f'{high}.npz').exists() else ())):
+        row[label] = {'worst_component_rel_l2_of_high_minus_twice_low': float(max(np.linalg.norm(b[:, r, k] - 2 * a[:, r, k]) / np.linalg.norm(b[:, r, k]) for r, k in pairs)),
+                      'max_abs_over_peak': float(np.abs(b - 2 * a).max() / np.abs(b).max())}
+    ratios = [v['2f_over_f']['software'] / v['2f_over_f']['comsol'] - 1 for v in harmonics(pairs, names, c_low, c_high, t[1] - t[0]).values()]
+    row['comsol_2f_over_f_change_from_1_to_2_mpa'] = [float(min(ratios)), float(max(ratios))]
+    row['comsol_contact'] = {k: [meta_low['contact'][k], meta_high['contact'][k]] for k in ('max_penetration_m', 'max_contact_pressure_pa')}
+    out['homogeneity'] = row
+    print(f'\n一次齐次性（{high} − 2 × {low}，最差分量的相对 L2）：COMSOL {row["comsol"]["worst_component_rel_l2_of_high_minus_twice_low"]:.1e}'
+          + (f'，软件 {row["software"]["worst_component_rel_l2_of_high_minus_twice_low"]:.1e}' if 'software' in row else ''))
 
 
 if __name__ == '__main__':
