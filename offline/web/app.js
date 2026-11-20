@@ -13,6 +13,7 @@ import { mountRibbon } from './ribbon.js';
 import { icon } from './icons.js';
 import { renderTreeView, popupMenu, createLog, dialog, initSplitters, previewMessages, renderMessages, fmtBytes, fmtDuration, estimateMarkup } from './shell.js';
 import { scanFormMarkup, bindScanForm, scanAxes, keepScan, scanPageMarkup, SCAN_STATES, axisText, caseText, gridValues } from './scan.js';
+import { nonlinearMarkup, mountNonlinear, convergenceTable } from './nonlinear.js';
 
 const $ = s => document.querySelector(s);
 const PHASES = { starting: '准备中', meshing: '生成连接图', running: '计算中', exporting: '保存结果', completed: '已完成', failed: '未完成', paused: '已暂停' };
@@ -25,7 +26,7 @@ const state = { scene: null, degree: 4, engine: 'network', coarseModel: DEFAULT_
   expanded: new Set(['scene', 'component', 'physics', 'sources', 'boundaries', 'receivers', 'study', 'results']), info: null, phases: {}, lastPreviewKey: '',
   // parameter scans: the definition being edited, the server's check of it, the stored scans and the one shown in the results window
   scan: { axes: [] }, scanPlan: null, scans: [], scanStates: {}, scanOpen: '', scanView: { receiver: 0, quantity: 'a2_over_a1_squared_per_m', window: null, axis: null } };
-let previewTimer = 0, previewStamp = 0, poll = 0, generation = 0, viewer = null, pathViewer = null, ribbon = null, log = null, planTimer = 0, planStamp = 0;
+let previewTimer = 0, previewStamp = 0, poll = 0, generation = 0, viewer = null, pathViewer = null, nonlinearViewer = null, nonlinearKept = null, ribbon = null, log = null, planTimer = 0, planStamp = 0;
 
 async function api(url, body) {
   const response = await fetch(url, body ? { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WorkAI-Token': state.token }, body: JSON.stringify(body) } : undefined);
@@ -298,8 +299,13 @@ async function openScan(id, quiet = false) {
     const bindHead = () => $('#result-head').querySelectorAll('[data-scan-act]').forEach(b => b.addEventListener('click', () => scanAction(id, b.dataset.scanAct)));
     bindHead(); if (!$('#results').children.length) $('#results').innerHTML = page.body;
     const table = await api(`/api/scans/${id}/summary${query}`); if (stamp !== generation) return;
+    let check = '';
+    if (detail.kind === 'convergence') {   // a convergence check: the comparison of the meshes above the ordinary table of a scan
+      const compared = await api(`/api/scans/${id}/convergence${query}`); if (stamp !== generation) return;
+      check = `<section class="nl-check-result"><h3 class="scan-h">收敛检查：各套网格与最细网格的比较</h3>${convergenceTable(compared)}</section>`;
+    }
     page = scanPageMarkup(detail, table, view); $('#result-head').innerHTML = page.head; bindHead();
-    const keep = $('#tab-result .wb-scroll')?.scrollTop; $('#results').innerHTML = page.body; if (keep) $('#tab-result .wb-scroll').scrollTop = keep;
+    const keep = $('#tab-result .wb-scroll')?.scrollTop; $('#results').innerHTML = check + page.body; if (keep) $('#tab-result .wb-scroll').scrollTop = keep;
     $('#scan-receiver')?.addEventListener('change', ev => { view.receiver = +ev.target.value; openScan(id, true); });
     $('#scan-quantity')?.addEventListener('change', ev => { view.quantity = ev.target.value; openScan(id, true); });
     $('#scan-axis')?.addEventListener('change', ev => { view.axis = +ev.target.value; openScan(id, true); });
@@ -420,12 +426,14 @@ function renderProgress() {
       <div class="pg-bar"><span style="width:${pct.toFixed(1)}%"></span></div><div class="pg-foot"><span>${pct.toFixed(0)}%${j.completed_time_us !== undefined && j.duration_us ? ` · 已算到 ${(+j.completed_time_us).toFixed(2)} / ${j.duration_us} μs` : ''}${j.remaining_s > 0 && !['completed', 'failed', 'paused'].includes(j.phase) ? ` · 预计还需 ${fmtDuration(j.remaining_s)}` : ''}</span>
       <span>${j.message ? escapeHtml(j.message) : ''}</span></div></div>`;
 }
-function clearResults() { viewer?.(); pathViewer?.cleanup(); viewer = null; pathViewer = null; $('#results').replaceChildren(); }
+function clearResults() { viewer?.(); pathViewer?.cleanup(); nonlinearViewer?.cleanup(); viewer = null; pathViewer = null; nonlinearViewer = null; $('#results').replaceChildren(); }
 async function reuseJob(id) {
   try { const d = await api('/api/jobs/' + id + '/request'); takeEngine(d); loadScene(d.scene); setTab('model'); toast('已载入该计算的模型。', 'info'); } catch (e) { fail(e); }
 }
 async function openJob(id, restore = false) {
   clearTimeout(poll); const stamp = ++generation, oldView = restore ? viewer?.snapshot() : null, oldPath = restore ? pathViewer?.snapshot() : null;
+  // The nonlinear analysis does not depend on the response shown: it is kept while the same job stays open (also when another response is chosen).
+  if (nonlinearViewer && state.job === id) nonlinearKept = { job: id, view: nonlinearViewer.snapshot() };
   clearResults(); state.job = id; state.scanOpen = ''; renderProgress(); ribbon?.refresh();
   if (!id) { $('#result-head').innerHTML = '<p class="wb-empty">在模型开发器的“结果”下选择一条计算记录，或点击功能区的“计算”计算当前模型。</p>'; return; }
   try {
@@ -450,9 +458,11 @@ async function openJob(id, restore = false) {
       const base = '/api/jobs/' + id, query = '?part=' + state.part, result = await api(base + '/result' + query), response = await fetch(base + '/field' + query);
       if (!response.ok) throw Error('位移场读取失败');
       const field = await decodeSpectralField(result, await response.arrayBuffer()); if (stamp !== generation) return;
-      $('#results').innerHTML = solidResultMarkup(result) + solidPathMarkup(result.recording ? 8 : 64);
+      $('#results').innerHTML = solidResultMarkup(result) + solidPathMarkup(result.recording ? 8 : 64) + (result.recording ? nonlinearMarkup(result) : '');
       const extract = result.recording ? recordExtractor(base, result) : spectralPointSeries;
       viewer = mountSolidResult($('#results'), result, field, extract, oldView); pathViewer = mountSolidPath($('#results'), result, field, extract, chart, oldPath);
+      if (result.recording) nonlinearViewer = mountNonlinear($('#results'), { job: id, result, api, busy: () => Boolean(running() || scanRunning()), refresh: refreshJobs,
+        openScan: scan => { state.expanded.add('results'); select(`scanrun:${scan}`); } }, nonlinearKept?.job === id ? nonlinearKept.view : null);
     } else if (!done) poll = setTimeout(async () => { try { await refreshJobs(); if (state.job === id) await openJob(id); } catch (e) { fail(e); } }, 2500);
     else await refreshJobs();
   } catch (error) { if (stamp === generation) fail(error); }
@@ -580,6 +590,7 @@ async function showHelp() {
       <li><b>检查：</b>“消息”窗口实时列出模型检查结果、网格和记录大小、每个激励的 2f 分辨率，以及是否超出原验收范围。图形窗口显示几何、加载区、边界和接收点。</li>
       <li><b>计算：</b>点击“计算”（F8）。“进度”窗口显示计算进度；5 ms 及以上的长记录可“暂停”并在之后“继续”。首次计算需要几分钟编译。</li>
       <li><b>参数扫描：</b>功能区“研究 → 参数扫描”：选 1–3 个参数（频率、幅值、板厚、缺陷尺寸等）并填入取值，软件逐个组合计算。可以暂停和继续；失败的组合不中断扫描，结束后可单独重算。“结果”下的扫描页给出汇总表（各接收点的 A₁、A₂、非线性增量的 A₂ 和 A₂/A₁²）、随参数变化的曲线，并可导出 CSV；点表中的一行打开那个组合的完整结果。</li>
+      <li><b>非线性导波分析：</b>已完成的计算的结果页最下方。沿程累积：沿一条线提取 A₁、A₂，拟合 A₂/A₁² 随距离的增长，由相位斜率得到 f、2f 处的波数并与平板理论对照。频散与 f–k 谱：理论频散曲线、f 与 2f 处的模态、相位匹配表，以及叠加理论曲线的 f–k 谱。收敛检查：同一模型在更细的网格上重算，比较各接收点的 A₁、A₂ 和波形。</li>
       <li><b>结果：</b>在“结果”下选择计算记录：位移场动画、任意点波形与频谱、多点提取、五种响应（完整、线性、StVK、几何增量、材料增量），可导出全部结果 ZIP。</li>
       <li><b>精度：</b>自动网格的 2f 分辨率目标为 10（1 ms 及以上为 15）；模型太大时会放粗并提示。新模型的结果属于研究结果，应用细网格参考逐例核对。</li></ol>
       <p class="muted">快捷键：Ctrl+O 打开 · Ctrl+S 保存 · Ctrl+Z 撤销 · F8 计算 · F1 帮助</p>` });
