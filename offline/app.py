@@ -241,7 +241,7 @@ def handler(application):
                     return self.reply(200, sorted(rows, key=lambda x: x['started_at_utc'], reverse=True))
                 if url.path == '/api/scans':
                     return self.reply(200, application.scans.list())
-                match = re.fullmatch(r'/api/scans/(' + SCAN_ID + r')(?:/(summary|summary\.csv))?', url.path)
+                match = re.fullmatch(r'/api/scans/(' + SCAN_ID + r')(?:/(summary|summary\.csv|convergence))?', url.path)
                 if match:
                     scan, kind = match.groups()
                     if not kind:
@@ -251,8 +251,11 @@ def handler(application):
                         window = [float(query['start_us'][0]), float(query['end_us'][0])]
                     if kind == 'summary':
                         return self.reply(200, application.scans.summary(scan, window))
+                    if kind == 'convergence':
+                        with application.trace_lock:
+                            return self.reply(200, application.scans.convergence(scan, window))
                     return self.reply(200, application.scans.summary_csv(scan, window), 'text/csv; charset=utf-8', attachment=scan + '.csv')
-                match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})(?:/(result|field|export|request))?', url.path)
+                match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})(?:/(result|field|export|request|dispersion|checks))?', url.path)
                 if match:
                     job, kind = match.groups()
                     directory = application.path(job)
@@ -261,6 +264,13 @@ def handler(application):
                         return self.reply(200, status)
                     if kind == 'request':
                         return self.reply(200, (directory / 'request.json').read_bytes())
+                    if kind == 'dispersion':
+                        # Theoretical guided waves of the model's plate (offline/guided.py): needs the request only, not the result.
+                        from .nonlinear import dispersion
+                        query = parse_qs(url.query); number = lambda name, default: float(query[name][0]) if name in query else default
+                        return self.reply(200, dispersion(directory, number('angle_deg', 0.), number('frequency_max_mhz', None)))
+                    if kind == 'checks':
+                        return self.reply(200, application.scans.checks_of(job))
                     if status['phase'] != 'completed':
                         return self.reply(409, {'error': '任务尚未完成。'})
                     if kind == 'export':
@@ -314,7 +324,7 @@ def handler(application):
         def do_POST(self):
             try:
                 self.local_request()
-                match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume)',self.path)
+                match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume|accumulation|fk|converge|converge-plan)',self.path)
                 scan = re.fullmatch(r'/api/scans/(' + SCAN_ID + r')/(pause|resume|retry)', self.path)
                 if self.path not in ('/api/jobs', '/api/preview', '/api/shutdown', '/api/interpret', '/api/defect', '/api/scans', '/api/scans/plan') and not match and not scan:
                     raise FileNotFoundError()
@@ -335,6 +345,21 @@ def handler(application):
                             raise ValueError('提取参数无效。')
                         with application.trace_lock:
                             return self.reply(200,traces(application.path(job)/'record',body['part'],body['points']))
+                    if action in ('accumulation', 'fk'):
+                        # Nonlinear guided-wave post-processing on the finished record (offline/nonlinear.py).
+                        if application.status(job)['phase'] != 'completed':
+                            raise ValueError('任务尚未完成。')
+                        from . import nonlinear
+                        with application.trace_lock:
+                            return self.reply(200, getattr(nonlinear, action)(application.path(job), body))
+                    if action in ('converge', 'converge-plan'):
+                        # One-click convergence check: the same model on finer meshes, queued like a parameter scan (offline/scan.py).
+                        if not isinstance(body, dict) or set(body) - {'levels'}:
+                            raise ValueError('收敛检查只接受 levels（加密级数，1 或 2）。')
+                        levels = body.get('levels', 1)
+                        if action == 'converge-plan':
+                            return self.reply(200, application.scans.converge_plan(job, levels))
+                        return self.reply(202, application.scans.converge(job, levels))
                     return self.reply(202,application.control(job,action))
                 if scan:
                     return self.reply(202, application.scans.control(*scan.groups()))

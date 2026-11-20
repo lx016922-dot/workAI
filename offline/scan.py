@@ -18,6 +18,12 @@ solver settings) and by its axes: a numeric field of the scene (`source.frequenc
 When a dimension of a plate changes, what sat on the moving face or on the mid-plane moves with it (`follow`):
 a source centred on the top face stays on the top face when the thickness is scanned.
 
+A convergence check (`Scans.converge`) is a scan of one finished computation over its mesh: the computation itself
+is the first combination, and the same model on one or two finer meshes the others. A level raises the degree of the
+elements by one while it is below 5 — that refines every direction, also through a plate that is one element thick —
+and multiplies the element size by 0.75 once the degree is 5. The automatic time layer follows the mesh.
+`Scans.convergence` compares the receivers of every mesh with those of the finest one.
+
 The research command line `python -m sweep` (other solvers, sampling plans, data sets) is a different tool; this
 module needs only what the packaged application ships.
 """
@@ -42,6 +48,10 @@ PATH = re.compile(r'[a-z_]+(\.[a-z_0-9]+){1,4}')
 DIMENSIONS = {'geometry.length_mm': 0, 'geometry.width_mm': 1, 'geometry.thickness_mm': 2}
 TERMINAL = ('completed', 'failed', 'paused')
 PHASE_WORDS = {'queued': '排队', 'running': '计算中', 'completed': '已完成', 'failed': '未完成', 'paused': '已暂停'}
+
+
+CONVERGENCE_RATIO = .75                             # element size of one level relative to the level before
+CONVERGENCE_TOLERANCE = {'a1': .01, 'a2': .05}      # change of A1 and of A2 from a mesh to the finest one that counts as converged
 
 
 class Busy(ValueError):
@@ -136,11 +146,46 @@ def combinations(scan):
 def case_request(scan, values):
     """The request of one combination: the scan's request with its values written into the scene."""
     request = copy.deepcopy(scan['request']); scene = request['scene']
+    if scan.get('kind') == 'convergence':   # the mesh of one level
+        level = next(level for level in scan['levels'] if level['node_spacing_mm'] == values[0]); request['degree'] = level['degree']; scene['numerics']['h_mm'] = level['h_mm']
+        tail = ' · ' + level['label']; scene['name'] = (str(scene.get('name') or '模型')[:max(1, 100 - len(tail))] + tail)[:100]
+        return request
     for axis, value in zip(scan['axes'], values):
         old = get_path(scene, axis['path']); set_path(scene, axis['path'], value)
         if axis['path'] in DIMENSIONS and scene.get('geometry', {}).get('kind') != 'pipe': follow(scene, DIMENSIONS[axis['path']], old, value)
     tail = ' · ' + label(scan['axes'], values); scene['name'] = (str(scene.get('name') or '模型')[:max(1, 100 - len(tail))] + tail)[:100]
     return request
+
+
+def convergence_definition(request, name, job_id, levels=1):
+    """The scan that checks a finished computation on finer meshes: its request with the mesh written out (degree and
+    element size instead of 'auto') and one axis, the mean node spacing h / degree of every level."""
+    if type(levels) is not int or not 1 <= levels <= 2: raise ValueError('加密级数需为 1 或 2。')
+    request = copy.deepcopy(request); scene = request.get('scene')
+    if not isinstance(scene, dict) or scene.get('schema') != V2: raise ValueError('收敛检查需要 v2 场景的计算。')
+    if request.get('engine', 'network') != 'network':
+        raise ValueError('快速引擎在模型自带的粗网格上运行，网格不能加密：收敛检查只用于冻结网络引擎的计算。')
+    report = request.pop('mesh_report', None)
+    if request.pop('mesh', None) == 'auto':
+        if not isinstance(report, dict): raise ValueError('这次计算没有保存自动网格的报告，不能确定它的单元尺寸。')
+        request['degree'] = int(report['degree']); scene['numerics']['h_mm'] = float(report['h_mm'])
+    meshes = [(int(request['degree']), float(scene['numerics']['h_mm']))]
+    for _ in range(levels):
+        degree, h = meshes[-1]; meshes.append((degree + 1, h) if degree < 5 else (degree, round(h * CONVERGENCE_RATIO, 4)))
+    rows = [{'degree': degree, 'h_mm': h, 'node_spacing_mm': round(h / degree, 6), 'label': f'{degree} 阶 · 单元 {h:g} mm'} for degree, h in meshes]; tail = ' · 收敛检查'
+    return {'request': request, 'axes': [{'path': 'mesh.node_spacing_mm', 'values': [r['node_spacing_mm'] for r in rows], 'label': '平均节点间距', 'unit': 'mm'}], 'levels': rows,
+            'name': (str(name or '模型')[:100 - len(tail)] + tail), 'kind': 'convergence', 'base_job': job_id}
+
+
+def case_label(scan, values):
+    """One combination in words: the mesh of a convergence check, else the values of the axes."""
+    if scan.get('kind') == 'convergence': return next(level['label'] for level in scan['levels'] if level['node_spacing_mm'] == values[0])
+    return label(scan['axes'], values)
+
+
+def wrapped(angle_deg):
+    """An angle difference in (−180°, 180°]."""
+    return (angle_deg + 180.) % 360. - 180. if angle_deg % 360. != 180. else 180.
 
 
 def result_bytes(cost, nodes):
@@ -283,8 +328,9 @@ class Scans:
     def public(self, scan, cases=True):
         """What the interface gets: the definition and the phases, without the stored request."""
         counts = {phase: sum(1 for c in scan['cases'] if c['phase'] == phase) for phase in ('queued', 'running', 'completed', 'failed', 'paused')}
-        out = {k: scan[k] for k in ('scan_id', 'name', 'state', 'message', 'created_at_utc', 'updated_at_utc', 'axes')}; out.update(count=len(scan['cases']), counts=counts)
-        if cases: out['cases'] = [dict(c, label=label(scan['axes'], c['values'])) for c in scan['cases']]
+        out = {k: scan[k] for k in ('scan_id', 'name', 'state', 'message', 'created_at_utc', 'updated_at_utc', 'axes', 'kind', 'base_job') if k in scan}; out.update(count=len(scan['cases']), counts=counts)
+        if cases: out['cases'] = [dict(c, label=case_label(scan, c['values'])) for c in scan['cases']]
+        if 'levels' in scan: out['levels'] = scan['levels']
         return out
 
     def list(self):
@@ -312,6 +358,106 @@ class Scans:
                         cases=[{'index': i, 'values': values, 'phase': 'queued', 'job_id': None, 'message': '', 'attempts': 0, 'previous_jobs': []} for i, values in enumerate(rows)])
             (self.root / scan['scan_id']).mkdir(); self.save(scan); self.advance()
             return {'scan_id': scan['scan_id'], 'count': len(rows)}
+
+    # ---------- convergence checks ----------
+    def _definition(self, job_id, levels):
+        status = self.app.status(job_id)
+        if status['phase'] != 'completed': raise ValueError('计算完成后才能做收敛检查。')
+        request = json.loads((self.app.path(job_id) / 'request.json').read_text(encoding='utf-8'))
+        return convergence_definition(request, status.get('name'), job_id, levels)
+
+    def checks_of(self, job_id):
+        """The convergence checks of a job, newest first (public form, without cases)."""
+        with self.lock: return sorted((self.public(self.sync(s), cases=False) for s in self.all() if s.get('base_job') == job_id), key=lambda s: s['created_at_utc'], reverse=True)
+
+    def converge_plan(self, job_id, levels=1):
+        """What a convergence check of a job would compute: every finer mesh checked like a model, with its size and estimated cost."""
+        import shutil
+        from .preview import preview
+        scan = self._definition(job_id, levels); rows = []; base = self.app.status(job_id)
+        for level, values in list(zip(scan['levels'], combinations(scan)))[1:]:
+            checked = preview(case_request(scan, values), self.app.data); cost = checked.get('estimate') or {}; mesh = checked.get('mesh') or {}
+            rows.append({**level, 'ok': bool(checked['ok']), 'errors': checked['errors'], 'nodes': mesh.get('nodes'), 'seconds': cost.get('seconds'), 'memory_bytes': cost.get('memory_bytes'),
+                         'disk_bytes': cost['disk_bytes'] + result_bytes(cost, mesh['nodes']) if cost and mesh.get('nodes') else None, 'record': cost.get('record')})
+        valid = [r for r in rows if r['ok']]; free = shutil.disk_usage(self.app.data).free; disk = sum(r['disk_bytes'] or 0 for r in valid)
+        return {'job_id': job_id, 'levels': levels, 'ratio': CONVERGENCE_RATIO, 'tolerance': CONVERGENCE_TOLERANCE, 'base': {**scan['levels'][0], 'nodes': base.get('nodes'), 'seconds': base.get('elapsed_s')},
+                'cases': rows, 'ok': len(valid) == len(rows), 'seconds_total': sum(r['seconds'] or 0 for r in valid), 'memory_bytes_max': max([r['memory_bytes'] or 0 for r in valid] or [0]),
+                'disk_bytes_total': disk, 'free_bytes': free, 'disk_short': disk > free, 'existing': self.checks_of(job_id)}
+
+    def converge(self, job_id, levels=1):
+        """Start the convergence check of a finished job: the job is the first combination, the finer meshes are queued."""
+        scan = self._definition(job_id, levels); rows = combinations(scan)
+        for values in rows[1:]:
+            try: validate_request(case_request(scan, values))
+            except (ValueError, KeyError, TypeError) as error:
+                raise ValueError(f'加密网格（{case_label(scan, values)}）不能计算：{error}') from None
+        with self.lock:
+            if self.running() is not None: raise Busy('已有参数扫描或收敛检查在进行，请先暂停它或等它完成。')
+            self.app.settle()
+            if self.app.busy(): raise Busy('已有任务正在运行，请等待完成。')
+            base = self.app.status(job_id)
+            scan.update(schema=SCHEMA, scan_id='scan-' + secrets.token_hex(12), state='running', message='', created_at_utc=now(),
+                        cases=[{'index': 0, 'values': rows[0], 'phase': 'completed', 'job_id': job_id, 'message': '', 'attempts': 0, 'previous_jobs': [], 'elapsed_s': base.get('elapsed_s'), 'nodes': base.get('nodes')}] +
+                              [{'index': i, 'values': values, 'phase': 'queued', 'job_id': None, 'message': '', 'attempts': 0, 'previous_jobs': []} for i, values in enumerate(rows) if i])
+            (self.root / scan['scan_id']).mkdir(); self.save(scan); self.advance()
+            return {'scan_id': scan['scan_id'], 'count': len(rows)}
+
+    def convergence(self, scan_id, window_us=None):
+        """The receivers of every finished mesh of a convergence check against those of the finest finished mesh:
+        the change of A1 (complete response) and of A2 (nonlinear increment when the linear control was computed), of the
+        phase at f, and the relative difference of the waveforms inside the analysis window."""
+        from .domain import parts_for, response
+        from .recording import controls_of
+        if window_us is not None and not (isinstance(window_us, (list, tuple)) and len(window_us) == 2 and all(number(v) for v in window_us) and window_us[0] < window_us[1]):
+            raise ValueError('分析时间窗需要起点早于终点的两个时刻（μs）。')
+        with self.lock: scan = self.sync(self.load(scan_id))
+        if scan.get('kind') != 'convergence': raise ValueError('这个扫描不是收敛检查。')
+        done = [c for c in scan['cases'] if c['phase'] == 'completed']; key = {'window_us': list(window_us) if window_us else None, 'jobs': [c['job_id'] for c in done]}
+        cache = self.path(scan_id) / 'convergence.json'
+        if cache.exists():
+            stored = json.loads(cache.read_text(encoding='utf-8'))
+            if stored.get('key') == key: return dict(self.public(scan, cases=False), **stored['value'])
+        scene = scan['request']['scene']; f = float(scene['source']['frequency_mhz']); receivers = scene['receivers']; points = [[float(v) for v in r['point_mm']] for r in receivers]
+        directions = [np.asarray(r['direction'], dtype=float) / np.linalg.norm(r['direction']) for r in receivers]; loaded = []
+        for case in done:
+            job = self.app.path(case['job_id']); times, values, m = receiver_series(job / 'record', points); controls = controls_of(m)
+            basis = 'nonlinear' if {'linear', 'murnaghan'} <= set(controls) else 'full'; first = 'linear' if 'linear' in controls else 'full'
+            wave = {part: np.stack([response(values, part)[:, j] @ directions[j] for j in range(len(points))], axis=1) for part in {'full', first, basis}}
+            plan = m.get('time_plan') or {}
+            loaded.append({'case': case, 'times': times, 'wave': wave, 'basis': basis, 'first': first, 'nodes': m.get('nodes'), 'layer_step_us': plan.get('layer_step_us', m.get('layer_step_us')), 'scheme': plan.get('scheme'),
+                           'harmonics': {part: [harmonics(times, wave[part][:, j], f, window_us) for j in range(len(points))] for part in ('full', basis)}})
+        rows = []; reference = loaded[-1] if loaded else None
+        for item in loaded:
+            keep = slice(None) if window_us is None else (item['times'] >= window_us[0] - 1e-9) & (item['times'] <= window_us[1] + 1e-9); out = []
+            for j, receiver in enumerate(receivers):
+                h1 = item['harmonics']['full'][j][0]; h2 = item['harmonics'][item['basis']][j][1]; r1 = reference['harmonics']['full'][j][0]; r2 = reference['harmonics'][reference['basis']][j][1]
+                relative = lambda a, b: None if a is None or b is None or not b['amplitude_m'] > 0 else a['amplitude_m'] / b['amplitude_m'] - 1
+                def difference(part):
+                    a, b = item['wave'][part][keep, j], reference['wave'][part][keep, j]; size = float(np.linalg.norm(b))
+                    return float(np.linalg.norm(a - b)) / size if size > 0 else None
+                out.append({'name': receiver['name'], 'a1_m': h1['amplitude_m'] if h1 else None, 'a2_m': h2['amplitude_m'] if h2 else None, 'a1_change': relative(h1, r1), 'a2_change': relative(h2, r2),
+                            'phase1_change_deg': wrapped(h1['phase_deg'] - r1['phase_deg']) if h1 and r1 and h1['phase_deg'] is not None and r1['phase_deg'] is not None else None,
+                            'waveform_change': difference(item['first']), 'increment_waveform_change': difference(item['basis']) if item['basis'] == 'nonlinear' else None})
+            worst = lambda name: max((abs(r[name]) for r in out if r[name] is not None), default=None)
+            rows.append({'index': item['case']['index'], **scan['levels'][item['case']['index']], 'job_id': item['case']['job_id'], 'nodes': item['nodes'], 'elapsed_s': item['case'].get('elapsed_s'), 'layer_step_us': item['layer_step_us'],
+                         'scheme': item['scheme'], 'is_reference': item is reference, 'receivers': out,
+                         'worst': {name: worst(name) for name in ('a1_change', 'a2_change', 'phase1_change_deg', 'waveform_change', 'increment_waveform_change')}})
+        verdict = None
+        if len(rows) >= 2 and rows[0]['index'] == 0:
+            w = rows[0]['worst']; ok = w['a1_change'] is not None and w['a1_change'] <= CONVERGENCE_TOLERANCE['a1'] and (w['a2_change'] is None or w['a2_change'] <= CONVERGENCE_TOLERANCE['a2'])
+            share = lambda v: '不到 0.01%' if v < 5e-5 else f'{v:.2%}'
+            verdict = {'converged': bool(ok), 'reference': rows[-1]['label'], 'a1_change': w['a1_change'], 'a2_change': w['a2_change'],
+                       'text': (f"原网格（{rows[0]['label']}）与最细网格（{rows[-1]['label']}）相比，各接收点 A₁ 最多变化 {share(w['a1_change'])}"
+                                + (f"，A₂ 最多变化 {share(w['a2_change'])}" if w['a2_change'] is not None else '') + '。'
+                                + (f"按 A₁ ≤ {CONVERGENCE_TOLERANCE['a1']:.0%}、A₂ ≤ {CONVERGENCE_TOLERANCE['a2']:.0%} 的判据，原网格的结果已收敛。" if ok else
+                                   f"超过了 A₁ ≤ {CONVERGENCE_TOLERANCE['a1']:.0%}、A₂ ≤ {CONVERGENCE_TOLERANCE['a2']:.0%} 的判据：请采用加密网格的结果，或再加密一级确认。"))}
+        value = {'window_us': key['window_us'], 'frequency_mhz': f, 'a2_basis': loaded[-1]['basis'] if loaded else None, 'tolerance': CONVERGENCE_TOLERANCE, 'ratio': CONVERGENCE_RATIO, 'rows': rows, 'verdict': verdict,
+                 'pending': [{'index': c['index'], **scan['levels'][c['index']], 'phase': c['phase'], 'message': c.get('message', '')} for c in scan['cases'] if c['phase'] != 'completed'],
+                 'note': '每加密一级：单元阶次低于 5 时阶次加一（各个方向的节点都加密，板厚方向只有一层单元时也一样），阶次已是 5 时单元尺寸乘 0.75。自动时间层按每套网格重新选步长'
+                         '（表中列出），网格变细时步长通常随之缩短，但不保证。差值相对最细的已完成网格计算；'
+                         '判据只说明这个模型在这些接收点上的变化，不是误差的上界。波形差是分析时间窗内的相对 L2 差，对相位很敏感：相位差 1° 约对应 1.7 %。'}
+        cache.write_text(json.dumps({'key': key, 'value': value}, ensure_ascii=False, allow_nan=False), encoding='utf-8')
+        return dict(self.public(scan, cases=False), **value)
 
     def advance(self):
         """Start the next queued combination of the running scan when nothing is being computed. Called whenever a
@@ -381,7 +527,7 @@ class Scans:
         with self.lock: scan = self.sync(self.load(scan_id))
         directory = self.path(scan_id) / 'summary'; directory.mkdir(exist_ok=True); rows = []
         for case in scan['cases']:
-            row = {k: case[k] for k in ('index', 'values', 'phase', 'job_id', 'message')}; row['label'] = label(scan['axes'], case['values'])
+            row = {k: case[k] for k in ('index', 'values', 'phase', 'job_id', 'message')}; row['label'] = case_label(scan, case['values'])
             if case['phase'] == 'completed':
                 cache = directory / f"{case['job_id']}.json"; key = list(window_us) if window_us else None
                 stored = json.loads(cache.read_text(encoding='utf-8')) if cache.exists() else None

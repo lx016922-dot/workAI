@@ -119,6 +119,20 @@ def main():
             assert abs(two['a1_m'] / one['a1_m'] - 2) < 1e-3 and abs(two['a2_nonlinear_m'] / one['a2_nonlinear_m'] - 4) < .05, (one, two)
             sheet = request('/api/scans/' + scan + '/summary.csv').decode('utf-8-sig').splitlines()
             assert len(sheet) == 3 and sheet[0].startswith('组合,幅值 (MPa),状态'), sheet[:1]
+            # Nonlinear guided-wave post-processing (offline/nonlinear.py, offline/guided.py) on the first combination: the plate's
+            # theoretical modes, the harmonics along a line with the A2/A1² fit, the f–k spectrum, and the plan of a convergence check.
+            first_job = table['rows'][0]['job_id']
+            theory = request('/api/jobs/' + first_job + '/dispersion')
+            assert {'S0', 'A0'} <= {m['name'] for m in theory['modes']['f']} and theory['pairs'] and theory['validity']['plane_strain'] is False, theory['modes']['f']
+            line = {'mode': 'line', 'start_mm': [6., 1., 1.6], 'end_mm': [13., 1., 1.6], 'count': 16}
+            along = request('/api/jobs/' + first_job + '/accumulation', {'points': line, 'direction': [0., 0., 1.], 'window': {'mode': 'fixed', 'start_us': 0., 'end_us': 10.}}, headers)
+            assert len(along['rows']) == 16 and all(r['usable'] and r['a1_m'] > 0 and r['a2_nonlinear_m'] > 0 for r in along['rows']) and along['a2_basis'] == 'nonlinear', along['notes']
+            assert along['fit']['points'] == 16 and np.isfinite(along['fit']['ratio']['slope_per_m2'])
+            spectrum = request('/api/jobs/' + first_job + '/fk', {'points': line, 'direction': [0., 0., 1.]}, headers)
+            import base64
+            assert len(base64.b64decode(spectrum['image'])) == spectrum['frequency']['count'] * spectrum['wavenumber']['count'] and any(c['name'] == 'A0' for c in spectrum['curves'])
+            finer = request('/api/jobs/' + first_job + '/converge-plan', {'levels': 1}, headers)
+            assert finer['ok'] and finer['cases'][0]['degree'] == 5 and finer['cases'][0]['nodes'] > finer['base']['nodes'] and request('/api/jobs/' + first_job + '/checks') == [], finer
             for bad in [{'Content-Type': 'application/json'}, dict(headers, Origin='https://unrelated.example')]:
                 try:
                     request('/api/jobs', body, bad)
@@ -165,7 +179,8 @@ def main():
                               'original_weights_sha256': info['model']['weights_sha256'], 'elapsed_s': status['elapsed_s'],
                               'duration_us':5000,'full_samples':25001,'controls': 3, 'response_parts': 5, 'authentication_checks': 2, 'invalid_scene_rejected': True,
                               'fast_engine_models_checked': len(fast_models), 'fast_engine_elapsed_s': fast_status['elapsed_s'],
-                              'defect_job_elapsed_s': defect_status['elapsed_s'], 'text_box_operations': len(told['operations']), 'scan_combinations': scan_status['counts']['completed']}), flush=True)
+                              'defect_job_elapsed_s': defect_status['elapsed_s'], 'text_box_operations': len(told['operations']), 'scan_combinations': scan_status['counts']['completed'],
+                              'line_points': len(along['rows']), 'theory_modes_at_f': len(theory['modes']['f'])}), flush=True)
         finally:
             server.terminate()
             server.wait(timeout=15)

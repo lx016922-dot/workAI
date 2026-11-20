@@ -109,7 +109,7 @@ const axisName = a => a.label || pathLabel(a.path).name;
 export function gridValues(axes, index) { const out = []; for (let i = axes.length - 1; i >= 0; i--) { const n = axes[i].values.length; out.unshift(axes[i].values[index % n]); index = Math.floor(index / n); } return out; }
 /** A combination in words: 频率 0.3 MHz，幅值 2 MPa. */
 export const caseText = (axes, values) => axes.map((a, i) => `${axisName(a)} ${short(values[i])}${a.unit ? ' ' + a.unit : ''}`).join('，');
-const num = v => (v === null || v === undefined || !Number.isFinite(v) ? '—' : Math.abs(v) >= 1e-3 && Math.abs(v) < 1e5 ? String(+v.toPrecision(4)) : v.toExponential(3));
+const num = v => (v === null || v === undefined || !Number.isFinite(v) ? '—' : v === 0 ? '0' : Math.abs(v) >= 1e-3 && Math.abs(v) < 1e5 ? String(+v.toPrecision(4)) : v.toExponential(3));
 const short = v => String(+(+v).toPrecision(6));
 
 /** The definition form shown in the settings window. `plan`: the server's answer for these axes, or null while it is asked. */
@@ -157,7 +157,9 @@ export function bindScanForm(root, scan, onChange, onStart) {
   root.querySelector('[data-scan-start]')?.addEventListener('click', onStart);
 }
 
-/** One or more curves over one axis: series [{name, points: [[x, y, tip]]}]. Lines 2 px, markers with a surface ring, a legend for two or more. */
+/** One or more curves over one axis: series [{name, points: [[x, y, tip]]}]. Lines 2 px, markers with a surface ring, a legend for two or more.
+ *  A series may give its own `colour`, `markers: false` with `dash: true` for a line that is not data (a fit), and
+ *  `small: true` for many points (small dots without a ring). */
 export function seriesChart(series, labelX, labelY, width = 900) {
   const height = 210, left = 70, right = 20, top = 28, bottom = 40, all = series.flatMap(s => s.points);
   if (!all.length) return '';
@@ -166,10 +168,11 @@ export function seriesChart(series, labelX, labelY, width = 900) {
   const sx = v => left + (v - xmin) / (xmax - xmin) * (width - left - right), sy = v => height - bottom - (v - ymin) / (ymax - ymin) * (height - top - bottom);
   const ticks = Array.from({ length: 5 }, (_, i) => { const xv = xmin + (xmax - xmin) * i / 4, yv = ymin + (ymax - ymin) * i / 4;
     return `<path d="M${left} ${sy(yv).toFixed(1)}H${width - right}" stroke="#e6edef"/><text x="${left - 8}" y="${(sy(yv) + 4).toFixed(1)}" text-anchor="end">${num(yv)}</text><text x="${sx(xv).toFixed(1)}" y="${height - bottom + 18}" text-anchor="middle">${num(xv)}</text>`; }).join('');
-  const marks = series.map((s, k) => { const colour = SCAN_SERIES[k % SCAN_SERIES.length], points = [...s.points].sort((a, b) => a[0] - b[0]);
-    return `<polyline points="${points.map(p => `${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join(' ')}" fill="none" stroke="${colour}" stroke-width="2" stroke-linejoin="round"/>` +
-      points.map(p => `<g><circle cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="4.5" fill="${colour}" stroke="#fff" stroke-width="2"/><circle cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="11" fill="transparent"><title>${escapeHtml(p[2] || `${num(p[0])}：${num(p[1])}`)}</title></circle></g>`).join(''); }).join('');
-  const legend = series.length > 1 ? `<ul class="scan-legend">${series.map((s, k) => `<li><i style="background:${SCAN_SERIES[k % SCAN_SERIES.length]}"></i>${escapeHtml(s.name)}</li>`).join('')}</ul>` : '';
+  const colourOf = (s, k) => s.colour || SCAN_SERIES[k % SCAN_SERIES.length];
+  const marks = series.map((s, k) => { const colour = colourOf(s, k), points = [...s.points].sort((a, b) => a[0] - b[0]);
+    return `<polyline points="${points.map(p => `${sx(p[0]).toFixed(1)},${sy(p[1]).toFixed(1)}`).join(' ')}" fill="none" stroke="${colour}" stroke-width="2" stroke-linejoin="round"${s.dash ? ' stroke-dasharray="6 4"' : ''}/>` +
+      (s.markers === false ? [] : points).map(p => `<g><circle cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" ${s.small ? 'r="2.2"' : 'r="4.5" stroke="#fff" stroke-width="2"'} fill="${colour}"/><circle cx="${sx(p[0]).toFixed(1)}" cy="${sy(p[1]).toFixed(1)}" r="${s.small ? 5 : 11}" fill="transparent"><title>${escapeHtml(p[2] || `${num(p[0])}：${num(p[1])}`)}</title></circle></g>`).join(''); }).join('');
+  const legend = series.length > 1 ? `<ul class="scan-legend">${series.map((s, k) => `<li><i style="background:${colourOf(s, k)}"></i>${escapeHtml(s.name)}</li>`).join('')}</ul>` : '';
   return `${legend}<svg class="solid-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(labelY)}随${escapeHtml(labelX)}的变化"><g font-size="11" fill="#748995">${ticks}<text x="${width / 2}" y="${height - 4}" text-anchor="middle">${escapeHtml(labelX)}</text><text x="7" y="11">${escapeHtml(labelY)}</text></g>${marks}</svg>`;
 }
 
