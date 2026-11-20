@@ -42,9 +42,10 @@ class Isotropic(unittest.TestCase):
 
     def test_the_synchronous_pair_s1_s2_is_found_with_no_mismatch(self):
         d = 2e-3; f = CT / math.sqrt(1 - CT ** 2 / CL ** 2) / d   # the frequency where S1 at f and S2 at 2f both travel at the longitudinal speed
-        pairs = plate(d, 2.2 * f).pairs(f); best = pairs[0]
-        self.assertEqual((best['primary'], best['secondary']), ('S1', 'S2')); self.assertLess(abs(best['mismatch']), 1e-7)
-        self.assertAlmostEqual(best['phase_velocity_primary_m_s'] / CL, 1., delta=1e-7)
+        pairs = plate(d, 2.2 * f).pairs(f); best = next(r for r in pairs if (r['primary'], r['secondary']) == ('S1', 'S2'))
+        self.assertLess(abs(best['mismatch']), 1e-7); self.assertAlmostEqual(best['phase_velocity_primary_m_s'] / CL, 1., delta=1e-7)
+        # SH2 travels at the longitudinal speed at this frequency too (the same condition), so two pairs lead the table, in either order
+        self.assertEqual({(r['primary'], r['secondary']) for r in pairs[:2]}, {('S1', 'S2'), ('SH2', 'S2')}); self.assertLess(abs(pairs[1]['mismatch']), 1e-4)
         self.assertTrue(all(row['secondary'].startswith('S') and not row['secondary'].startswith('SH') for row in pairs))   # second harmonics are symmetric Lamb modes
         s0 = next(r for r in plate(1e-3, .5e6).pairs(.2e6) if (r['primary'], r['secondary']) == ('S0', 'S0'))
         self.assertLess(abs(s0['mismatch']), .005); self.assertGreater(s0['coherence_length_m'], 1.)                   # nearly matched at low frequency
