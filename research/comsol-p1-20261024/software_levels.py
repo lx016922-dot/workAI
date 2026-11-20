@@ -13,6 +13,12 @@ the software's side without COMSOL: refine the software's mesh and see whether t
   The automatic time layer follows the mesh. All three constitutive controls are computed.
 * Every level is compared with COMSOL (`coarsegraph.evaluate.case_metrics`, COMSOL as reference, the same metric as
   `compare_baselines.py`) and with the finest level of the software itself.
+* Receiver by receiver, the difference to COMSOL is set beside the difference between COMSOL's two linear runs of the
+  same case (2026-10-30 and 2026-11-09: two revisions of the model source, the same elements, degrees of freedom and
+  solver settings), both relative to the second harmonic of the increment: how well COMSOL repeats itself is the
+  resolution of the comparison.
+* The increment is the sum of a geometric and a material part of opposite sign. `separation` bounds an error of either
+  part from the comparison of their sum, which is what the missing StVK runs were planned to check.
 * The finest level is written in the delivery format (`predictions/<case>_<control>.csv`) with its StVK response:
   a prediction of the COMSOL runs that do not exist yet, fixed before they are made (`compare_remaining.py`).
 
@@ -24,6 +30,7 @@ import numpy as np
 
 REPO = Path(__file__).resolve().parents[2]; sys.path.insert(0, str(REPO))
 HERE = Path(__file__).resolve().parent; OUT = HERE / 'software-levels-20261120'; BASELINES = HERE / 'serendipity-baselines-20261109' / 'data'
+EARLIER = HERE / 'recovery-rebuild-20261029' / 'data'   # the linear runs of 2026-10-30: the same cases, mesh and settings in COMSOL from an earlier revision of the model source
 JOBS = Path(os.environ.get('WORKAI_P1_JOBS') or Path(tempfile.gettempdir()) / 'workai-p1-software-levels')
 CASES = ('A-f0.40-T1.6', 'B-f0.40-T1.6', 'C-f0.25-T2.0')
 LEVELS = ((4, 1.5), (5, 1.5), (5, 1.125), (5, .84375))
@@ -60,6 +67,41 @@ def load(cid, degree, h):
     times, values, m = receiver_series(job / 'record', points); return times, values, m, float((job / 'elapsed_s').read_text())
 
 
+def second_harmonic(t, f, X):
+    """Complex Hann-weighted coefficient at 2f of every receiver (the columns of X)."""
+    from dispersion.analysis import harmonic_coefficients
+    h = [harmonic_coefficients(t, X[:, i], f, t[0], t[-1])['harmonics'][1] for i in range(X.shape[1])]; return np.array([complex(x['real'], x['imaginary']) for x in h])
+
+
+def separation(t, f, CL, CN, SL, SS, SN):
+    """What the comparison of the complete increment already says about its two parts, without a COMSOL StVK run.
+
+    The increment is geometric (StVK − linear) plus material (Murnaghan − StVK). If the software had one part wrong by
+    a factor 1 + ε, its increment would differ from COMSOL's by ε × that part, less whatever an error of the other part
+    could cancel. With g⊥ the component of the geometric part (13 complex 2f coefficients) that no multiple of the
+    material part can cancel, the observed difference r bounds |ε_geometric| ≤ ‖r‖ / ‖g⊥‖, and likewise for the material
+    part. The bound is useless when the two parts are proportional over the receivers (case B)."""
+    R = lambda z: np.concatenate([z.real, z.imag]); g, m, a = R(second_harmonic(t, f, SS - SL)), R(second_harmonic(t, f, SN - SS)), R(second_harmonic(t, f, CN - CL)); r = R(second_harmonic(t, f, SN - SL)) - a
+    n = np.linalg.norm; gp, mp = g - m * (g @ m) / (m @ m), m - g * (g @ m) / (g @ g); fit = np.linalg.lstsq(np.stack([g, m], 1), r, rcond=None)[0]
+    return {'geometric_over_increment': float(n(g) / n(a)), 'material_over_increment': float(n(m) / n(a)), 'cosine_between_parts': float(g @ m / n(g) / n(m)),
+            'difference_over_increment': float(n(r) / n(a)), 'uncancellable_geometric_over_increment': float(n(gp) / n(a)), 'uncancellable_material_over_increment': float(n(mp) / n(a)),
+            'bound_geometric_scale_error': float(n(r) / n(gp)), 'bound_material_scale_error': float(n(r) / n(mp)), 'least_squares_scale_errors': {'geometric': float(fit[0]), 'material': float(fit[1])}}
+
+
+def receivers(case, t, f, CL, CN, SL, SN):
+    """Per receiver, relative to COMSOL's second harmonic of the increment there: the software's difference and COMSOL's own repeatability."""
+    from coarsegraph.comsol import projected, read_csv
+    second = lambda X: second_harmonic(t, f, X)
+    ci, si = second(CN - CL), second(SN - SL); a = np.abs(ci); cid = case['case_id']
+    out = {'increment_2f_over_largest': (a / a.max()).tolist(), 'software_amplitude_difference': (np.abs(np.abs(si) - a) / a).tolist(), 'software_complex_difference': (np.abs(si - ci) / a).tolist(),
+           'linear_records_2f_difference': (np.abs(second(SL - CL)) / a).tolist(), 'names': [r['name'] for r in case['output']['receivers']]}
+    earlier = EARLIER / f'{cid}_linear.csv'
+    if earlier.exists():
+        _, old = read_csv(earlier, case); rep = np.abs(second(CL - projected(case, old))) / a; out['comsol_two_linear_runs_2f_difference'] = rep.tolist()
+        out['worst_receiver'] = {'software': int(np.argmax(out['software_amplitude_difference'])), 'comsol_repeat': int(np.argmax(rep))}
+    return out
+
+
 def analyse():
     from coarsegraph.comsol import export_csv, load_case, projected, read_csv
     from coarsegraph.evaluate import case_metrics, compare, vector_relative
@@ -84,6 +126,8 @@ def analyse():
                                          'difference_to_comsol_increment_a2_vector': [r['against_comsol']['increment_a2_vector_relative'] for r in rows],
                                          'change_to_finest_worst_increment_a2': [r['against_finest_level']['increment']['worst_a2'] for r in rows],
                                          'last_refinement_over_gap': own['worst_a2'] / gap['worst_increment_a2'] if gap['worst_increment_a2'] > 0 else None}}
+        out['cases'][cid]['receivers'] = receivers(case, t, f, CL, CN, P(finest[1], 'linear'), P(finest[1], 'murnaghan'))
+        out['cases'][cid]['parts'] = separation(t, f, CL, CN, *(P(finest[1], law) for law in LAWS))
         files = {}
         for law in LAWS:
             path = OUT / 'predictions' / f'{cid}_{law}.csv'; export_csv(case, t, finest[1][law], path, comment=f'WorkAI desktop software, frozen network, degree {LEVELS[-1][0]}, h {LEVELS[-1][1]:g} mm, automatic time layer; written before the COMSOL {law} run of tiers 2-4 existed'); files[law] = digest(path)

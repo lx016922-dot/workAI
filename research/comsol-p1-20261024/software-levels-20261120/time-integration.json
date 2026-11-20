@@ -1,0 +1,182 @@
+{
+ "schema": "workai.comsol.p1.time_integration.v1",
+ "mesh": {
+  "degree": 4,
+  "h_mm": 1.5
+ },
+ "scheme": "average-acceleration Newmark (spectral3d.implicit), full hyperelastic force converged in every step",
+ "comsol": "generalized-α, ρ∞ = 1, Δt = 0.01 μs (base runs)",
+ "metric": "coarsegraph.evaluate.case_metrics; the second argument of each comparison is the reference",
+ "cases": {
+  "A-f0.40-T1.6": {
+   "frequency_mhz": 0.4,
+   "software_against_comsol": {
+    "same_mesh": {
+     "worst_increment_a2": 0.009972499860950473,
+     "increment_a2_vector_relative": 0.006420309772839983,
+     "increment_l2": 0.06594233941847681,
+     "worst_waveform_l2": 0.0003451680809163614,
+     "record_l2": 0.00013834635060131444
+    },
+    "finest_mesh": {
+     "worst_increment_a2": 0.010438204220603384,
+     "increment_a2_vector_relative": 0.0066314142484439785,
+     "increment_l2": 0.06594972601096466,
+     "worst_waveform_l2": 0.00025313551926684847,
+     "record_l2": 0.00010482385672392478
+    }
+   },
+   "implicit": [
+    {
+     "steps_per_sample": 5,
+     "time_step_us": 0.01,
+     "nodes": 10449,
+     "elapsed_s_murnaghan": 1575.5043044150007,
+     "against_comsol": {
+      "worst_increment_a2": 0.02229661771235314,
+      "increment_a2_vector_relative": 0.009479410936967502,
+      "increment_l2": 0.06589911246306596,
+      "worst_waveform_l2": 0.0007163823826085658,
+      "record_l2": 0.00025859904530881094
+     },
+     "against_software_same_mesh": {
+      "worst_increment_a2": 0.012202429128614302,
+      "increment_a2_vector_relative": 0.004455424199133237,
+      "increment_l2": 0.00034579983233557507,
+      "worst_waveform_l2": 0.0008407885437208742,
+      "record_l2": 0.0002829053264194223
+     }
+    },
+    {
+     "steps_per_sample": 10,
+     "time_step_us": 0.005,
+     "nodes": 10449,
+     "elapsed_s_murnaghan": 2879.411567624,
+     "against_comsol": {
+      "worst_increment_a2": 0.014182298020265702,
+      "increment_a2_vector_relative": 0.0073127613026335355,
+      "increment_l2": 0.06595452376595562,
+      "worst_waveform_l2": 0.00038372488938786896,
+      "record_l2": 0.00013124086204133645
+     },
+     "against_software_same_mesh": {
+      "worst_increment_a2": 0.00416823048141887,
+      "increment_a2_vector_relative": 0.0014953140594059472,
+      "increment_l2": 0.00011666473814575081,
+      "worst_waveform_l2": 0.0002783834025830271,
+      "record_l2": 9.388340460768673e-05
+     }
+    },
+    {
+     "steps_per_sample": 20,
+     "time_step_us": 0.0025,
+     "nodes": 10449,
+     "elapsed_s_murnaghan": 5480.426131572,
+     "against_comsol": {
+      "worst_increment_a2": 0.01204995241110047,
+      "increment_a2_vector_relative": 0.0068349304196277895,
+      "increment_l2": 0.06594266372382157,
+      "worst_waveform_l2": 0.00035628230156706985,
+      "record_l2": 0.00012637278203850118
+     },
+     "against_software_same_mesh": {
+      "worst_increment_a2": 0.0020569397190874144,
+      "increment_a2_vector_relative": 0.0007457786567620055,
+      "increment_l2": 5.524226594433944e-05,
+      "worst_waveform_l2": 0.00013780797450679825,
+      "record_l2": 4.663066438723452e-05
+     }
+    }
+   ],
+   "predicted_comsol_base_against_dt2": {
+    "worst_increment_a2": 0.008000849263418413,
+    "increment_a2_vector_relative": 0.002961605330921412,
+    "increment_l2": 0.0002592315767130235,
+    "worst_waveform_l2": 0.0005624571360277287,
+    "record_l2": 0.00018904916243560847
+   }
+  },
+  "B-f0.40-T1.6": {
+   "frequency_mhz": 0.4,
+   "software_against_comsol": {
+    "same_mesh": {
+     "worst_increment_a2": 0.0005091208989788362,
+     "increment_a2_vector_relative": 0.0006920345376824672,
+     "increment_l2": 0.0024085955137756274,
+     "worst_waveform_l2": 0.00021068363210151623,
+     "record_l2": 0.00016225465454142296
+    },
+    "finest_mesh": {
+     "worst_increment_a2": 0.0003599571556324248,
+     "increment_a2_vector_relative": 0.0004986584584971525,
+     "increment_l2": 0.0024022684138347173,
+     "worst_waveform_l2": 0.00019885134056069957,
+     "record_l2": 0.00015290218784011364
+    }
+   },
+   "implicit": [
+    {
+     "steps_per_sample": 10,
+     "time_step_us": 0.005,
+     "nodes": 10449,
+     "elapsed_s_murnaghan": 2888.076227541,
+     "against_comsol": {
+      "worst_increment_a2": 0.0007310346028447859,
+      "increment_a2_vector_relative": 0.0013510759234560995,
+      "increment_l2": 0.00243567629790184,
+      "worst_waveform_l2": 0.00029907264071887444,
+      "record_l2": 0.00022608144798097108
+     },
+     "against_software_same_mesh": {
+      "worst_increment_a2": 0.0011113975248234946,
+      "increment_a2_vector_relative": 0.001999284764386272,
+      "increment_l2": 0.000663699503409231,
+      "worst_waveform_l2": 0.0005095028409919716,
+      "record_l2": 0.00038773379621651863
+     }
+    }
+   ]
+  },
+  "C-f0.25-T2.0": {
+   "frequency_mhz": 0.25,
+   "software_against_comsol": {
+    "same_mesh": {
+     "worst_increment_a2": 0.027209131517988584,
+     "increment_a2_vector_relative": 0.003124932073661753,
+     "increment_l2": 0.02176853677525598,
+     "worst_waveform_l2": 0.00018287469032568369,
+     "record_l2": 0.00015617764502249385
+    },
+    "finest_mesh": {
+     "worst_increment_a2": 0.02807880271284351,
+     "increment_a2_vector_relative": 0.002346123681765708,
+     "increment_l2": 0.021756176039909092,
+     "worst_waveform_l2": 3.1678099703211884e-05,
+     "record_l2": 2.082173054551048e-05
+    }
+   },
+   "implicit": [
+    {
+     "steps_per_sample": 10,
+     "time_step_us": 0.005,
+     "nodes": 10449,
+     "elapsed_s_murnaghan": 2898.5545074499996,
+     "against_comsol": {
+      "worst_increment_a2": 0.0273943565943606,
+      "increment_a2_vector_relative": 0.002992472851449277,
+      "increment_l2": 0.021756834264563575,
+      "worst_waveform_l2": 8.848234301018915e-05,
+      "record_l2": 5.793175039286894e-05
+     },
+     "against_software_same_mesh": {
+      "worst_increment_a2": 0.0006448271380534102,
+      "increment_a2_vector_relative": 0.0005694928699046028,
+      "increment_l2": 8.968604628940369e-05,
+      "worst_waveform_l2": 0.00016000523872884332,
+      "record_l2": 0.000122577226192228
+     }
+    }
+   ]
+  }
+ }
+}

@@ -9,7 +9,8 @@ import numpy as np
 REPO = Path(__file__).resolve().parents[1]
 P1 = REPO / 'research' / 'comsol-p1-20261024'
 spec = importlib.util.spec_from_file_location('compare_remaining', P1 / 'compare_remaining.py'); tool = importlib.util.module_from_spec(spec); spec.loader.exec_module(tool)
-from coarsegraph.comsol import export_csv, load_case
+from coarsegraph.comsol import export_csv, load_case, projected
+spec = importlib.util.spec_from_file_location('software_levels', P1 / 'software_levels.py'); levels = importlib.util.module_from_spec(spec); spec.loader.exec_module(levels)
 
 CID = 'A-f0.40-T1.6'
 
@@ -61,6 +62,16 @@ class Remaining(unittest.TestCase):
         mesh2 = row['tier3_mesh2']; self.assertEqual(set(mesh2), {'comsol_linear_base_against_refined', 'software_linear'})   # only the linear run of this variant was delivered
         self.assertAlmostEqual(mesh2['comsol_linear_base_against_refined']['l2'], 1e-4 / (1 + 1e-4), places=9); self.assertNotIn('tier2_stvk', row)
         lines = tool.summary({'gate': .05, 'rows': [row]}); self.assertEqual(len(lines), 2); self.assertIn('ratio 0.2', lines[0]); self.assertIn('linear only', lines[1])
+
+    def test_the_complete_increment_bounds_an_error_of_either_part(self):
+        case, t, L, G, M = self.case, self.t, self.L, self.G, self.M; f = case['sources'][0]['frequency_mhz']; P = lambda U: projected(case, U)
+        parts = levels.separation(t, f, P(L), P(L + G + M), P(L), P(L + 1.02 * G), P(L + 1.02 * G + .99 * M))   # the software has the geometric part 2 % large and the material part 1 % small
+        self.assertAlmostEqual(parts['least_squares_scale_errors']['geometric'], .02 / 1.02, places=5); self.assertAlmostEqual(parts['least_squares_scale_errors']['material'], -.01 / .99, places=5)   # relative to the software's own part
+        self.assertGreaterEqual(parts['bound_geometric_scale_error'], .02 / 1.02 - 1e-6); self.assertGreaterEqual(parts['bound_material_scale_error'], .01 / .99 - 1e-6)
+        self.assertAlmostEqual(parts['cosine_between_parts'], np.cos(.8), places=3); self.assertAlmostEqual(parts['material_over_increment'] / parts['geometric_over_increment'], 2.5 * .99 / 1.02, places=3)
+        # two parts in the same proportion at every receiver cannot be told apart from their sum
+        same = levels.separation(t, f, P(L), P(L + G - 3 * G), P(L), P(L + 1.3 * G), P(L + 1.3 * G - 3.3 * G))   # 30 % and 10 % wrong, and the sum exact
+        self.assertLess(same['difference_over_increment'], 1e-6); self.assertLess(same['uncancellable_geometric_over_increment'], 1e-6)
 
     def test_a_delivery_without_new_runs_says_so(self):
         self.write(self.delivery, 'linear', self.L)
