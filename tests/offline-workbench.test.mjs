@@ -241,3 +241,26 @@ test('material damping: the form, the conversion from measured attenuation and t
   assert.equal(scanParameters({ ...full, damping: undefined }).filter(r => r.path.startsWith('damping.')).length, 0);
   assert.match(tree({ ...full, boundary: { fixed_face: 'none' }, acquisition: { duration_us: 30, sample_step_us: .05 }, numerics: { h_mm: 1 } }).find(r => r.id === 'material').detail, /有阻尼/);
 });
+
+test('transducer sources: a wedge and a bonded wafer in the source form', async () => {
+  const m = await import('../offline/web/scene-model.js');
+  const source = { face: 'zmax', center_mm: [50, 1, 2], radius_mm: 3, direction: [0, 0, -1], amplitude_mpa: 1, frequency_mhz: .5, cycles: 5, delay_us: 0, phase_deg: 0 };
+  assert.match(m.PROFILE_LABELS.wedge, /斜楔/); assert.match(m.PROFILE_LABELS.patch, /压电片/);
+  m.setProfileType(source, 'wedge');
+  assert.deepEqual(source.profile, { type: 'wedge', along: 'x', length_mm: 20, width_mm: 0, trace_velocity_m_s: 5400, reverse: false, apodization: 'uniform' });
+  assert.equal(source.radius_mm, 0); assert.deepEqual(source.direction, [0, 0, -1]);                 // its own size is the region; it still presses on the face
+  m.setProfileType(source, 'patch'); assert.equal(source.profile.shape, 'strip'); assert.deepEqual(source.direction, [1, 0, 0]);   // the wafer's length axis lies in the face
+  m.setProfileType(source, 'uniform'); assert.deepEqual(source.direction, [0, 0, -1]);                 // back to a pressure
+  // moving a transducer to another face keeps it in that face
+  const scene = { geometry: { kind: 'plate', length_mm: 100, width_mm: 20, thickness_mm: 2 } };
+  m.setProfileType(source, 'wedge'); m.setSourceFace(scene, source, 'xmin'); assert.equal(source.profile.along, 'y');
+  m.setProfileType(source, 'patch'); assert.deepEqual(source.direction, [0, 1, 0]); m.setSourceFace(scene, source, 'zmin'); assert.deepEqual(source.direction, [1, 0, 0]);
+  // Snell: the trace velocity under a wedge
+  assert.ok(Math.abs(m.traceVelocity(2720, 30) - 5440) < 1e-6); assert.ok(Math.abs(m.traceVelocity(2720, 90 - 1e-9) - 2720) < 1e-3);
+  assert.throws(() => m.traceVelocity(2720, 0), /入射角/); assert.throws(() => m.traceVelocity(0, 30), /楔块声速/);
+  assert.match(m.sourceSummary({ ...source, profile: { type: 'wedge' } }), /斜楔换能器/);
+  const { scanParameters } = await import('../offline/web/scan.js');
+  const full = { geometry: scene.geometry, source: { ...source, face: 'zmax', profile: m.defaultProfile('wedge', { face: 'zmax' }) }, receivers: [], boundaries: [] };
+  const names = scanParameters(full).map(r => r.path); assert.ok(names.includes('source.profile.trace_velocity_m_s') && names.includes('source.profile.length_mm'));
+  assert.equal(scanParameters(full).find(r => r.path === 'source.profile.trace_velocity_m_s').name, '迹线速度');
+});

@@ -210,11 +210,14 @@ def accumulation(job, body):
     from .domain import parts_for, response
     from .recording import controls_of, is_compact, manifest
     from physics.signals import support_us
-    if not isinstance(body, dict) or set(body) - {'points', 'direction', 'window', 'fit_mm'}: raise ValueError('沿程分析只接受 points、direction、window、fit_mm。')
+    if not isinstance(body, dict) or set(body) - {'points', 'direction', 'window', 'fit_mm', 'receiver'}: raise ValueError('沿程分析只接受 points、direction、window、fit_mm、receiver。')
     job, scene, f = _job(job); m = manifest(job / 'record'); compact = is_compact(m)
     points, distance, e, names, notes = line_of(body, scene, compact, MAX_LINE)
     direction = _vector(body.get('direction', scene['receivers'][0]['direction']), '接收方向', unit=True)
     times, values, m = series(job / 'record', points, direction); controls = controls_of(m); step = m['sample_step_us']
+    values, kept, receiver = aperture(times, values, distance, body.get('receiver'), step)   # a finite receiver reads the line through its footprint
+    if receiver['type'] != 'point':
+        points = [points[i] for i in kept]; distance = distance[kept]; names = [names[i] for i in kept] if names else names
     have = lambda part: part in parts_for(controls) or (part == 'nonlinear' and {'linear', 'murnaghan'} <= set(controls))
     part = lambda name: response(values, name)
     full = part('full'); basis = 'nonlinear' if have('nonlinear') else 'full'
@@ -279,22 +282,105 @@ def accumulation(job, body):
                          'coherence_length_mm': None if best['coherence_length_m'] is None else best['coherence_length_m'] * 1e3,
                          'group_velocity_primary_m_s': best['group_velocity_primary_m_s'], 'group_velocity_secondary_m_s': best['group_velocity_secondary_m_s']}
     variation = float((a1.max() - a1.min()) / a1.mean())
+    attenuation = _attenuation(scene, f, e, points, distance, rows, chosen, x, a1, pair, wave[1], speed_measured, notes)
     if basis == 'full': notes.append('这次计算没有线性控制：A₂ 取自完整响应，2f 处还含有猝发音自身的线性频谱，A₂/A₁² 不能当作非线性的度量。请在“求解器配置”里选“完整 + 线性”或“全部”后重新计算。')
     if variation > .1: notes.append(f'拟合范围内基频幅值 A₁ 变化了 {variation:.0%}（波束扩散、多模态叠加或反射）：A₂/A₁² 只部分抵消这种变化。')
     if ratio['r_squared'] is not None and ratio['r_squared'] < .98: notes.append(f"A₂/A₁² 随距离不是直线（R² = {ratio['r_squared']:.3f}）：相位失配时二次谐波会先增后减，多模态时会出现拍。")
     if any(not r['usable'] for r in rows): notes.append(f"{sum(1 for r in rows if not r['usable'])} 个点的时间窗超出记录的末尾，未参与分析。")
     if scene['source'].get('signal', {}).get('type', 'tone_burst') not in ('tone_burst', 'gaussian_pulse'): notes.append('激励不是单一载频的猝发音：f 取主激励的 frequency_mhz，f 与 2f 的系数只在信号有这个载频时才有意义。')
     return {'schema': 'workai.nonlinear.accumulation.v1', 'job_id': job.name, 'frequency_mhz': f, 'direction': [float(v) for v in direction], 'line_direction': [float(v) for v in e],
-            'points_mode': (body.get('points') or {'mode': 'receivers'})['mode'], 'record_mode': 'compact' if compact else 'full', 'controls': list(controls), 'a2_basis': basis, 'window': used,
+            'points_mode': (body.get('points') or {'mode': 'receivers'})['mode'], 'record_mode': 'compact' if compact else 'full', 'controls': list(controls), 'a2_basis': basis, 'window': used, 'receiver': receiver,
             'group': {'velocity_m_s': speed_measured, 'r_squared': group['r_squared'] if group else None}, 'rows': rows,
             'fit': {'range_mm': [float(x[0] * 1e3), float(x[-1] * 1e3)], 'points': len(chosen),
                     'ratio': {'slope_per_m2': ratio['slope'], 'intercept_per_m': ratio['intercept'], 'r_squared': ratio['r_squared']},
                     'a2': {'slope_m_per_m': a2['slope'], 'intercept_m': a2['intercept'], 'r_squared': a2['r_squared']},
-                    'f': wave[1], '2f': wave[2], 'pair': pair, 'a1_variation': variation},
+                    'f': wave[1], '2f': wave[2], 'pair': pair, 'a1_variation': variation, 'attenuation': attenuation},
             'notes': notes,
             'note': 'A₂/A₁² 是这个模型、激励和接收方向下的相对非线性参数，不是材料的 β；它的数值与分析时间窗的长度有关，不同算例之间要用同一窗长比较，随距离的增长不受此影响。'
                     '2f 的波数取自 2f 系数的相位斜率：相位匹配时它等于二次模态的波数；失配时 2f 场是随基波走的受迫波（波数 2k(f)）与自由的二次模态之和，'
                             '相位斜率落在两者之间，偏向幅值大的一个，两个成分要在 f–k 谱里分开看。'}
+
+
+RECEIVERS = ('point', 'wedge', 'patch')
+
+
+def aperture(times, values, distance_mm, receiver, step_us):
+    """What a receiver of finite size reads at every position of an equally spaced line: ({control: frames × positions}, the
+    indices of the points that are centres of a whole footprint, the receiver as used).
+
+    * `point` — the displacement at the point (a laser spot): nothing changes.
+    * `wedge` — an angle-beam receiver of footprint `length_mm` and trace velocity `trace_velocity_m_s`: the mean over the
+      footprint of the displacement, each point advanced by its distance from the centre over the trace velocity. A wave
+      whose phase velocity along the line is the trace velocity adds up in phase; others cancel in part. `apodization`
+      'hann' weights the footprint with a Hann window.
+    * `patch` — a bonded wafer of length `length_mm` in the pin-force picture: the displacement at its far edge minus that
+      at its near edge, which is its mean strain times its length (use the in-plane direction along the line).
+
+    Only the extent of the receiver along the line is modelled; across the line it is a point."""
+    if receiver is None: receiver = {'type': 'point'}
+    if not isinstance(receiver, dict) or receiver.get('type') not in RECEIVERS: raise ValueError('接收方式需为 point（点）、wedge（斜楔）或 patch（压电片）。')
+    kind = receiver['type']
+    if kind == 'point':
+        if set(receiver) != {'type'}: raise ValueError('点接收不带其他参数。')
+        return values, list(range(len(distance_mm))), {'type': 'point'}
+    allowed = {'type', 'length_mm'} | ({'trace_velocity_m_s', 'apodization'} if kind == 'wedge' else set())
+    if set(receiver) - allowed or not number(receiver.get('length_mm')) or receiver['length_mm'] <= 0: raise ValueError('接收换能器需要正的长度 length_mm（mm）' + ('、迹线速度 trace_velocity_m_s（m/s）。' if kind == 'wedge' else '。'))
+    spacing = np.diff(distance_mm)
+    if len(spacing) < 2 or np.ptp(spacing) > 1e-6 * spacing.max(): raise ValueError('有尺寸的接收换能器需要等距的点列：请用“线段等距采样”。')
+    dx = float(spacing[0]); half = int(round(receiver['length_mm'] / 2 / dx))
+    if half < 1: raise ValueError(f'接收换能器的长度（{receiver["length_mm"]:g} mm）小于两个点距（{2 * dx:.3g} mm）：请加密点列，或改用点接收。')
+    count = len(distance_mm) - 2 * half
+    if count < 2: raise ValueError(f'点列比接收换能器长不了多少：长 {receiver["length_mm"]:g} mm 的换能器在这条线上放不下两个位置。请加长线段。')
+    kept = list(range(half, half + count)); used = {'type': kind, 'length_mm': 2 * half * dx, 'points': 2 * half + 1}
+    if kind == 'patch':
+        return {law: v[:, 2 * half:] - v[:, :count] for law, v in values.items()}, kept, used
+    speed = receiver.get('trace_velocity_m_s'); shape = receiver.get('apodization', 'uniform')
+    if not (number(speed) and 100 <= speed <= 1e5) or shape not in ('uniform', 'hann'): raise ValueError('斜楔接收需要 100–100000 m/s 的迹线速度；幅值分布为 uniform 或 hann。')
+    offsets = np.arange(-half, half + 1); weights = .5 * (1 + np.cos(np.pi * offsets / (half + 1))) if shape == 'hann' else np.ones(len(offsets)); weights = weights / weights.sum()
+    shift = offsets * dx * 1e-3 / speed * 1e6                      # μs: how much later the wave reaches that part of the footprint
+    pad = int(math.ceil(np.abs(shift).max() / step_us)) + 2; frames = len(times); n = frames + 2 * pad; f = np.fft.rfftfreq(n, step_us)
+    out = {}
+    for law, v in values.items():
+        spectrum = np.fft.rfft(np.pad(v, ((pad, pad), (0, 0))), axis=0); total = np.zeros((len(f), count), dtype=complex)
+        for o, w, s in zip(offsets, weights, shift): total += w * spectrum[:, half + o:half + o + count] * np.exp(2j * np.pi * f * s)[:, None]   # advanced by its delay
+        out[law] = np.fft.irfft(total, n, axis=0)[pad:pad + frames]
+    return out, kept, dict(used, trace_velocity_m_s=float(speed), apodization=shape)
+
+
+def _attenuation(scene, f, e, points, distance, rows, chosen, x, a1, pair, wave, speed_measured, notes):
+    """The attenuation along the line: what A1 shows, what the model's damping gives for the modes, and A2/A1² with the
+    attenuation taken out.
+
+    With attenuation a₁ at f and a₂ at 2f a phase-matched second harmonic grows as
+    A₂ = K A₁(0)² (e^{−2a₁X} − e^{−a₂X})/(a₂ − 2a₁), X the distance from the source, so A₂/A₁² = K (1 − e^{−mX})/m with
+    m = a₂ − 2a₁. Multiplying by mX/(1 − e^{−mX}) gives K·X again: a straight line whose slope is the one the material
+    would show without attenuation. X is measured from the centre of the primary source along the line."""
+    measured = linear_fit(x, np.log(a1)) if np.all(a1 > 0) else None
+    out = {'a1_measured_np_m': None if measured is None else -measured['slope'], 'a1_measured_r_squared': None if measured is None else measured['r_squared']}
+    damping = scene.get('damping')
+    if not damping: return out
+    from physics.damping import decay_per_s
+    theory = wave['theory'] if wave['theory'] and wave['theory']['matched'] else None
+    c1 = pair['group_velocity_primary_m_s'] if pair else theory['group_velocity_m_s'] if theory else speed_measured
+    c2 = pair['group_velocity_secondary_m_s'] if pair else c1
+    out.update(decay_per_s={'f': decay_per_s(damping, f * 1e6), '2f': decay_per_s(damping, 2 * f * 1e6)}, group_velocity_source='theory' if pair or theory else 'measured')
+    if not (c1 and c1 > 0 and c2 and c2 > 0):
+        notes.append('没有群速度（理论和实测都没有），不能把模型的阻尼换算成沿程衰减。'); return out
+    a1t = out['decay_per_s']['f'] / c1; a2t = out['decay_per_s']['2f'] / c2; m = a2t - 2 * a1t
+    out.update(a1_np_m=a1t, a2_np_m=a2t, m_np_m=m, mode_f=pair['primary'] if pair else theory['mode'] if theory else None, mode_2f=pair['secondary'] if pair else None)
+    if not pair: notes.append('没有认出二次模态：2f 处的沿程衰减按一次模态的群速度估计。')
+    if pair and abs(pair['mismatch']) >= .01:
+        notes.append('这一对模态相位失配：衰减修正的公式只适用于相位匹配的累积，没有做修正。'); return out
+    offset = float((np.asarray(points[0], dtype=float) - np.asarray(scene['source']['center_mm'], dtype=float)) @ np.asarray(e, dtype=float)) - float(distance[0])
+    factor = lambda X: 1. if abs(m * X) < 1e-9 else m * X / -math.expm1(-m * X)
+    if min(r['distance_mm'] for r in chosen) + offset <= 0:
+        notes.append('拟合范围内有点不在主激励的下游：衰减修正需要从激励算起的传播距离，没有做修正。'); return out
+    for r in rows:
+        X = (r['distance_mm'] + offset) * 1e-3
+        if r['usable'] and r.get('ratio_per_m') is not None and X > 0: r['ratio_corrected_per_m'] = r['ratio_per_m'] * factor(X)
+    fit = linear_fit(x + offset * 1e-3, [r['ratio_corrected_per_m'] for r in chosen])
+    out.update(source_offset_mm=offset, corrected={'slope_per_m2': fit['slope'], 'intercept_per_m': fit['intercept'], 'r_squared': fit['r_squared']})
+    return out
 
 
 def fk(job, body):

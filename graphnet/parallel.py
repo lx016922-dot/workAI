@@ -128,6 +128,8 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
     P[0] = positions; V[0] = velocities; A[0] = accelerations; X[0] = externals
     now = np.zeros(controls, dtype=np.int64); active = np.ones(controls, dtype=np.bool_); at = np.zeros(controls, dtype=np.int64)
     task_strain = np.empty(len(element_tasks)); task_jac = np.empty(len(element_tasks))
+    carries = np.zeros(nodes, dtype=np.bool_)   # nodes with an external force: the others skip the sum over the sources (their loads are exact zeros)
+    for q in range(len(loaded)): carries[loaded[q]] = True
     work = works.copy(); dissipated = dissipations.copy(); potential = potentials.copy(); max_strain = strains.copy(); min_j = jacobians.copy()
     if include_initial:
         for c in prange(controls):
@@ -208,7 +210,8 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
                     for node in range(node_blocks[task % blocks, 0], node_blocks[task % blocks, 1]):
                         for axis in range(3):
                             external = 0.
-                            for source in range(sources): external += loads[source, node, axis] * signals[source, step - start_step - 1, stage]
+                            if carries[node]:
+                                for source in range(sources): external += loads[source, node, axis] * signals[source, step - start_step - 1, stage]
                             if stiff: undamped = (external - message[c, node, axis] - viscous[c, node, axis]) / mass[node] * free[node, axis]
                             else: undamped = (external - message[c, node, axis]) / mass[node] * free[node, axis]
                             if damped:

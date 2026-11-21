@@ -22,15 +22,15 @@ def face_load(mesh, source):
         weights = region_weights(probe[ids], source, axis3)
         length += float((quadrature * np.minimum(np.abs(weights), 1)).sum()); weighted += float((quadrature * weights).sum())
         np.add.at(force, ids, (quadrature * weights)[:, None] * direction)
-    require(length > 0, f'{source.get("name", "primary")} 的加载边上没有节点；请检查加载面、中心、半径或梳状参数。')
     return force, length, weighted
 
 
 def prepare_excitation(mesh, scene):
     require(scene_v2.is_v2(scene) and scene_v2.is_plane_strain(scene), '二维求解器需要 dimension 为 2d_plane_strain 的 v2 场景。')
     lifted = points3d(mesh); material = scene['material']; loads = []; rows = []
+    from spectral3d.loads import source_loads
     for src in scene_v2.sources(scene):
-        force, length, weighted = face_load(mesh, src); loads.append((force, src))
+        parts, length, weighted = source_loads(mesh, src, face_load); loads += parts
         rows.append({'name': src.get('name', 'primary'), 'face': src['face'], 'loaded_length_mm': length * 1e3, 'profile_weighted_length_mm': weighted * 1e3})
     mask3, constraint_rows = build_constraints(lifted, scene['boundary']['fixed_face'], scene_v2.boundaries(scene)); mask = mask3[:, [0, 2]]
     total = sum(force for force, _ in loads)

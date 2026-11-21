@@ -14,7 +14,7 @@ const NAMES = { frequency_mhz: ['频率', 'MHz'], amplitude_mpa: ['幅值', 'MPa
   pitch_mm: ['齿距', 'mm'], tooth_width_mm: ['齿宽', 'mm'], length_mm: ['长度', 'mm'], width_mm: ['宽度', 'mm'], thickness_mm: ['厚度', 'mm'], outer_radius_mm: ['外半径', 'mm'], inner_radius_mm: ['内半径', 'mm'],
   hole_radius_mm: ['孔半径', 'mm'], hole_x_mm: ['孔中心 x', 'mm'], hole_y_mm: ['孔中心 y', 'mm'], notch_x_mm: ['缺口中心 x', 'mm'], notch_width_mm: ['缺口宽度', 'mm'], notch_depth_mm: ['缺口深度', 'mm'],
   x_mm: ['位置 x', 'mm'], y_mm: ['位置 y', 'mm'], z_mm: ['位置 z', 'mm'], depth_mm: ['深度', 'mm'], x_start_mm: ['起点 x', 'mm'], x_end_mm: ['终点 x', 'mm'], rho_kg_m3: ['密度 ρ', 'kg/m³'], lambda_pa: ['λ', 'Pa'], mu_pa: ['μ', 'Pa'],
-  l_pa: ['l', 'Pa'], m_pa: ['m', 'Pa'], n_pa: ['n', 'Pa'], attenuation_db: ['目标衰减', 'dB'], mass_per_s: ['阻尼 α', '1/s'], stiffness_s: ['阻尼 β', 's'] };
+  l_pa: ['l', 'Pa'], m_pa: ['m', 'Pa'], n_pa: ['n', 'Pa'], attenuation_db: ['目标衰减', 'dB'], mass_per_s: ['阻尼 α', '1/s'], stiffness_s: ['阻尼 β', 's'], trace_velocity_m_s: ['迹线速度', 'm/s'], edge_mm: ['边缘传力区', 'mm'] };
 // Columns of the summary table and quantities of the curve: key in a receiver's row, heading, factor from metres.
 export const QUANTITIES = [
   { key: 'a2_over_a1_squared_per_m', label: 'A₂/A₁²', unit: '1/m', scale: 1, tip: '相对非线性参数：A₂ 取非线性增量（完整 − 线性）；没有算线性控制时取完整响应' },
@@ -46,7 +46,7 @@ export function scanParameters(scene) {
     const base = i ? `sources.${i - 1}` : 'source';
     for (const key of ['frequency_mhz', 'amplitude_mpa', 'cycles', 'delay_us']) add(`${base}.${key}`);
     if (s.radius_mm > 0) add(`${base}.radius_mm`);
-    for (const key of ['sigma_mm', 'pitch_mm']) add(`${base}.profile.${key}`);
+    for (const key of ['sigma_mm', 'pitch_mm', 'trace_velocity_m_s', 'length_mm', 'edge_mm']) add(`${base}.profile.${key}`);
   });
   const g = scene.geometry;
   for (const key of g.kind === 'pipe' ? ['length_mm', 'outer_radius_mm', 'inner_radius_mm'] : ['length_mm', 'width_mm', 'thickness_mm']) add(`geometry.${key}`);

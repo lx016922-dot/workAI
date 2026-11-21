@@ -142,3 +142,34 @@ test('the shared chart draws a fit as a dashed line without markers and many poi
   assert.equal((svg.match(/r="2.2"/g) || []).length, 50); assert.equal((svg.match(/r="4.5"/g) || []).length, 0); assert.ok(svg.includes('stroke="#173147"') && svg.includes('background:#173147') && svg.includes('stroke-dasharray'));
   assert.ok(seriesChart([{ name: 'a', points: [[0, 0], [1, 2]] }], 'x', 'y').includes('>0</text>'));   // zero is written as 0
 });
+
+test('accumulation with damping: the attenuation of the modes and the slope with it taken out', () => {
+  const plain = accumulation(); assert.ok(!/沿程衰减/.test(accumulationMarkup(plain)));   // no damping, flat A1: nothing to say
+  const beam = accumulation(); beam.fit.attenuation = { a1_measured_np_m: 2.4, a1_measured_r_squared: .98 };
+  assert.match(accumulationMarkup(beam), /沿程衰减[\s\S]*A₁ 实测 2\.4 Np\/m[\s\S]*模型没有材料阻尼/);
+  const a = accumulation(); a.rows.forEach(r => { if (r.usable) r.ratio_corrected_per_m = r.ratio_per_m * 1.2; });
+  a.fit.attenuation = { a1_measured_np_m: 5.02, a1_measured_r_squared: 1, decay_per_s: { f: 27000, '2f': 80000 }, group_velocity_source: 'theory', a1_np_m: 5, a2_np_m: 14.8, m_np_m: 4.8, mode_f: 'S0', mode_2f: 'S0',
+    source_offset_mm: 10, corrected: { slope_per_m2: 4.1e6, intercept_per_m: -12, r_squared: .9999 } };
+  const text = accumulationMarkup(a);
+  assert.match(text, /模型的阻尼：f 处 5 Np\/m（S0），2f 处 14\.8 Np\/m（S0），由衰减率除以理论群速度得到；A₁ 实测与它相差 \+?0\.4/);
+  assert.match(text, /扣除衰减后 A₂\/A₁² 的斜率 [^ ]+ m⁻²/); assert.match(text, /m = a₂ − 2a₁ = 4\.8 Np\/m/); assert.match(text, /沿程距离 \+ 10 mm/);
+  const chart = accumulationCharts(a).ratio; assert.match(chart, /扣除衰减后的直线拟合/); assert.equal((chart.match(/stroke-dasharray/g) || []).length, 2);
+  const csv = accumulationCsv(a).split('\n'); assert.ok(csv.includes('# corrected_ratio_slope_per_m2,4100000')); assert.ok(csv.includes('# attenuation_model_2f_np_m,14.8'));
+  const header = csv.find(l => l.startsWith('point,')).split(','), first = csv[csv.findIndex(l => l.startsWith('point,')) + 1].split(',');
+  assert.equal(header.at(-1), 'a2_over_a1_squared_without_attenuation_per_m'); assert.equal(first.length, header.length);
+  assert.ok(Math.abs(Number(first.at(-1)) / Number(first[header.indexOf('a2_over_a1_squared_per_m')]) - 1.2) < 1e-12);
+});
+
+test('a receiver of finite size: the request, and what the result says about it', () => {
+  assert.equal(accumulationBody(form()).receiver, undefined); assert.equal(accumulationBody(form({ receiver: 'point' })).receiver, undefined);
+  assert.deepEqual(accumulationBody(form({ receiver: 'wedge', receiverLength: '12', receiverSpeed: '5400' })).receiver, { type: 'wedge', length_mm: 12, trace_velocity_m_s: 5400 });
+  assert.deepEqual(accumulationBody(form({ receiver: 'patch', receiverLength: '7', receiverSpeed: '' })).receiver, { type: 'patch', length_mm: 7 });
+  assert.throws(() => accumulationBody(form({ receiver: 'wedge', receiverLength: '12', receiverSpeed: '' })), /迹线速度/);
+  assert.throws(() => accumulationBody(form({ receiver: 'patch', receiverLength: '0' })), /正数/);
+  assert.throws(() => accumulationBody(form({ mode: 'receivers', receiver: 'patch', receiverLength: '7' })), /等距/);
+  const wedge = accumulationMarkup(accumulation({ receiver: { type: 'wedge', length_mm: 12, points: 25, trace_velocity_m_s: 5400, apodization: 'uniform' } }));
+  assert.match(wedge, /接收方式[\s\S]*斜楔换能器：沿线长 12 mm（25 个点），迹线速度 5400 m\/s/);
+  assert.match(accumulationMarkup(accumulation({ receiver: { type: 'patch', length_mm: 7, points: 15 } })), /压电片：长 7 mm，取两端位移之差/);
+  assert.ok(!/接收方式/.test(accumulationMarkup(accumulation({ receiver: { type: 'point' } }))));
+  assert.ok(accumulationCsv(accumulation({ receiver: { type: 'patch', length_mm: 7, points: 15 } })).split('\n').includes('# receiver,type=patch;length_mm=7;points=15'));
+});

@@ -1,6 +1,8 @@
 """Material damping in the offline software: what a request may ask for, what the preview says, the attenuation of the plate's modes."""
 import copy
+import math
 import unittest
+import numpy as np
 from physics.damping import decay_per_s
 from .domain import templates, validate_request
 from .guided import describe
@@ -41,6 +43,35 @@ class Requests(unittest.TestCase):
         for key, frequency in (('f', f), ('2f', 2 * f)):
             for m in d['modes'][key]: self.assertAlmostEqual(m['attenuation_np_m'], decay_per_s(scene['damping'], frequency) / abs(m['group_velocity_m_s']))
         plain = describe(validate_request({'scene': v2_plate(), 'degree': 3})['scene']); self.assertNotIn('damping', plain); self.assertNotIn('attenuation_np_m', plain['modes']['f'][0])
+
+
+class Accumulation(unittest.TestCase):
+    def rows(self, K, m, a1, offset, x):
+        return [{'usable': True, 'distance_mm': float(d), 'ratio_per_m': K * (1 - math.exp(-m * (d + offset) * 1e-3)) / m, 'a1_m': 1e-9 * math.exp(-a1 * d * 1e-3)} for d in x]
+
+    def test_the_slope_without_attenuation_is_recovered(self):
+        from .nonlinear import _attenuation
+        damping = {'mass_per_s': 2e4, 'stiffness_s': 3e-9}; f = .5; c1, c2 = 5000., 4000.
+        scene = {'damping': damping, 'source': {'center_mm': [0., 1., 1.]}}; a1 = decay_per_s(damping, f * 1e6) / c1; a2 = decay_per_s(damping, 2 * f * 1e6) / c2; m = a2 - 2 * a1; K = 3.7e6
+        x = np.linspace(20., 200., 10); rows = self.rows(K, m, a1, 15., x); points = [[35. + d - 20., 1., 1.] for d in x]; notes = []
+        pair = {'primary': 'S0', 'secondary': 'S0', 'mismatch': 1e-4, 'group_velocity_primary_m_s': c1, 'group_velocity_secondary_m_s': c2}
+        out = _attenuation(scene, f, [1., 0., 0.], points, x, rows, rows, x * 1e-3, np.array([r['a1_m'] for r in rows]), pair, {'theory': None}, 5100., notes)
+        self.assertAlmostEqual(out['a1_measured_np_m'], a1, places=9); self.assertAlmostEqual(out['a1_np_m'], a1); self.assertAlmostEqual(out['a2_np_m'], a2); self.assertAlmostEqual(out['m_np_m'], m)
+        self.assertAlmostEqual(out['source_offset_mm'], 15.); self.assertAlmostEqual(out['corrected']['slope_per_m2'] / K, 1., places=9); self.assertLess(abs(out['corrected']['intercept_per_m']), 1e-6 * K)
+        self.assertEqual((out['mode_f'], out['mode_2f'], out['group_velocity_source'], notes), ('S0', 'S0', 'theory', []))
+        raw = np.polyfit(x * 1e-3, [r['ratio_per_m'] for r in rows], 1)[0]; self.assertLess(raw, .9 * K)   # the uncorrected slope is lower
+        # a mismatched pair and points upstream of the source get no correction, and say why
+        for change, word in (({'pair': dict(pair, mismatch=.05)}, '相位失配'), ({'points': [[-50. + d, 1., 1.] for d in x]}, '下游')):
+            fresh = self.rows(K, m, a1, 15., x); notes = []
+            out = _attenuation(scene, f, [1., 0., 0.], change.get('points', points), x, fresh, fresh, x * 1e-3, np.array([r['a1_m'] for r in fresh]), change.get('pair', pair), {'theory': None}, 5100., notes)
+            self.assertNotIn('corrected', out); self.assertIn(word, notes[0]); self.assertNotIn('ratio_corrected_per_m', fresh[0])
+        # no damping in the model: only what A1 shows
+        plain = _attenuation({'source': scene['source']}, f, [1., 0., 0.], points, x, rows, rows, x * 1e-3, np.array([r['a1_m'] for r in rows]), pair, {'theory': None}, 5100., [])
+        self.assertEqual(set(plain), {'a1_measured_np_m', 'a1_measured_r_squared'})
+        # without a recognised pair the measured group velocity stands in, with a note
+        notes = []; fresh = self.rows(K, m, a1, 15., x)
+        out = _attenuation(scene, f, [1., 0., 0.], points, x, fresh, fresh, x * 1e-3, np.array([r['a1_m'] for r in fresh]), None, {'theory': None}, 5100., notes)
+        self.assertEqual(out['group_velocity_source'], 'measured'); self.assertAlmostEqual(out['a1_np_m'], decay_per_s(damping, f * 1e6) / 5100.); self.assertIn('二次模态', notes[0])
 
 
 if __name__ == '__main__': unittest.main()

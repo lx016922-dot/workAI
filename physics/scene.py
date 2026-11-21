@@ -74,7 +74,8 @@ def _validate_source(raw, core):
     if profile is not None: validated['profile'] = validate_profile(profile, validated)
     if name is not None: validated['name'] = name
     start, end = support_us(validated)
-    require(end <= core['acquisition']['duration_us'] + 1e-9, '计算时长需要覆盖完整激励信号。')
+    from .loads import travel_us
+    require(end + travel_us(validated) <= core['acquisition']['duration_us'] + 1e-9, '计算时长需要覆盖完整激励信号' + ('（包括行波走完斜楔底面的时间）。' if travel_us(validated) else '。'))
     # Mesh screen on the real signal content, not only the carrier.
     checked = max(2 * validated['frequency_mhz'], bandwidth_mhz(validated, 30.))
     require(core['numerics']['h_mm'] <= _shear_speed(core['material']) / (checked * 1e6 * 8) * 1000 + 1e-12,
@@ -124,7 +125,10 @@ def _plane_strain_checks(core):
     for src in sources(core):
         require(src['face'] in PLANE_FACES, '二维平面应变的激励面需为 xmin/xmax/zmin/zmax。')
         require(abs(src['direction'][1]) < 1e-12, '二维平面应变的激励方向不能有 y 分量。')
-        require((src.get('profile') or {}).get('along') != 'y', '二维平面应变的梳状方向不能是 y。')
+        require((src.get('profile') or {}).get('along') != 'y', '二维平面应变的梳状或斜楔方向不能是 y。')
+        profile = src.get('profile') or {}
+        require(profile.get('type') != 'patch' or (profile['shape'] == 'strip' and abs(src['direction'][0]) > .5), '二维平面应变只支持长度沿 x 的条形压电片。')
+        require(profile.get('type') not in ('wedge', 'patch') or profile['width_mm'] == 0, '二维平面应变里换能器的宽度需为 0（整个宽度）。')
     require(core['boundary']['fixed_face'] in ('none',) + PLANE_FACES, '二维平面应变的固定面需为 xmin/xmax/zmin/zmax。')
     for b in boundaries(core): require(b['face'] in PLANE_FACES, '二维平面应变的边界面需为 xmin/xmax/zmin/zmax。')
     for rx in core['receivers'] + receiver_lines(core): require(abs(rx['direction'][1]) < 1e-12, '二维平面应变的接收方向不能有 y 分量。')

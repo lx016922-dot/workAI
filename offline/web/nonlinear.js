@@ -53,6 +53,17 @@ export function accumulationBody(form) {
     const speed = optional(form.speed, '跟随速度'), length = optional(form.length, '时间窗长度');
     body.window = { mode: 'follow', ...(speed === null ? {} : { speed_m_s: speed }), ...(length === null ? {} : { length_us: length }) };
   }
+  if (form.receiver && form.receiver !== 'point') {   // a receiver of finite size along the line (offline/nonlinear.py aperture)
+    if (form.mode !== 'line') throw new Error('有尺寸的接收换能器需要等距的点列：请把“分析的点”改为线段等距采样。');
+    const [size] = numbers([form.receiverLength], '接收换能器的长度');
+    if (!(size > 0)) throw new Error('接收换能器的长度需要是正数。');
+    body.receiver = { type: form.receiver, length_mm: size };
+    if (form.receiver === 'wedge') {
+      const [velocity] = numbers([form.receiverSpeed], '接收斜楔的迹线速度');
+      if (!(velocity >= 100 && velocity <= 1e5)) throw new Error('接收斜楔的迹线速度需在 100–100000 m/s。');
+      body.receiver.trace_velocity_m_s = velocity;
+    }
+  }
   const from = optional(form.fitFrom, '拟合范围'), to = optional(form.fitTo, '拟合范围');
   if ((from === null) !== (to === null)) throw new Error('拟合范围需要同时填写起点和终点，或者都留空（用全部点）。');
   if (from !== null) { if (!(from < to)) throw new Error('拟合范围的起点需要小于终点。'); body.fit_mm = [from, to]; }
@@ -79,14 +90,28 @@ const inFit = (a, r) => r.usable && r.distance_mm >= a.fit.range_mm[0] - 1e-9 &&
 /** The three charts of an accumulation analysis: A₂/A₁² with its fit, A₁, and the second harmonics. */
 export function accumulationCharts(a, width = 900) {
   const rows = usable(a), fit = a.fit.ratio, [x0, x1] = a.fit.range_mm, where = r => `${r.name ? r.name + ' · ' : ''}${num(r.distance_mm)} mm`, small = rows.length > 40, half = width >= 860 ? Math.floor((width - 18) / 2) : width;
+  const c = a.fit.attenuation?.corrected, shift = a.fit.attenuation?.source_offset_mm ?? 0, line = (g, o) => [[x0, g.intercept_per_m + g.slope_per_m2 * (x0 + o) * 1e-3], [x1, g.intercept_per_m + g.slope_per_m2 * (x1 + o) * 1e-3]];
   const ratio = seriesChart([
     { name: 'A₂/A₁²（各点）', small, points: rows.map(r => [r.distance_mm, r.ratio_per_m, `${where(r)}：A₂/A₁² ${num(r.ratio_per_m)} 1/m${inFit(a, r) ? '' : '（未参与拟合）'}`]) },
-    { name: `直线拟合（${num(x0)}–${num(x1)} mm）`, points: [[x0, fit.intercept_per_m + fit.slope_per_m2 * x0 * 1e-3], [x1, fit.intercept_per_m + fit.slope_per_m2 * x1 * 1e-3]], markers: false, dash: true, colour: INK }],
+    ...(c ? [{ name: '扣除衰减后', small, points: rows.filter(r => Number.isFinite(r.ratio_corrected_per_m)).map(r => [r.distance_mm, r.ratio_corrected_per_m, `${where(r)}：扣除衰减后 ${num(r.ratio_corrected_per_m)} 1/m`]) }] : []),
+    { name: `直线拟合（${num(x0)}–${num(x1)} mm）`, points: line(fit, 0), markers: false, dash: true, colour: INK },
+    ...(c ? [{ name: '扣除衰减后的直线拟合', points: line(c, shift), markers: false, dash: true, colour: MUTED }] : [])],
     '沿程距离 (mm)', 'A₂/A₁² (1/m)', width);
   const first = seriesChart([{ name: 'A₁', small, points: rows.map(r => [r.distance_mm, r.a1_m * 1e9, `${where(r)}：A₁ ${num(r.a1_m * 1e9)} nm`]) }], '沿程距离 (mm)', 'A₁ 完整响应 (nm)', half);
   const parts = [['a2_nonlinear_m', 'A₂ 非线性增量'], ['a2_geometric_m', 'A₂ 几何'], ['a2_material_m', 'A₂ 材料'], ['a2_m', 'A₂ 完整响应']].filter(([key]) => rows.some(r => Number.isFinite(r[key])));
   const second = seriesChart(parts.map(([key, name]) => ({ name, small, points: rows.filter(r => Number.isFinite(r[key])).map(r => [r.distance_mm, r[key] * 1e12, `${where(r)}：${name} ${num(r[key] * 1e12)} pm`]) })), '沿程距离 (mm)', '2f 幅值 (pm)', half);
   return { ratio, first, second };
+}
+
+/** The attenuation along the line: measured from A₁, given by the model's damping, and the slope with it taken out. */
+function attenuationRow(t) {
+  if (!t || (t.a1_np_m === undefined && !(Math.abs(t.a1_measured_np_m) > 1e-9))) return '';
+  const shown = t.a1_measured_np_m === null ? '—' : `${num(t.a1_measured_np_m, 4)} Np/m（ln A₁ 对距离的直线拟合，R² ${t.a1_measured_r_squared === null ? '—' : t.a1_measured_r_squared.toFixed(4)}）`;
+  if (t.a1_np_m === undefined) return `<tr><th>沿程衰减</th><td>A₁ 实测 ${shown}<br><span class="muted">模型没有材料阻尼：这是波束扩散、多模态叠加或吸收层的效果。</span></td></tr>`;
+  const model = `模型的阻尼：f 处 ${num(t.a1_np_m, 4)} Np/m${t.mode_f ? `（${escapeHtml(t.mode_f)}）` : ''}，2f 处 ${num(t.a2_np_m, 4)} Np/m${t.mode_2f ? `（${escapeHtml(t.mode_2f)}）` : ''}，由衰减率除以${t.group_velocity_source === 'theory' ? '理论' : '实测'}群速度得到${t.a1_measured_np_m === null || !(t.a1_np_m > 0) ? '' : `；A₁ 实测与它相差 ${pct(t.a1_measured_np_m / t.a1_np_m - 1)}`}`;
+  const fixed = t.corrected ? `<br><b>扣除衰减后 A₂/A₁² 的斜率 ${num(t.corrected.slope_per_m2)} m⁻²</b>；截距 ${num(t.corrected.intercept_per_m)} m⁻¹；R² ${t.corrected.r_squared === null ? '—' : t.corrected.r_squared.toFixed(4)}
+    <br><span class="muted">各点乘以 mX/(1 − e^{−mX})，m = a₂ − 2a₁ = ${num(t.m_np_m, 4)} Np/m，X 为从主激励算起的传播距离（第一个点 X = 沿程距离 + ${num(t.source_offset_mm, 4)} mm）。这是相位匹配时没有衰减的材料会给出的斜率。</span>` : '';
+  return `<tr><th>沿程衰减</th><td>A₁ 实测 ${shown}<br>${model}${fixed}</td></tr>`;
 }
 
 function waveRow(label, w) {
@@ -103,12 +128,15 @@ export function accumulationMarkup(a, width = 900) {
   const summary = `<table class="wb-table nl-summary">
     <tr><th>A₂/A₁² 的斜率</th><td><b>${num(f.ratio.slope_per_m2)} m⁻²</b>（每毫米 ${num(f.ratio.slope_per_m2 * 1e-3)} m⁻¹）；截距 ${num(f.ratio.intercept_per_m)} m⁻¹；R² ${f.ratio.r_squared === null ? '—' : f.ratio.r_squared.toFixed(4)}；
       拟合 ${num(f.range_mm[0])}–${num(f.range_mm[1])} mm 内的 ${f.points} 个点；A₂ 取${basis}</td></tr>
+    ${attenuationRow(f.attenuation)}
     <tr><th>A₂ 的斜率</th><td>${num(f.a2.slope_m_per_m * 1e9)} pm/mm；R² ${f.a2.r_squared === null ? '—' : f.a2.r_squared.toFixed(4)}；拟合范围内 A₁ 变化 ${(100 * f.a1_variation).toFixed(1)}%</td></tr>
     ${waveRow('f 处的波数', f.f)}${waveRow('2f 处的相位斜率', f['2f'])}
     <tr><th>相位匹配（理论）</th><td>${pair ? `${escapeHtml(pair.primary)} → ${escapeHtml(pair.secondary)}：相速度失配 ${pct(pair.mismatch, 3)}，Δk = k(2f) − 2k(f) = ${num(pair.delta_k_rad_mm, 3)} rad/mm${pair.coherence_length_mm === null ? '（匹配）' : `，π/|Δk| = ${num(pair.coherence_length_mm, 3)} mm`}
       <br><span class="muted">按实测到的一次模态 ${escapeHtml(pair.primary)} 查理论；二次谐波在 π/|Δk| 处最大，之后回落。全部模态对见“频散与 f–k 谱”。</span>` : '没有认出一次模态（非平板，或实测波数不在任何理论模态上）'}</td></tr>
     <tr><th>群速度</th><td>${a.group.velocity_m_s ? `${num(a.group.velocity_m_s, 5)} m/s（包络到达时刻对距离的直线拟合，R² ${a.group.r_squared === null ? '—' : a.group.r_squared.toFixed(4)}）` : '没有量出沿这条线向前传播的波包'}
       ${mode ? `<br><span class="muted">理论 ${escapeHtml(mode.mode)}：${num(mode.group_velocity_m_s, 5)} m/s${a.group.velocity_m_s ? `；实测相差 ${pct(a.group.velocity_m_s / mode.group_velocity_m_s - 1)}` : ''}</span>` : ''}</td></tr>
+    ${a.receiver && a.receiver.type !== 'point' ? `<tr><th>接收方式</th><td>${a.receiver.type === 'wedge' ? `斜楔换能器：沿线长 ${num(a.receiver.length_mm)} mm（${a.receiver.points} 个点），迹线速度 ${num(a.receiver.trace_velocity_m_s, 5)} m/s；各点按到中心的距离对齐后取平均`
+      : `压电片：长 ${num(a.receiver.length_mm)} mm，取两端位移之差（平均应变 × 长度）`}<br><span class="muted">表中的“点”是换能器中心的位置；A₁、A₂ 是换能器读到的量，不是某一点的位移。只算了换能器沿线的长度，垂直于线的方向按一个点处理。</span></td></tr>` : ''}
     <tr><th>时间窗</th><td>${w.mode === 'fixed' ? `各点同一时间窗 ${num(w.start_us)}–${num(w.end_us)} μs` : `跟随波包：长 ${num(w.length_us)} μs，第一个点以 ${num(w.centre_first_us)} μs 为中心，按 ${num(w.speed_m_s, 5)} m/s（${w.speed_source === 'measured' ? '实测群速度' : '手动填写'}）随距离后移`}</td></tr></table>`;
   const notes = a.notes.length ? `<ul class="nl-notes">${a.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '';
   const extra = [['a2_nonlinear_m', 'A₂ 非线性 / pm'], ['a2_geometric_m', 'A₂ 几何 / pm'], ['a2_material_m', 'A₂ 材料 / pm']].filter(([key]) => a.rows.some(r => Number.isFinite(r[key])));
@@ -125,14 +153,16 @@ export function accumulationMarkup(a, width = 900) {
 export function accumulationCsv(a) {
   const f = a.fit, blank = v => (v === null || v === undefined ? '' : v);
   const lines = ['# schema,' + a.schema, '# job_id,' + a.job_id, '# frequency_mhz,' + a.frequency_mhz, '# receiving_direction,' + a.direction.join(','), '# line_direction,' + a.line_direction.join(','),
-    '# a2_taken_from,' + a.a2_basis, '# window,' + Object.entries(a.window).map(([k, v]) => `${k}=${v}`).join(';'), '# group_velocity_m_s,' + blank(a.group.velocity_m_s),
+    '# a2_taken_from,' + a.a2_basis, '# window,' + Object.entries(a.window).map(([k, v]) => `${k}=${v}`).join(';'), '# receiver,' + Object.entries(a.receiver || { type: 'point' }).map(([k, v]) => `${k}=${v}`).join(';'), '# group_velocity_m_s,' + blank(a.group.velocity_m_s),
     '# fit_range_mm,' + f.range_mm.join(','), '# fit_points,' + f.points, '# ratio_slope_per_m2,' + f.ratio.slope_per_m2, '# ratio_intercept_per_m,' + f.ratio.intercept_per_m, '# ratio_r_squared,' + blank(f.ratio.r_squared),
     '# a2_slope_m_per_m,' + f.a2.slope_m_per_m, '# wavenumber_f_rad_mm,' + (f.f.reliable ? f.f.wavenumber_rad_mm : ''), '# wavenumber_2f_rad_mm,' + (f['2f'].reliable ? f['2f'].wavenumber_rad_mm : ''),
     '# theory_mode_f,' + (f.f.theory?.matched ? f.f.theory.mode : ''), '# theory_mode_2f,' + (f['2f'].theory?.matched ? f['2f'].theory.mode : ''),
     '# theory_pair,' + (f.pair ? `${f.pair.primary}-${f.pair.secondary}` : ''), '# theory_delta_k_rad_mm,' + blank(f.pair?.delta_k_rad_mm), '# theory_coherence_length_mm,' + blank(f.pair?.coherence_length_mm),
-    'point,x_mm,y_mm,z_mm,distance_mm,window_start_us,window_end_us,in_fit,a1_m,a2_complete_m,a2_nonlinear_m,a2_geometric_m,a2_material_m,a2_over_a1_squared_per_m,phase_f_deg,phase_2f_deg,arrival_us'];
+    '# a1_attenuation_measured_np_m,' + blank(f.attenuation?.a1_measured_np_m), '# attenuation_model_f_np_m,' + blank(f.attenuation?.a1_np_m), '# attenuation_model_2f_np_m,' + blank(f.attenuation?.a2_np_m),
+    '# corrected_ratio_slope_per_m2,' + blank(f.attenuation?.corrected?.slope_per_m2), '# corrected_ratio_intercept_per_m,' + blank(f.attenuation?.corrected?.intercept_per_m), '# source_offset_mm,' + blank(f.attenuation?.source_offset_mm),
+    'point,x_mm,y_mm,z_mm,distance_mm,window_start_us,window_end_us,in_fit,a1_m,a2_complete_m,a2_nonlinear_m,a2_geometric_m,a2_material_m,a2_over_a1_squared_per_m,phase_f_deg,phase_2f_deg,arrival_us,a2_over_a1_squared_without_attenuation_per_m'];
   for (const r of a.rows) lines.push([r.name || r.index, ...r.point_mm, r.distance_mm, ...r.window_us, inFit(a, r) ? 1 : 0,
-    ...['a1_m', 'a2_m', 'a2_nonlinear_m', 'a2_geometric_m', 'a2_material_m', 'ratio_per_m', 'phase1_deg', 'phase2_deg'].map(k => (r.usable ? blank(r[k]) : '')), r.arrival_us].join(','));
+    ...['a1_m', 'a2_m', 'a2_nonlinear_m', 'a2_geometric_m', 'a2_material_m', 'ratio_per_m', 'phase1_deg', 'phase2_deg'].map(k => (r.usable ? blank(r[k]) : '')), r.arrival_us, blank(r.ratio_corrected_per_m)].join(','));
   return lines.join('\n');
 }
 
@@ -310,6 +340,9 @@ export function nonlinearMarkup(result) {
         <label class="field" data-nl-follow><span>时间窗长度 / μs（留空为激励时长的 1.5 倍）</span><input id="nl-length" type="number" step="any" placeholder="自动"></label>
         <label class="field" data-nl-fixed hidden><span>时间窗起点 / μs</span><input id="nl-window-start" type="number" step="any"></label>
         <label class="field" data-nl-fixed hidden><span>时间窗终点 / μs</span><input id="nl-window-end" type="number" step="any"></label>
+        <label class="field"><span>接收方式</span><select id="nl-receiver"><option value="point">点（激光测点）</option><option value="wedge">斜楔换能器</option><option value="patch">压电片</option></select></label>
+        <label class="field" data-nl-aperture hidden><span>接收换能器沿线的长度 / mm</span><input id="nl-receiver-length" type="number" step="any" min="0" placeholder="例如 12"></label>
+        <label class="field" data-nl-wedge hidden><span>接收斜楔的迹线速度 / m·s⁻¹</span><input id="nl-receiver-speed" type="number" step="any" placeholder="要接收的模态的相速度"></label>
         <label class="field"><span>拟合范围起点 / mm（留空用全部点）</span><input id="nl-fit-from" type="number" step="any" placeholder="全部"></label>
         <label class="field"><span>拟合范围终点 / mm</span><input id="nl-fit-to" type="number" step="any" placeholder="全部"></label></div>
       <div class="solid-path-actions"><button class="button primary small" id="nl-run">计算 A₁、A₂ 和 A₂/A₁² 拟合</button><button class="button secondary small" id="nl-csv" disabled>下载 CSV</button></div>
@@ -354,11 +387,13 @@ export function mountNonlinear(container, ctx, saved = null) {
   if (saved?.inputs) for (const id of FORM_IDS) if (saved.inputs[id] !== undefined && $(id)) $(id).value = saved.inputs[id];
   const form = () => ({ mode: $('nl-mode').value, count: $('nl-count').value, start: [0, 1, 2].map(j => $('nl-start-' + j).value), end: [0, 1, 2].map(j => $('nl-end-' + j).value), direction: [0, 1, 2].map(j => $('nl-direction-' + j).value),
     window: $('nl-window').value, speed: $('nl-speed').value, length: $('nl-length').value, windowStart: $('nl-window-start').value, windowEnd: $('nl-window-end').value, fitFrom: $('nl-fit-from').value, fitTo: $('nl-fit-to').value,
+    receiver: $('nl-receiver').value, receiverLength: $('nl-receiver-length').value, receiverSpeed: $('nl-receiver-speed').value,
     part: $('nl-part').value, rangeStart: $('nl-range-start').value, rangeEnd: $('nl-range-end').value, fmax: $('nl-fk-fmax').value });
   function layout() {
     const line = $('nl-mode').value === 'line'; $('nl-segment').hidden = !line; $('nl-count-field').hidden = !line;
     const fixed = $('nl-window').value === 'fixed';
     container.querySelectorAll('[data-nl-fixed]').forEach(el => { el.hidden = !fixed; }); container.querySelectorAll('[data-nl-follow]').forEach(el => { el.hidden = fixed; });
+    const receiver = $('nl-receiver').value; container.querySelectorAll('[data-nl-aperture]').forEach(el => { el.hidden = receiver === 'point'; }); container.querySelectorAll('[data-nl-wedge]').forEach(el => { el.hidden = receiver !== 'wedge'; });
     container.querySelectorAll('[data-nl-tab]').forEach(b => { b.classList.toggle('active', b.dataset.nlTab === tab); b.setAttribute('aria-selected', b.dataset.nlTab === tab); });
     container.querySelectorAll('[data-nl-page]').forEach(page => { page.hidden = page.dataset.nlPage !== tab; });
     $('nl-line').hidden = tab === 'convergence';
@@ -451,7 +486,7 @@ export function mountNonlinear(container, ctx, saved = null) {
     if (tab === 'convergence') { showConvergence(); loadConvergence(); }
   }
   container.querySelectorAll('[data-nl-tab]').forEach(b => listen(b, 'click', () => open(b.dataset.nlTab)));
-  listen($('nl-mode'), 'change', layout); listen($('nl-window'), 'change', layout);
+  listen($('nl-mode'), 'change', layout); listen($('nl-window'), 'change', layout); listen($('nl-receiver'), 'change', layout);
   listen($('nl-run'), 'click', runAccumulation); listen($('nl-fk-run'), 'click', runFk);
   listen($('nl-quantity'), 'change', showTheory); listen($('nl-angle'), 'change', loadTheory); listen($('nl-theory-fmax'), 'change', loadTheory);
   listen($('nl-fk-curves'), 'change', showFk);
