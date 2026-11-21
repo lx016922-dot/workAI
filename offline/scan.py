@@ -43,7 +43,7 @@ from .domain import V2, validate_request
 SCHEMA = 'workai.scan.v1'
 MAX_AXES, MAX_VALUES, MAX_CASES = 3, 100, 200
 ID = r'scan-[a-f0-9]{24}'
-ROOTS = ('source', 'sources', 'geometry', 'defects', 'material', 'boundaries', 'receivers', 'acquisition')
+ROOTS = ('source', 'sources', 'geometry', 'defects', 'material', 'boundaries', 'receivers', 'acquisition', 'damping')
 PATH = re.compile(r'[a-z_]+(\.[a-z_0-9]+){1,4}')
 DIMENSIONS = {'geometry.length_mm': 0, 'geometry.width_mm': 1, 'geometry.thickness_mm': 2}
 TERMINAL = ('completed', 'failed', 'paused')

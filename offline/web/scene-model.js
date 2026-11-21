@@ -156,7 +156,7 @@ export function materialSummary(m) {
 /** Model tree rows for the left panel: [{id, label, detail, group, removable}]. */
 export function tree(scene) {
   const rows = [{ id: 'geometry', group: 'model', label: '几何', detail: geometrySummary(scene.geometry) },
-    { id: 'material', group: 'model', label: '材料与本构', detail: materialSummary(scene.material) }];
+    { id: 'material', group: 'model', label: '材料与本构', detail: materialSummary(scene.material) + (scene.damping ? ' · 有阻尼' : '') }];
   rows.push({ id: 'sources', group: 'header', label: '激励源', detail: String(sourcesOf(scene).length), add: 'source' });
   sourcesOf(scene).forEach((s, i) => rows.push({ id: `source:${i}`, group: 'item', label: s.name || (i ? `激励 ${i + 1}` : '主激励'), detail: sourceSummary(s), removable: i > 0 }));
   rows.push({ id: 'boundaries', group: 'header', label: '边界条件', detail: String((scene.boundaries || []).length + (scene.boundary.fixed_face !== 'none' ? 1 : 0)), add: 'boundary' });

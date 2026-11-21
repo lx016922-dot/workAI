@@ -38,7 +38,7 @@ def build(scene, mesh):
     constrained = np.asarray(excitation['constrained'], dtype=bool)
     alpha = excitation['alpha']
     return {'loads': loads, 'sources': sources, 'free': np.ascontiguousarray((~constrained).astype(np.float64)), 'constrained': constrained,
-            'alpha': None if alpha is None else np.ascontiguousarray(np.asarray(alpha, dtype=np.float64)), 'area_m2': excitation['area_m2'], 'summary': excitation['summary']}
+            'alpha': None if alpha is None else np.ascontiguousarray(np.asarray(alpha, dtype=np.float64)), 'beta': float(excitation.get('beta') or 0.), 'area_m2': excitation['area_m2'], 'summary': excitation['summary']}
 
 
 def signal_table(inputs, times_us):

@@ -21,6 +21,10 @@ Two things can be chosen per record (the defaults reproduce the frozen behaviour
   afford: the receivers at every sample (float64, bit-identical to the full record), the display mesh
   (`spectral3d.display`) at the animation frames as float32 (`display_parts`: the linear response and the
   increments when the controls allow them), and a few full float64 snapshots;
+* material damping (`physics.damping`) comes with the scene: the mass-proportional part joins the nodal damping of the
+  absorbing layers, the stiffness-proportional part is taken by the layer itself (`graphnet.recurrence`), with the
+  element message and the viscous force of the last layer as two more arrays of the state. Such a record uses one
+  stage per layer, chosen with the stability limit and the errors of the damped layer (`graphnet.timestep`);
 * `flush`: subnormal numbers count as zero inside the layers (`graphnet.subnormal`), which removes the slow start
   of a record on a large model, where the wave has not arrived yet. Only values next to the bottom of the double
   range (below 1e-280) can differ from the unflushed record. False (the default) keeps the frozen arithmetic.
@@ -133,6 +137,7 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
     trained = np.asarray(model['temporal']['weights'], dtype=np.float64)
     require(trained.shape == (3,) and np.isfinite(trained).all() and abs(trained.sum() - 1) <= 1e-13 and abs(np.sum(trained ** 3)) <= 1e-13, '时间组合权重无效。')
     inputs = build(scene, mesh); damped = inputs['alpha'] is not None; alpha = inputs['alpha'] if damped else np.zeros(len(mesh['mass']))
+    beta = inputs['beta']; stiff = beta > 0   # stiffness-proportional material damping (physics.damping); the mass-proportional part is in alpha
     quadratic, cubic, layer = energy_layer(scene, model); derivative = weights['derivative_' + str(int(mesh['degree']))]
     inverse = inverse_mapping(mesh); receivers = [interpolation(mesh, r['point_mm']) for r in scene['receivers']]
     sources = source_hashes()
@@ -155,17 +160,18 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         layers = manifest['time_plan']   # a resumed record keeps the layer it started with
     else:
         omega = None
-        if time_plan == 'auto' or given is not None:
+        if time_plan == 'auto' or given is not None or stiff:
             omega = largest_frequency(mesh, derivative, inverse, quadratic, cubic, inputs['free'], contact=(ca, cb, cn, ck))
         if given is not None:
             from .timestep import STABILITY_FRACTION, stability_limit
-            number = omega * sample * 1e-6 / per_sample; limit = stability_limit(stage_weights)
-            require(number <= limit * .95, f'给定的时间层在这个网格上不稳定（ω_max·Δt = {number:.2f}，极限 {limit:.2f}）。')
+            require(not stiff or len(stage_weights) == 1, '刚度比例阻尼只用于单级时间层；这个引擎的时间层是多级的，请改用冻结网络，或只用质量比例阻尼。')
+            number = omega * sample * 1e-6 / per_sample; limit = stability_limit(stage_weights, beta * per_sample / (sample * 1e-6))
+            require(number <= limit * .95, f'给定的时间层在这个网格上不稳定（ω_max·Δt = {number:.2f}，极限 {limit:.2f}）。' + ('请减小刚度比例阻尼，或改用冻结网络的自动时间层。' if stiff else ''))
             layers = {'mode': 'given', 'scheme': 'verlet2' if len(stage_weights) == 1 else 'composition', 'composition': stage_weights, 'subdivisions': per_sample, 'layer_step_us': sample / per_sample,
                       'time_order': given.get('time_order', 2 if len(stage_weights) == 1 else 4), 'evaluations_per_control': (frames - 1) * per_sample * len(stage_weights),
                       'stability_number': number, 'stability_limit': limit, 'omega_max_rad_s': omega, 'reason': given.get('reason', '给定的时间层')}
         else:
-            layers = layer_plan(scene, mesh, trained, speed_bound(scene), omega, time_plan, interface_omega=contact['omega_dt_max'] / trained_step if contact else None)
+            layers = layer_plan(scene, mesh, trained, speed_bound(scene), omega, time_plan, interface_omega=contact['omega_dt_max'] / trained_step if contact else None, beta=beta)
     composition = np.asarray(layers['composition'], dtype=np.float64); stages = len(composition); subdivisions = int(layers['subdivisions'])
     sample_s = sample * 1e-6; dt = sample_s / subdivisions
     total_steps = (frames - 1) * subdivisions; require(total_steps <= 20000000, '长记录超过 2000 万层，请增大单元尺寸。')
@@ -183,13 +189,14 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         keep = np.zeros(0, dtype=np.int64); local = receivers
         chunk_frames = max(2, min(256, 20000 // subdivisions, work_frames, (512 * 1024 ** 2) // (nodes * 24 * count)))   # one chunk (all controls) ≤ 512 MiB
     if manifest is not None:
-        with np.load(checkpoint_path, allow_pickle=False) as saved: state = {name: saved[name] for name in STATE}
+        with np.load(checkpoint_path, allow_pickle=False) as saved: state = {name: saved[name] for name in STATE + (('bulks', 'lags') if stiff else ())}
         next_frame = manifest['completed_frames']; elapsed_before = manifest['elapsed_s']
     else:
         estimate = storage_bytes(frames, nodes, record, len(display['nodes']) if compact else 0, len(shown) if compact else 0, len(receivers), controls=count)
         require(shutil.disk_usage(directory).free >= estimate + 512 * 1024 ** 2, f'预计{"精简" if compact else "完整长"}记录需要约 {estimate / 1024 ** 3:.2f} GiB 空间，请选择空间充足的数据目录。')
         save_arrays(directory / 'mesh.npz', **mesh); shape = (count, len(mesh['mass']), 3)
         state = {name: np.zeros(shape) for name in STATE[:4]}; state.update(works=np.zeros(count), dissipations=np.zeros(count), potentials=np.zeros(count), strains=np.zeros(count), jacobians=np.ones(count))
+        if stiff: state.update(bulks=np.zeros(shape), lags=np.zeros(shape))   # the element message and the viscous force of the last layer (zero at rest)
         next_frame, elapsed_before = 0, 0.
         manifest = {'schema': 'workai.graphnet.long_record.v1', 'phase': 'running', 'duration_us': duration, 'sample_step_us': sample, 'frame_count': frames, 'nodes': len(mesh['mass']),
                     'degree': int(mesh['degree']), 'layer_step_us': dt * 1e6, 'time_order': layers['time_order'], 'composition': composition.tolist(), 'fingerprint': fingerprint, 'identity': identity,
@@ -197,7 +204,8 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
                     'energy_columns': ['time_us', 'kinetic_j', 'strain_j', 'external_work_j', 'dissipated_j'], 'chunks': [], 'completed_frames': 0, 'elapsed_s': 0.,
                     'raw_storage_upper_bound_bytes': estimate, 'numerical_correction': False, 'neural_forward_only': True, **layer,
                     'time_plan': layers, 'record_mode': record, 'controls': list(controls),
-                    **({'contact': dict(contact, stiffness_layer_step_us=trained_step * 1e6, layer_omega_dt_max=contact['omega_dt_max'] * dt / trained_step)} if contact else {})}
+                    **({'contact': dict(contact, stiffness_layer_step_us=trained_step * 1e6, layer_omega_dt_max=contact['omega_dt_max'] * dt / trained_step)} if contact else {}),
+                    **({'material_damping': dict(scene['damping'], model='rayleigh', stiffness_term='tangent stiffness, explicit, extrapolated to the end of each layer')} if scene.get('damping') else {})}
         if compact:
             save_arrays(directory / 'display.npz', nodes=display['nodes'], triangles=display['triangles'])
             manifest['display'] = {'file': 'display.npz', 'sha256': digest(directory / 'display.npz'), 'nodes': int(len(display['nodes'])), 'triangles': int(len(display['triangles'])),
@@ -207,7 +215,8 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
             manifest['receivers'] = [{'name': r['name'], 'point_mm': list(r['point_mm'])} for r in scene['receivers']]
     manifest.update(layer_threads=used, layer_spread=spread)   # how this run uses the cores (a resumed run may differ: the bits do not)
     manifest['flush_subnormals'] = flush   # part of the fingerprint: a resumed record keeps the arithmetic it started with
-    workspace = prepare(mesh, inputs['loads'], alpha, laws, used) if spread else None
+    workspace = prepare(mesh, inputs['loads'], alpha, laws, used, stiff) if spread else None
+    idle = np.zeros((count, 0, 3))   # stands for the element messages when there is no stiffness-proportional damping
     def advance(first, last, include_initial):
         """Samples first..last (first − 1 is the saved state): fields on the kept nodes or the whole mesh, and energies."""
         start_step = max(0, first - 1) * subdivisions; end_step = last * subdivisions
@@ -216,8 +225,9 @@ def rollout(scene, mesh, model, directory, identity, callback=None, stop_after_c
         arguments = (*(state[name] for name in STATE), mesh['elements'], derivative, inverse, mesh['volume_weight'], mesh['mass'],
                      inputs['loads'], inputs['free'], alpha, damped, quadratic, cubic, composition, dt, subdivisions,
                      start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, compact, laws)
-        if spread: fields, energies, failed = parallel_segments(*arguments, *(workspace[name] for name in ARRAYS), flush)
-        else: fields, energies, failed = three_segments(*arguments, flush)
+        bulks, lags = (state['bulks'], state['lags']) if stiff else (idle, idle)
+        if spread: fields, energies, failed = parallel_segments(*arguments, *(workspace[name] for name in ARRAYS), flush, beta, bulks, lags)
+        else: fields, energies, failed = three_segments(*arguments, flush, beta, bulks, lags)
         if (failed >= 0).any():
             tripped = '、'.join(LAW_LABELS[name] for name, step in zip(controls, failed) if step >= 0)
             raise ValueError(f'{GUARD_MESSAGE}（{tripped}控制，约 {int(failed.max()) * dt * 1e6:.2f} μs，最大应变 {float(np.max(state["strains"])):.2e}；'

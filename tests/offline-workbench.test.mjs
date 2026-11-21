@@ -212,3 +212,32 @@ test('the cost table says how the cores are used', async () => {
   assert.match(estimateMarkup({ ...estimate, threads: 2, spread: false }), /2 个线程，每组控制一个线程/);
   assert.doesNotMatch(estimateMarkup(estimate), /个线程/);   // older previews carry no thread information
 });
+
+test('material damping: the form, the conversion from measured attenuation and the summary', async () => {
+  const { dampingFromAttenuation, dampingMarkup, dampingDerivedMarkup, materialMarkup } = await import('../offline/web/material-form.js');
+  const { scanParameters } = await import('../offline/web/scan.js');
+  const { tree } = await import('../offline/web/scene-model.js');
+  // γ = a·c at f and 2f; α/2 + βω²/2 through both
+  const alpha = 2e4, beta = 4e-9, gamma = f => alpha / 2 + beta * (2 * Math.PI * f * 1e6) ** 2 / 2;
+  const back = dampingFromAttenuation({ f1: .5, a1: gamma(.5) / 5000, c1: 5000, f2: 1, a2: gamma(1) / 4000, c2: 4000 });
+  assert.ok(Math.abs(back.mass_per_s / alpha - 1) < 1e-9 && Math.abs(back.stiffness_s / beta - 1) < 1e-9);
+  const decibel = dampingFromAttenuation({ f1: .5, a1: gamma(.5) / 5000 * 20 / Math.log(10), c1: 5000, f2: 1, a2: gamma(1) / 4000 * 20 / Math.log(10), c2: 4000, unit: 'db' });
+  assert.ok(Math.abs(decibel.stiffness_s / beta - 1) < 1e-9);
+  const single = dampingFromAttenuation({ f1: .5, a1: 5, c1: 6000, f2: 1, a2: NaN, c2: NaN });   // one point: stiffness-proportional
+  assert.equal(single.mass_per_s, 0); assert.ok(Math.abs(single.stiffness_s * (2 * Math.PI * .5e6) ** 2 / 2 - 30000) < 1e-6);
+  assert.throws(() => dampingFromAttenuation({ f1: .5, a1: 5, c1: 6000, f2: 1, a2: 1, c2: 6000 }), /质量比例加刚度比例/);    // falls with frequency
+  assert.throws(() => dampingFromAttenuation({ f1: .5, a1: 5, c1: 6000, f2: 1, a2: 50, c2: 6000 }), /质量比例加刚度比例/);   // rises faster than ω²
+  assert.throws(() => dampingFromAttenuation({ f1: .5, a1: 5, c1: NaN }), /群速度/);
+  const scene = { source: { frequency_mhz: .4 }, material: { rho_kg_m3: 2700, lambda_pa: 5.1e10, mu_pa: 2.6e10, l_pa: -2.5e11, m_pa: -3.3e11, n_pa: -3.5e11 }, damping: { mass_per_s: 2e4, stiffness_s: 4e-9 } };
+  const form = dampingMarkup(scene); assert.match(form, /id="damping-alpha" value="20000"/); assert.match(form, /id="damping-beta" value="4"/); assert.match(form, /id="damping-f1" value="0.4"/);
+  assert.match(dampingMarkup({ source: { frequency_mhz: .4 } }), /id="damping-alpha" value="0"/);
+  assert.match(materialMarkup(scene, {}), /材料阻尼[\s\S]*damping-derived[\s\S]*material-derived/);
+  assert.equal(dampingDerivedMarkup(null), '');
+  const derived = dampingDerivedMarkup({ at: [{ frequency_mhz: .4, decay_per_s: 22633, loss_factor: .018, q: 55.5, longitudinal_np_m: 3.54, longitudinal_db_m: 30.8, shear_np_m: 7.28, shear_db_m: 63.2 }] });
+  assert.match(derived, /0\.4000 MHz/); assert.match(derived, /3\.54（30\.8 dB\/m）/);
+  // the two coefficients can be scanned, and the model tree says the material is damped
+  const g = { kind: 'plate', length_mm: 100, width_mm: 2, thickness_mm: 1 }, full = { ...scene, geometry: g, source: { frequency_mhz: .4, amplitude_mpa: 1, cycles: 5, delay_us: 0, radius_mm: 0 }, receivers: [], boundaries: [] };
+  assert.deepEqual(scanParameters(full).filter(r => r.path.startsWith('damping.')).map(r => [r.path, r.owner, r.name]), [['damping.mass_per_s', '材料', '阻尼 α'], ['damping.stiffness_s', '材料', '阻尼 β']]);
+  assert.equal(scanParameters({ ...full, damping: undefined }).filter(r => r.path.startsWith('damping.')).length, 0);
+  assert.match(tree({ ...full, boundary: { fixed_face: 'none' }, acquisition: { duration_us: 30, sample_step_us: .05 }, numerics: { h_mm: 1 } }).find(r => r.id === 'material').detail, /有阻尼/);
+});

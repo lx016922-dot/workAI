@@ -208,8 +208,11 @@ def describe(scene, angle_deg=0., frequency_max_mhz=None, points=240):
     f = float(scene['source']['frequency_mhz']); top = 2.6 * f if frequency_max_mhz is None else frequency_max_mhz
     if not (0 < top <= 100): raise ValueError('频散曲线的频率上限需在 0–100 MHz。')
     plate = plate_of(scene, angle_deg, top * 1e6); curves = _curves(plate, top * 1e6, points)
-    public = lambda m: {'name': m['name'], 'family': m['family'], 'wavenumber_rad_mm': m['k_rad_m'] * 1e-3, 'phase_velocity_m_s': m['phase_velocity_m_s'], 'group_velocity_m_s': m['group_velocity_m_s'],
-                        'wavelength_mm': 2e3 * math.pi / m['k_rad_m'], 'backward': m['backward'], 'secondary': m['secondary'], 'surface': m['surface']}
+    from physics.damping import attenuation_np_m, decay_per_s
+    damping = scene.get('damping')   # Rayleigh damping: every mode decays at γ(ω) in time, so along its path at γ over its group velocity
+    public = lambda m, frequency: {'name': m['name'], 'family': m['family'], 'wavenumber_rad_mm': m['k_rad_m'] * 1e-3, 'phase_velocity_m_s': m['phase_velocity_m_s'], 'group_velocity_m_s': m['group_velocity_m_s'],
+                                   'wavelength_mm': 2e3 * math.pi / m['k_rad_m'], 'backward': m['backward'], 'secondary': m['secondary'], 'surface': m['surface'],
+                                   **({'attenuation_np_m': attenuation_np_m(damping, frequency, abs(m['group_velocity_m_s']))} if damping else {})}
     pairs = [{**{k: r[k] for k in ('primary', 'secondary', 'mismatch', 'phase_velocity_primary_m_s', 'phase_velocity_secondary_m_s', 'group_velocity_primary_m_s', 'group_velocity_secondary_m_s')},
               'delta_k_rad_mm': r['delta_k_rad_m'] * 1e-3, 'coherence_length_mm': None if r['coherence_length_m'] is None else r['coherence_length_m'] * 1e3} for r in _pairs(plate, f * 1e6)]
     return {'schema': 'workai.plate_dispersion.v1', 'thickness_mm': scene['geometry']['thickness_mm'], 'angle_deg': float(angle_deg), 'frequency_mhz': f, 'frequency_max_mhz': top,
@@ -217,7 +220,8 @@ def describe(scene, angle_deg=0., frequency_max_mhz=None, points=240):
             'validity': validity(scene),
             'curves': [{'name': c['name'], 'family': c['family'], 'secondary': c['secondary'], 'wavenumber_rad_mm': (c['k'] * 1e-3).tolist(), 'frequency_mhz': (c['omega'] / (2e6 * math.pi)).tolist(),
                         'group_velocity_m_s': [None if not math.isfinite(v) else float(v) for v in c['group']]} for c in curves],
-            'modes': {'f': [public(m) for m in _at(plate, f * 1e6)], '2f': [public(m) for m in _at(plate, 2 * f * 1e6)]}, 'pairs': pairs,
+            'modes': {'f': [public(m, f * 1e6) for m in _at(plate, f * 1e6)], '2f': [public(m, 2 * f * 1e6) for m in _at(plate, 2 * f * 1e6)]}, 'pairs': pairs,
+            **({'damping': {**damping, 'decay_per_s': {'f': decay_per_s(damping, f * 1e6), '2f': decay_per_s(damping, 2 * f * 1e6)}}} if damping else {}),
             'note': '相位匹配（Δk = 0）是二次谐波累积的必要条件，不是充分条件：还要求一次模态到二次模态的功率流不为零，群速度决定两个波包能一起走多远。'
                     '二次谐波只出现在对称 Lamb 模态里，所以配对的二次模态只列对称族。'}
 

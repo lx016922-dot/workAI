@@ -5,7 +5,7 @@ so every existing job, test and the offline network keep their exact inputs.
 A version-2 scene is a version-1 scene (`schema` set to the v2 identifier)
 whose `source` may carry `signal` and `profile`, plus optional top-level
 `sources` (further tractions of the same shape) and `boundaries` (symmetry,
-antisymmetry and absorbing faces). Validation reuses the version-1 rules for
+antisymmetry and absorbing faces) and `damping` (Rayleigh damping of the material, `physics.damping`). Validation reuses the version-1 rules for
 every source and adds the signal support, bandwidth and boundary checks.
 """
 import copy
@@ -134,6 +134,7 @@ def validate_scene(value):
     require(isinstance(value, dict), '场景需要是对象。')
     if value.get('schema') != V2: return validate_v1(value)
     s = copy.deepcopy(value); extra_sources = s.pop('sources', []); extra_boundaries = s.pop('boundaries', []); defects = s.pop('defects', None)
+    damping = s.pop('damping', None)
     dim = s.pop('dimension', '3d'); lines = s.pop('receiver_lines', []); require(dim in DIMENSIONS, 'dimension 需为 3d 或 2d_plane_strain。')
     require(isinstance(extra_sources, list) and len(extra_sources) <= MAX_SOURCES - 1, f'额外激励最多 {MAX_SOURCES - 1} 个。')
     primary = s['source'] if isinstance(s.get('source'), dict) else {}
@@ -154,6 +155,11 @@ def validate_scene(value):
     core['boundaries'] = _validate_boundaries(extra_boundaries, core)
     core['dimension'] = dim; core['receiver_lines'] = _validate_lines(lines, core)
     if is_plane_strain(core): _plane_strain_checks(core)
+    from .damping import validate_damping
+    damping = validate_damping(damping)
+    if damping:
+        require(not is_plane_strain(core), '二维平面应变暂不支持材料阻尼。')
+        core['damping'] = damping
     if defects:
         from .defects import validate_defects
         require(not is_plane_strain(core), '缺陷模型是三维模型，不能声明为二维平面应变。')

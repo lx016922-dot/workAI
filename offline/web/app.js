@@ -8,7 +8,7 @@ import { treeNodes, upgrade, workbenchTemplates, addSource, removeSource, addBou
 import { drawScene, pick } from './model-view.js';
 import { inspectorMarkup, bindInspector, escapeHtml, COARSE_MODELS, DEFAULT_COARSE_MODEL, RECORD_MODES, TIME_LAYERS, CONTROL_SETS } from './inspector.js';
 import { signalsMarkup } from './signal-view.js';
-import { materialDerivedMarkup } from './material-form.js';
+import { materialDerivedMarkup, dampingDerivedMarkup } from './material-form.js';
 import { mountRibbon } from './ribbon.js';
 import { icon } from './icons.js';
 import { renderTreeView, popupMenu, createLog, dialog, initSplitters, previewMessages, renderMessages, fmtBytes, fmtDuration, estimateMarkup } from './shell.js';
@@ -330,7 +330,10 @@ function renderEngineDerived() {
     ${e.range_verification?.text ? `<tr><th>范围核验</th><td>${escapeHtml(e.range_verification.text)}</td></tr>` : ''}
     <tr><th>适用范围</th><td>${e.out_of_training_range.length ? `<span class="wb-res warn">超出 ${e.out_of_training_range.length} 项：${escapeHtml(e.out_of_training_range.join('；'))}</span>` : '<span class="wb-res ok">在训练或核验过的范围内</span>'}</td></tr></table>${estimateMarkup(state.preview?.estimate)}`;
 }
-function renderMaterialDerived() { const box = $('#material-derived'); if (box) box.innerHTML = materialDerivedMarkup(state.preview?.material); }
+function renderMaterialDerived() {
+  const box = $('#material-derived'); if (box) box.innerHTML = materialDerivedMarkup(state.preview?.material);
+  const damping = $('#damping-derived'); if (damping) damping.innerHTML = dampingDerivedMarkup(state.preview?.damping);
+}
 function drawView() {
   if (state.tab !== 'model' || !state.scene) return;
   try { state.picks = drawScene($('#view'), state.scene, { ...state.view, selected: state.selection, gridMm: state.preview?.mesh?.grid_mm }); }

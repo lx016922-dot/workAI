@@ -49,8 +49,9 @@ def choose(controls, threads, nodes):
     return spread, threads if spread else max(1, min(len(controls), threads))
 
 
-def prepare(mesh, loads, alpha, laws, threads):
-    """Index arrays of the parallel layer for this mesh, excitation and thread count."""
+def prepare(mesh, loads, alpha, laws, threads, stiff=False):
+    """Index arrays of the parallel layer for this mesh, excitation and thread count. `stiff`: room for the viscous
+    force of stiffness-proportional damping."""
     cells = np.asarray(mesh['elements']); nodes = len(mesh['mass']); elements = len(cells); flat = cells.reshape(-1).astype(np.int64)
     entries = np.argsort(flat, kind='stable').astype(np.int64)   # a node's (element, local index) entries, in element order
     pointer = np.zeros(nodes + 1, dtype=np.int64); np.cumsum(np.bincount(flat, minlength=nodes), out=pointer[1:])
@@ -67,10 +68,11 @@ def prepare(mesh, loads, alpha, laws, threads):
             'node_blocks': np.stack([edges[:-1], edges[1:]], axis=1).astype(np.int64),
             # work arrays kept between calls: two buffers per state array, the message, and the flux and energy of every quadrature point
             'P': np.empty((2, controls, nodes, 3)), 'V': np.empty((2, controls, nodes, 3)), 'A': np.empty((2, controls, nodes, 3)), 'X': np.empty((2, controls, nodes, 3)),
-            'message': np.empty((controls, nodes, 3)), 'flux': np.empty((controls, elements, n, n, n, 3, 3)), 'energy': np.empty((controls, elements, n, n, n))}
+            'message': np.empty((controls, nodes, 3)), 'flux': np.empty((controls, elements, n, n, n, 3, 3)), 'energy': np.empty((controls, elements, n, n, n)),
+            'viscous': np.empty((controls, nodes if stiff else 0, 3))}
 
 
-ARRAYS = ('pointer', 'entries', 'loaded', 'absorbing', 'element_tasks', 'node_blocks', 'P', 'V', 'A', 'X', 'message', 'flux', 'energy')
+ARRAYS = ('pointer', 'entries', 'loaded', 'absorbing', 'element_tasks', 'node_blocks', 'P', 'V', 'A', 'X', 'message', 'flux', 'energy', 'viscous')
 
 
 @njit(cache=True)
@@ -114,9 +116,11 @@ def _elements(current, cells, derivative, inverse, volume, quadratic, cubic, law
 def parallel_segments(positions, velocities, accelerations, externals, works, dissipations, potentials, strains, jacobians,
                       cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
                       dt, subdivisions, start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, subset, laws,
-                      pointer, entries, loaded, absorbing, element_tasks, node_blocks, P, V, A, X, message, flux, energy, flush=False):
+                      pointer, entries, loaded, absorbing, element_tasks, node_blocks, P, V, A, X, message, flux, energy, viscous, flush, beta, bulks, lags):
     """`recurrence.three_segments` with every control spread over the threads; same arguments plus the arrays of `prepare` (in the order of `ARRAYS`)
-    and, last, `flush` (subnormal numbers count as zero inside every task, `graphnet.subnormal`)."""
+    and, last, `flush` (subnormal numbers count as zero inside every task, `graphnet.subnormal`), `beta`, `bulks` and `lags` (stiffness-proportional
+    damping, as in `three_segments`). `viscous` holds the force applied at the end of the layer."""
+    stiff = beta > 0.
     count = (end_step - start_step) // subdivisions + (1 if include_initial else 0); controls = len(laws); stages = len(composition)
     nodes = len(mass); elements = cells.shape[0]; n = cells.shape[1]; n3 = n * n * n; sources = loads.shape[0]; blocks = node_blocks.shape[0]
     fields = np.empty((controls, count, len(keep) if subset else nodes, 3)); energies = np.empty((controls, count, 5)); failed = np.full(controls, -1, dtype=np.int64)
@@ -171,6 +175,12 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
                                 m2 += (derivative[neighbor, i] * flux[c, e, neighbor, j, k, 2, 0] + derivative[neighbor, j] * flux[c, e, i, neighbor, k, 2, 1]
                                        + derivative[neighbor, k] * flux[c, e, i, j, neighbor, 2, 2])
                         message[c, node, 0] = m0; message[c, node, 1] = m1; message[c, node, 2] = m2
+                        if stiff:   # β K u̇ at the middle of the layer from the change of the element message, extrapolated to its end
+                            g0 = (m0 - bulks[c, node, 0]) * (beta / h); g1 = (m1 - bulks[c, node, 1]) * (beta / h); g2 = (m2 - bulks[c, node, 2]) * (beta / h)
+                            viscous[c, node, 0] = 1.5 * g0 - .5 * lags[c, node, 0]; viscous[c, node, 1] = 1.5 * g1 - .5 * lags[c, node, 1]
+                            viscous[c, node, 2] = 1.5 * g2 - .5 * lags[c, node, 2]
+                            bulks[c, node, 0] = m0; bulks[c, node, 1] = m1; bulks[c, node, 2] = m2
+                            lags[c, node, 0] = g0; lags[c, node, 1] = g1; lags[c, node, 2] = g2
                 leave(saved)
             # 4. energy, guard and contact of each control (serial sums in the frozen order)
             for c in prange(controls):
@@ -199,7 +209,8 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
                         for axis in range(3):
                             external = 0.
                             for source in range(sources): external += loads[source, node, axis] * signals[source, step - start_step - 1, stage]
-                            undamped = (external - message[c, node, axis]) / mass[node] * free[node, axis]
+                            if stiff: undamped = (external - message[c, node, axis] - viscous[c, node, axis]) / mass[node] * free[node, axis]
+                            else: undamped = (external - message[c, node, axis]) / mass[node] * free[node, axis]
                             if damped:
                                 velocity = (V[a0, c, node, axis] + .5 * h * (A[a0, c, node, axis] + undamped)) / (1 + .5 * h * alpha[node]) * free[node, axis]
                                 acceleration = (undamped - alpha[node] * velocity) * free[node, axis]
@@ -213,6 +224,11 @@ def parallel_segments(positions, velocities, accelerations, externals, works, di
                 saved = enter(flush)
                 if active[c]:
                     a0 = now[c]; a1 = 1 - a0
+                    if stiff:
+                        total = 0.
+                        for node in range(nodes):
+                            for axis in range(3): total += lags[c, node, axis] * (P[a1, c, node, axis] - P[a0, c, node, axis])
+                        dissipated[c] += total
                     if damped:
                         total = 0.
                         for q in range(len(absorbing)):

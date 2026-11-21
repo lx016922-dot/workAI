@@ -54,8 +54,12 @@ def prepare_excitation(mesh, scene):
     from physics.materials import is_custom, fastest_speed
     speed = fastest_speed(material) if is_custom(material) else math.sqrt((material['lambda_pa'] + 2 * material['mu_pa']) / material['rho_kg_m3'])
     alpha, damping_rows = build_damping(points, scene_v2.boundaries(scene), speed)
-    return {'loads': loads, 'constrained': mask, 'alpha': alpha, 'area_m2': sum(r['loaded_area_mm2'] for r in rows) * 1e-6,
-            'summary': {'excitation_model': 'multi_source_v2', 'sources': rows, 'constraints': constraint_rows, 'damping': damping_rows}}
+    from physics.damping import coefficients
+    mass_damping, stiffness_damping = coefficients(scene)   # Rayleigh damping of the material: α joins the nodal coefficient, β goes to the layer
+    if mass_damping > 0: alpha = np.full(len(points), mass_damping) if alpha is None else alpha + mass_damping
+    summary = {'excitation_model': 'multi_source_v2', 'sources': rows, 'constraints': constraint_rows, 'damping': damping_rows}
+    if scene.get('damping'): summary['material_damping'] = dict(scene['damping'], model='rayleigh')
+    return {'loads': loads, 'constrained': mask, 'alpha': alpha, 'beta': stiffness_damping, 'area_m2': sum(r['loaded_area_mm2'] for r in rows) * 1e-6, 'summary': summary}
 
 
 def loaded_surface_faces(surface, loads):

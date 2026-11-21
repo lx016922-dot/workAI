@@ -57,7 +57,46 @@ export function materialMarkup(scene, presets = {}) {
         ${['nu12', 'nu23'].map(k => `<label class="wb-field"><span>${k.replace('nu', 'ν')}</span><input type="number" step="any" id="eng-${k}" value="${{ nu12: .3, nu23: .45 }[k]}"></label>`).join('')}
         <div class="wb-field wide"><button type="button" class="wb-button small" data-action="ti-from-engineering">写入 C11、C12、C22、C23、C55</button><small>纤维为轴 1；C13 = C12，C33 = C22，C44 = (C22 − C23)/2，C66 = C55（模板中已按此书写）。</small></div></div></details></section>`;
   }
-  return body + '<div id="material-derived"></div>';
+  return body + dampingMarkup(scene) + '<div id="damping-derived"></div><div id="material-derived"></div>';
+}
+
+/** Rayleigh damping (α, β) from the attenuation of a wave at two frequencies: a in Np/m (or dB/m), c the group velocity in m/s.
+ *  The decay rate in time is γ = a·c; γ(ω) = α/2 + βω²/2 through both points. With only the first point the damping is stiffness-proportional. */
+export function dampingFromAttenuation({ f1, a1, c1, f2, a2, c2, unit = 'np' }) {
+  const neper = unit === 'db' ? Math.log(10) / 20 : 1, ok = v => Number.isFinite(v) && v > 0;
+  if (!ok(f1) || !ok(c1) || !(a1 >= 0)) throw Error('需要频率、群速度（正数）和 f 处的衰减（非负）。');
+  const g1 = a1 * neper * c1, w1 = (2 * Math.PI * f1 * 1e6) ** 2;
+  if (!ok(f2) || !Number.isFinite(a2)) return { mass_per_s: 0, stiffness_s: 2 * g1 / w1 };
+  if (!ok(c2) || !(a2 >= 0) || Math.abs(f2 - f1) < 1e-9 * f1) throw Error('第二个衰减点需要不同的频率、群速度（正数）和非负的衰减。');
+  const g2 = a2 * neper * c2, w2 = (2 * Math.PI * f2 * 1e6) ** 2, beta = 2 * (g2 - g1) / (w2 - w1), alpha = 2 * g1 - beta * w1, slack = 1e-9 * Math.max(g1, g2);
+  if (beta < -slack / Math.max(w1, w2) || alpha < -slack) throw Error('这两个衰减不能由质量比例加刚度比例阻尼得到：频率高的一个的衰减率（衰减 × 群速度）需要在低的一个的 1 倍到（频率比）² 倍之间。');
+  return { mass_per_s: Math.max(alpha, 0), stiffness_s: Math.max(beta, 0) };
+}
+
+export function dampingMarkup(scene) {
+  const d = scene.damping || { mass_per_s: 0, stiffness_s: 0 }, f = scene.source?.frequency_mhz ?? .5, shown = v => +(+v).toPrecision(8);
+  return `<section class="wb-section"><h3>材料阻尼 <em class="wb-unit">可选</em></h3><div class="wb-grid">
+    <label class="wb-field"><span>质量比例 α <em>1/s</em></span><input type="number" step="any" min="0" id="damping-alpha" value="${shown(d.mass_per_s)}"></label>
+    <label class="wb-field"><span>刚度比例 β <em>ns</em></span><input type="number" step="any" min="0" id="damping-beta" value="${shown(d.stiffness_s * 1e9)}"></label></div>
+    <p class="wb-note">Rayleigh 阻尼：任何模态在频率 f 处的幅值按 exp(−γt) 衰减，γ = α/2 + β(2πf)²/2；沿传播方向每米衰减 γ/群速度 奈培。两个系数都填 0 即无阻尼。刚度比例项需要自动时间层和冻结网络引擎。</p>
+    <details class="wb-help"><summary>由 f 和 2f 处实测的衰减换算</summary><div class="wb-grid">
+      <label class="wb-field"><span>频率 f <em>MHz</em></span><input type="number" step="any" id="damping-f1" value="${shown(f)}"></label>
+      <label class="wb-field"><span>单位</span><select id="damping-unit"><option value="np">Np/m</option><option value="db">dB/m</option></select></label>
+      <label class="wb-field"><span>f 处的衰减</span><input type="number" step="any" min="0" id="damping-a1" placeholder="例如 5"></label>
+      <label class="wb-field"><span>f 处模态的群速度 <em>m/s</em></span><input type="number" step="any" id="damping-c1" placeholder="例如 5400"></label>
+      <label class="wb-field"><span>2f 处的衰减</span><input type="number" step="any" min="0" id="damping-a2" placeholder="留空：只用刚度比例"></label>
+      <label class="wb-field"><span>2f 处模态的群速度 <em>m/s</em></span><input type="number" step="any" id="damping-c2"></label>
+      <div class="wb-field wide"><button type="button" class="wb-button small" data-action="damping-from-attenuation">写入 α、β</button>
+        <small>衰减和群速度取实际测量的那个模态（群速度可在结果页“频散与 f–k 谱”里查）。两点决定两个系数；其他频率处的衰减按 γ = α/2 + βω²/2 变化，这是模型，不是材料规律。</small></div></div></details></section>`;
+}
+
+/** What the damping does at f and 2f, from the server preview (offline/preview.py damping_summary). */
+export function dampingDerivedMarkup(d) {
+  if (!d) return '';
+  const row = r => `<tr><th>${fmt(r.frequency_mhz)} MHz</th><td>${fmt(r.decay_per_s)}</td><td>${fmt(r.loss_factor, 3)}</td><td>${r.q ? fmt(r.q, 3) : '—'}</td><td>${fmt(r.longitudinal_np_m, 3)}（${fmt(r.longitudinal_db_m, 3)} dB/m）</td><td>${fmt(r.shear_np_m, 3)}（${fmt(r.shear_db_m, 3)} dB/m）</td></tr>`;
+  return `<section class="wb-section"><h3>阻尼在 f 和 2f 处的效果</h3>
+    <table class="wb-table"><tr><th>频率</th><th>衰减率 γ (1/s)</th><th>损耗因子</th><th>Q</th><th>纵波 Np/m</th><th>横波 Np/m</th></tr>${d.at.map(row).join('')}</table>
+    <p class="wb-note">体波的沿程衰减供参考；导波各模态的衰减是 γ 除以它自己的群速度，算完后在结果页“频散与 f–k 谱”里列出。</p></section>`;
 }
 
 const fmt = (v, digits = 4) => (Math.abs(v) >= 1e4 || (Math.abs(v) < 1e-3 && v !== 0) ? v.toExponential(3) : (+v).toPrecision(digits));
@@ -88,6 +127,19 @@ export function materialDerivedMarkup(d) {
 /** Material-specific actions; generic inputs are bound by the inspector. */
 export function bindMaterial(root, scene, presets, onChange) {
   const set = material => { scene.material = structuredClone(material); onChange('structure'); };
+  const damp = (alpha, beta) => {
+    if (!(alpha >= 0) || !(beta >= 0)) return onChange({ error: Error('阻尼系数需要非负数值。') });
+    if (alpha > 0 || beta > 0) scene.damping = { mass_per_s: alpha, stiffness_s: beta }; else delete scene.damping;
+    onChange('structure');
+  };
+  const number = id => { const el = root.querySelector(id); return el && el.value !== '' ? Number(el.value) : NaN; };
+  for (const id of ['#damping-alpha', '#damping-beta']) root.querySelector(id)?.addEventListener('change', () => damp(number('#damping-alpha') || 0, (number('#damping-beta') || 0) * 1e-9));
+  root.querySelector('[data-action="damping-from-attenuation"]')?.addEventListener('click', () => {
+    try {
+      const f1 = number('#damping-f1'), d = dampingFromAttenuation({ f1, a1: number('#damping-a1'), c1: number('#damping-c1'), f2: 2 * f1, a2: number('#damping-a2'), c2: number('#damping-c2'), unit: root.querySelector('#damping-unit').value });
+      damp(d.mass_per_s, d.stiffness_s);
+    } catch (error) { onChange({ error }); }
+  });
   root.querySelector('[data-action="material-model"]')?.addEventListener('change', ev => {
     const kind = ev.target.value, pick = { reference: 'aluminium', murnaghan: 'murnaghan', energy: 'cfrp_ud' }[kind];
     if (presets[pick]) set(presets[pick].material);

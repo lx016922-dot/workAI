@@ -39,6 +39,7 @@ def scope(scene):
         if scene.get('boundaries'): out.append('对称面 / 吸收层')
         signals = {(s.get('signal') or {}).get('type', 'tone_burst') for s in [scene.get('source', {}), *(scene.get('sources') or [])]}
         if signals - {'tone_burst'}: out.append('非猝发音信号')
+        if scene.get('damping'): out.append('材料阻尼')
     return out
 
 
@@ -159,7 +160,23 @@ def preview(body, data_directory=None):
                     out['warnings'].append(f'无法估计计算量：{error}')
             if free is not None and size > free: out['warnings'].append('记录超过数据目录的可用磁盘空间。')
         out['warnings'] += absorber_warnings(scene)
+        if scene.get('damping'): out['damping'], notes = damping_summary(scene); out['warnings'] += notes
     return out
+
+
+def damping_summary(scene):
+    """What the material damping of a scene does at f and 2f of the primary source, and notes when it is strong."""
+    from physics.damping import NEPER_DB, describe
+    from physics.materials import fastest_speed, is_custom, slowest_shear_speed
+    d = scene['damping']; f = scene['source']['frequency_mhz'] * 1e6; m = scene['material']
+    out = describe(d, (f, 2 * f)); fast = fastest_speed(m) if is_custom(m) else math.sqrt((m['lambda_pa'] + 2 * m['mu_pa']) / m['rho_kg_m3']); slow = slowest_shear_speed(m)
+    for row in out['at']:   # bulk waves: the attenuation of a guided mode is the decay rate over its own group velocity (the dispersion tab lists it)
+        row['longitudinal_np_m'] = row['decay_per_s'] / fast; row['shear_np_m'] = row['decay_per_s'] / slow
+        row['longitudinal_db_m'] = row['longitudinal_np_m'] * NEPER_DB; row['shear_db_m'] = row['shear_np_m'] * NEPER_DB
+    notes = []
+    if out['at'][1]['loss_factor'] > .1:
+        notes.append(f"材料阻尼在 2f 处的损耗因子为 {out['at'][1]['loss_factor']:.2g}（Q ≈ {out['at'][1]['q']:.1f}）：波在几个波长内就衰减完，衰减率公式 γ = α/2 + βω²/2 只在 γ ≪ ω 时准确。")
+    return out, notes
 
 
 def long_record_warnings(duration_us, signals, resolution):

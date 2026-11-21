@@ -97,6 +97,8 @@ def solve(scene,mesh,cfl=.3,keep_fields=False,callback=None,excitation=None):
         values=[np.array([pulse(step*dt*1e6,scene['source']) for step in range(steps+1)])];summary={'excitation_model':'legacy_single_source'}
     else:
         from physics.signals import evaluate
+        from physics.damping import only_mass
+        only_mass(excitation,'谱元参考求解器')
         loads=excitation['loads'];constrained=excitation['constrained'];alpha=excitation['alpha'];area=excitation['area_m2'];summary=excitation['summary']
         times=np.arange(steps+1)*dt*1e6;values=[evaluate(src,times) for _,src in loads]
     damping=None if alpha is None else mass*alpha

@@ -209,7 +209,14 @@ def validate_request(body):
         raise ValueError('记录方式设置需要 v2 场景。')
     if 'time_stepping' in options and not (body.get('engine', 'network') == 'network' and v2):
         raise ValueError('时间层设置只用于 v2 场景的冻结网络引擎；快速引擎使用模型训练时的时间层。')
-    return dict(_validate_request(body, len(CONTROL_SETS[options.get('controls', 'all')]), options.get('time_stepping') == 'frozen'), **options)
+    checked = _validate_request(body, len(CONTROL_SETS[options.get('controls', 'all')]), options.get('time_stepping') == 'frozen')
+    if (checked['scene'].get('damping') or {}).get('stiffness_s'):
+        # the stiffness-proportional term needs the one-stage layer of the automatic plan (graphnet/timestep.py)
+        if options.get('time_stepping') == 'frozen':
+            raise ValueError('刚度比例阻尼需要自动时间层；请把时间层设为自动，或只用质量比例阻尼。')
+        if checked.get('engine') == 'coarse':
+            raise ValueError('快速引擎不支持刚度比例阻尼（未核验）；请改用冻结网络，或只用质量比例阻尼。')
+    return dict(checked, **options)
 
 
 def _validate_request(body, controls=3, trained=False):

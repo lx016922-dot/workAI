@@ -41,7 +41,10 @@ def prepare(scene,mesh,substeps=4,excitation=None):
     start=time.monotonic()
     if excitation is None:
         load,fixed,area=boundary_data(mesh,scene);loads=[(load,scene['source'])];constrained=np.zeros((len(mesh['mass']),3),dtype=bool);constrained[fixed]=True;alpha=None
-    else:loads=excitation['loads'];constrained=excitation['constrained'];alpha=excitation['alpha'];area=excitation['area_m2']
+    else:
+        from physics.damping import only_mass
+        only_mass(excitation,'隐式参考求解器')
+        loads=excitation['loads'];constrained=excitation['constrained'];alpha=excitation['alpha'];area=excitation['area_m2']
     mass=np.repeat(mesh['mass'],3);free=np.flatnonzero(~constrained.ravel())
     stiffness=assemble(mesh,scene['material']);scale=1/np.sqrt(mass[free]);dt=scene['acquisition']['sample_step_us']*1e-6/substeps
     # The mass-normalized elastic matrix is I plus a positive semidefinite

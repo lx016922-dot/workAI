@@ -38,6 +38,8 @@ def predict(scene, mesh, model, laws=(0, 1, 2), callback=None):
         return {'fields': {LAWS[i]: fields[i] for i in laws}, 'diagnostics': [rows[i] for i in laws], 'route': 'frozen_v1', 'inputs': None}
     dt, subdivisions, frames, steps = layers(scene, mesh, cfl)
     signals = signal_table(inputs, np.arange(steps + 1) * dt * 1e6)
+    from physics.damping import only_mass
+    only_mass(inputs, '短记录预测')
     damped = inputs['alpha'] is not None; alpha = inputs['alpha'] if damped else np.zeros(len(mesh['mass']))
     inverse = inverse_mapping(mesh); fields = {}; rows = []; quadratic, cubic, layer = energy_layer(scene, model)
     ca, cb, cn, _ = contact_arrays(mesh); ck, contact = contact_stiffness(mesh, scene, dt)

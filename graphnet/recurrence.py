@@ -13,6 +13,14 @@ change:
 With α = 0 the update is the frozen one. The damped form is the central-difference
 equivalent of mass-proportional damping m ü + m α u̇ = f with the centred velocity.
 
+Stiffness-proportional material damping (the long record, one stage per layer): the term β K u̇ of
+m ü + (α m + β K) u̇ + f(u) = F. The change of the element message over a layer divided by the layer, times β, is
+β K u̇ at the middle of the layer, with the tangent stiffness of the control; the force that joins the acceleration at
+the end of the layer is extrapolated to that instant from this layer and the one before, 1.5 g − 0.5 g⁻, which keeps
+the layer of second order. The energy it takes is counted as g times the displacement of the layer. The element
+message and g of the last layer are part of the state (`bulks`, `lags`); the contact force is not damped. With β = 0
+nothing changes, bit for bit.
+
 Contact interfaces (closed cracks, closed delaminations, `graphnet.contact`) add the gradient of the
 unilateral penalty energy to the element messages and the energy itself to the strain energy; with no
 contact pairs the arrays are empty and the update is unchanged.
@@ -90,7 +98,7 @@ def forward_with_contact(cells, derivative, inverse, volume, mass, loads, signal
 def _segment(position, velocity, acceleration, previous_external, work, dissipated,
              cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
              law, dt, subdivisions, start_step, end_step, include_initial, signals,
-             prior_potential, prior_max_strain, prior_min_j, ca, cb, cn, ck, keep, subset):
+             prior_potential, prior_max_strain, prior_min_j, ca, cb, cn, ck, keep, subset, beta, stiff, bulk, lag):
     """Long record: a symmetric composition of damped velocity-Verlet layers.
 
     `composition` holds the stage weights: the frozen three-stage composition (fourth order) or a single stage
@@ -100,6 +108,7 @@ def _segment(position, velocity, acceleration, previous_external, work, dissipat
     nodes = len(mass); sources = loads.shape[0]; stages = len(composition)
     fields = np.empty((count, len(keep) if subset else nodes, 3)); energies = np.empty((count, 5))
     potential, max_strain, min_j = prior_potential, prior_max_strain, prior_min_j
+    viscous = np.zeros((0, 3)); middle = np.zeros((0, 3))
     at = 0
     if include_initial:
         if subset: fields[at] = position[keep]
@@ -117,12 +126,18 @@ def _segment(position, velocity, acceleration, previous_external, work, dissipat
                 # No raise here: an exception inside the parallel caller reaches Python as an opaque SystemError.
                 # Report the step instead; the caller raises a readable error and keeps the last complete chunk.
                 return fields, energies, position, velocity, acceleration, previous_external, work, dissipated, potential, max(max_strain, strain), min(min_j, jac), step
+            if stiff:
+                middle = (message - bulk) * (beta / h)   # β K u̇ at the middle of the layer
+                viscous = 1.5 * middle - .5 * lag        # at its end
+                bulk[:] = message; lag[:] = middle
             potential += contact_terms(next_position, message, ca, cb, cn, ck)
             max_strain, min_j = max(max_strain, strain), min(min_j, jac)
             external = np.zeros((nodes, 3))
             for k in range(sources): external += loads[k] * signals[k, step - start_step - 1, stage]
-            undamped = (external - message) / mass[:, None]
+            if stiff: undamped = (external - message - viscous) / mass[:, None]
+            else: undamped = (external - message) / mass[:, None]
             undamped *= free
+            if stiff: dissipated += np.sum(middle * (next_position - position))
             if damped:
                 next_velocity = (velocity + .5 * h * (acceleration + undamped)) / (1 + .5 * h * alpha)[:, None]
                 next_velocity *= free
@@ -147,17 +162,23 @@ def _segment(position, velocity, acceleration, previous_external, work, dissipat
 @njit(cache=True, parallel=True)
 def three_segments(positions, velocities, accelerations, externals, works, dissipations, potentials, strains, jacobians,
                    cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
-                   dt, subdivisions, start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, subset, laws, flush=False):
+                   dt, subdivisions, start_step, end_step, include_initial, signals, ca, cb, cn, ck, keep, subset, laws, flush, beta, bulks, lags):
     """One thread per control. `laws` lists the constitutive controls to run (0 linear, 1 StVK, 2 complete); the state
     arrays, fields and energies have one row per listed control, in that order. `flush`: subnormal numbers count as
-    zero inside the layers (`graphnet.subnormal`); false is the frozen arithmetic."""
+    zero inside the layers (`graphnet.subnormal`); false is the frozen arithmetic. `beta` > 0: stiffness-proportional damping (one stage per layer), with
+    `bulks` and `lags` the element message and the viscous force of the last layer of every control (updated in place; any arrays
+    with a leading control axis when β = 0)."""
+    stiff = beta > 0.
     count = (end_step - start_step) // subdivisions + (1 if include_initial else 0); controls = len(laws)
     fields = np.empty((controls, count, len(keep) if subset else len(mass), 3)); energies = np.empty((controls, count, 5)); failed = np.full(controls, -1, dtype=np.int64)
     for law in prange(controls):
         saved = enter(flush)
+        if stiff: bulk = bulks[law]; lag = lags[law]
+        else: bulk = np.zeros((0, 3)); lag = np.zeros((0, 3))
         row = _segment(positions[law], velocities[law], accelerations[law], externals[law], works[law], dissipations[law],
                        cells, derivative, inverse, volume, mass, loads, free, alpha, damped, quadratic, cubic, composition,
-                       laws[law], dt, subdivisions, start_step, end_step, include_initial, signals, potentials[law], strains[law], jacobians[law], ca, cb, cn, ck, keep, subset)
+                       laws[law], dt, subdivisions, start_step, end_step, include_initial, signals, potentials[law], strains[law], jacobians[law], ca, cb, cn, ck, keep, subset,
+                       beta, stiff, bulk, lag)
         leave(saved)
         fields[law], energies[law] = row[0], row[1]
         positions[law], velocities[law], accelerations[law], externals[law] = row[2], row[3], row[4], row[5]
