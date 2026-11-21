@@ -656,10 +656,8 @@ def carriers(scene):
 
 def _tone(times, values, frequency, window):
     """(amplitude in m, phase in degrees) of a waveform at one frequency: the Hann-weighted Fourier coefficient over the window."""
-    from dispersion.analysis import harmonic_coefficients
-
-    h = harmonic_coefficients(times, values, frequency, window[0], window[1], orders=(1,))['harmonics'][0]
-    return (h['amplitude'], h['phase_deg']) if h['available'] else (None, None)
+    first = harmonics(times, values, frequency, window)[0]  # the same coefficient as for f and 2f (offline/scan.py); None above Nyquist
+    return (first['amplitude_m'], first['phase_deg']) if first else (None, None)
 
 
 def mixing(job, body):
@@ -699,8 +697,10 @@ def mixing(job, body):
     full = response(values, 'full')
     basis = 'nonlinear' if have('nonlinear') else 'full'
     mixed = response(values, basis)
+    # The envelope of two tones beats at f_b − f_a: the arrival is taken from the envelope smoothed over one beat, so that the
+    # window sits on the burst and not on its first beat.
     arrival, group, speed_measured, windows, used = _windows(
-        body.get('window'), scene, times, response(values, 'linear') if have('linear') else full, distance, fb
+        body.get('window'), scene, times, response(values, 'linear') if have('linear') else full, distance, fb - fa
     )
     lead = max(0, int(math.ceil((times[0] - min(w[0] for w in windows)) / step - 1e-9)))
     if lead:  # the plate is at rest before the record starts

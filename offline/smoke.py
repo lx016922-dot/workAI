@@ -149,6 +149,34 @@ def main():
             swept = json.loads(json.dumps(small))
             swept['defects'] = []
             swept['name'] = 'scan smoke'
+            # with material damping (physics/damping.py): the two combinations run through the damped layer of the packaged software
+            swept['damping'] = {'mass_per_s': 2.0e4, 'stiffness_s': 2.0e-9}
+            damped = request('/api/preview', {'scene': swept, 'mesh': 'auto'}, headers)
+            assert (
+                damped['ok']
+                and damped['damping']['at'][1]['decay_per_s'] > damped['damping']['at'][0]['decay_per_s']
+                and damped['estimate']['scheme'] == 'verlet2'
+            ), damped['errors']
+            # a wedge transducer and a bonded wafer as sources (physics/loads.py): accepted, with their own regions
+            for profile, direction in (
+                (
+                    {
+                        'type': 'wedge',
+                        'along': 'x',
+                        'length_mm': 6.0,
+                        'width_mm': 0.0,
+                        'trace_velocity_m_s': 5400.0,
+                        'reverse': False,
+                        'apodization': 'hann',
+                    },
+                    [0.0, 0.0, -1.0],
+                ),
+                ({'type': 'patch', 'shape': 'strip', 'length_mm': 5.0, 'width_mm': 0.0, 'edge_mm': 0.6}, [1.0, 0.0, 0.0]),
+            ):
+                driven = json.loads(json.dumps(swept))
+                driven['source'].update(profile=profile, direction=direction, center_mm=[6.0, 1.0, 1.6], radius_mm=0.0)
+                checked = request('/api/preview', {'scene': driven, 'mesh': 'auto'}, headers)
+                assert checked['ok'], checked['errors']
             axes = [{'path': 'source.amplitude_mpa', 'values': [1.0, 2.0], 'label': '幅值', 'unit': 'MPa'}]
             planned = request('/api/scans/plan', {'request': {'scene': swept, 'mesh': 'auto'}, 'axes': axes}, headers)
             assert planned['count'] == planned['valid'] == 2 and planned['seconds_total'] > 0 and planned['disk_bytes_total'] > 0, planned
@@ -186,6 +214,34 @@ def main():
                 and along['a2_basis'] == 'nonlinear'
             ), along['notes']
             assert along['fit']['points'] == 16 and np.isfinite(along['fit']['ratio']['slope_per_m2'])
+            # the model is damped: every mode has its attenuation, and the analysis reports that of the fundamental
+            assert theory['damping']['decay_per_s']['2f'] > theory['damping']['decay_per_s']['f'] > 0 and all(
+                m['attenuation_np_m'] > 0 for m in theory['modes']['f']
+            )
+            assert along['fit']['attenuation']['decay_per_s']['f'] > 0 and along['receiver'] == {'type': 'point'}
+            # wave mixing (two frequencies given by hand: the model has one carrier) and a receiver of finite size
+            mixed = request(
+                '/api/jobs/' + first_job + '/mixing',
+                {
+                    'points': line,
+                    'direction': [0.0, 0.0, 1.0],
+                    'window': {'mode': 'fixed', 'start_us': 0.0, 'end_us': 10.0},
+                    'frequencies_mhz': [0.3, 0.45],
+                },
+                headers,
+            )
+            assert len(mixed['rows']) == 16 and abs(mixed['frequencies_mhz']['sum'] - 0.75) < 1e-12 and mixed['mixed_basis'] == 'nonlinear'
+            wafer = request(
+                '/api/jobs/' + first_job + '/accumulation',
+                {
+                    'points': line,
+                    'direction': [1.0, 0.0, 0.0],
+                    'window': {'mode': 'fixed', 'start_us': 0.0, 'end_us': 10.0},
+                    'receiver': {'type': 'patch', 'length_mm': 2.0},
+                },
+                headers,
+            )
+            assert wafer['receiver']['type'] == 'patch' and len(wafer['rows']) < 16
             spectrum = request('/api/jobs/' + first_job + '/fk', {'points': line, 'direction': [0.0, 0.0, 1.0]}, headers)
             import base64
 
