@@ -1,4 +1,5 @@
 """One local inference job. No remote service or numerical solver fallback."""
+
 import argparse
 import json
 import sys
@@ -18,12 +19,13 @@ from .recording import preview, display_preview
 def write_json(path, value):
     temp = path.with_suffix(path.suffix + '.tmp')
     temp.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + '\n', encoding='utf-8')
-    for attempt in range(40):   # Windows refuses the replace while the application is reading the file: retry for a moment
+    for attempt in range(40):  # Windows refuses the replace while the application is reading the file: retry for a moment
         try:
             return temp.replace(path)
         except PermissionError:
-            if attempt == 39: raise
-            time.sleep(.05)
+            if attempt == 39:
+                raise
+            time.sleep(0.05)
 
 
 def control_row(diagnostics, controls, part):
@@ -36,21 +38,32 @@ def export_results(directory, scene, mesh, fields, diagnostics, info, times=None
     """`fields` and `diagnostics` hold one entry per computed control, in the order of `controls`."""
     if times is None:
         times = np.arange(fields[0].shape[0]) * scene['acquisition']['sample_step_us']
-    exports = {}; values = dict(zip(controls, fields))
+    exports = {}
+    values = dict(zip(controls, fields))
     for part in parts_for(controls):
         field = response(values, part)
         d = dict(control_row(diagnostics, controls, part))
         d.update(output_dtype='float64', internal_step_us=d['layer_step_us'])
         record, packed = result_record(directory.name, scene, mesh, {'fields_m': field, 'times_us': times, 'diagnostics': d})
-        record.update(schema='workai.offline.graphwave.result.v1', engine='workai_graphwave_offline',
-                      engine_scope='continued_graph_network_long_record' if recording else 'original_frozen_graph_network', response_part=part,
-                      neural_model={'weights_sha256': info['weights_sha256'], 'numerical_correction': False,
-                                    'neural_forward_only': True, 'original_acceptance_restored': info['original_acceptance_restored']},
-                      controls=diagnostics)
+        record.update(
+            schema='workai.offline.graphwave.result.v1',
+            engine='workai_graphwave_offline',
+            engine_scope='continued_graph_network_long_record' if recording else 'original_frozen_graph_network',
+            response_part=part,
+            neural_model={
+                'weights_sha256': info['weights_sha256'],
+                'numerical_correction': False,
+                'neural_forward_only': True,
+                'original_acceptance_restored': info['original_acceptance_restored'],
+            },
+            controls=diagnostics,
+        )
         if extra:
             record.update(extra)
         if recording:
-            record['recording'] = {k: recording[k] for k in ('schema','duration_us','sample_step_us','frame_count','fingerprint','mesh_sha256')}
+            record['recording'] = {
+                k: recording[k] for k in ('schema', 'duration_us', 'sample_step_us', 'frame_count', 'fingerprint', 'mesh_sha256')
+            }
             record['recording'].update(animation_only=True, analysis_source='complete_float64_chunks')
         (directory / (part + '.bin.gz')).write_bytes(packed)
         write_json(directory / (part + '.json'), record)
@@ -61,20 +74,39 @@ def export_results(directory, scene, mesh, fields, diagnostics, info, times=None
 def export_display(directory, scene, mesh, display, parts, diagnostics, info, times, recording, extra):
     """The five responses on the display mesh (large models and compact records): float32 animation frames, receivers from the record."""
     from spectral3d.result import display_record
-    exports = {}; compact = recording.get('record_mode') == 'compact'; controls = tuple(recording.get('controls', LAWS))
+
+    exports = {}
+    compact = recording.get('record_mode') == 'compact'
+    controls = tuple(recording.get('controls', LAWS))
     for part in parts_for(controls):
         d = dict(control_row(diagnostics, controls, part))
         d.update(output_dtype='float32', internal_step_us=d['layer_step_us'])
         record, packed = display_record(directory.name, scene, mesh, display, parts[part], times, d, extra['loaded_faces'])
-        record.update(schema='workai.offline.graphwave.result.v1', engine='workai_graphwave_offline', engine_scope='continued_graph_network_long_record', response_part=part,
-                      neural_model={'weights_sha256': info['weights_sha256'], 'numerical_correction': False,
-                                    'neural_forward_only': True, 'original_acceptance_restored': info['original_acceptance_restored']},
-                      controls=diagnostics)
+        record.update(
+            schema='workai.offline.graphwave.result.v1',
+            engine='workai_graphwave_offline',
+            engine_scope='continued_graph_network_long_record',
+            response_part=part,
+            neural_model={
+                'weights_sha256': info['weights_sha256'],
+                'numerical_correction': False,
+                'neural_forward_only': True,
+                'original_acceptance_restored': info['original_acceptance_restored'],
+            },
+            controls=diagnostics,
+        )
         record.update(extra)
-        record['recording'] = {k: recording[k] for k in ('schema', 'duration_us', 'sample_step_us', 'frame_count', 'fingerprint', 'mesh_sha256')}
-        record['recording'].update(animation_only=True, analysis_source='receiver_float64_probes' if compact else 'complete_float64_chunks',
-                                   record_mode='compact' if compact else 'full', time_plan=recording.get('time_plan'))
-        if compact: record['recording'].update(receivers=recording['receivers'], snapshot_frames=recording['snapshot_frames'])
+        record['recording'] = {
+            k: recording[k] for k in ('schema', 'duration_us', 'sample_step_us', 'frame_count', 'fingerprint', 'mesh_sha256')
+        }
+        record['recording'].update(
+            animation_only=True,
+            analysis_source='receiver_float64_probes' if compact else 'complete_float64_chunks',
+            record_mode='compact' if compact else 'full',
+            time_plan=recording.get('time_plan'),
+        )
+        if compact:
+            record['recording'].update(receivers=recording['receivers'], snapshot_frames=recording['snapshot_frames'])
         (directory / (part + '.bin.gz')).write_bytes(packed)
         write_json(directory / (part + '.json'), record)
         exports[part] = {'result_sha256': digest(directory / (part + '.json')), 'field_sha256': digest(directory / (part + '.bin.gz'))}
@@ -85,13 +117,17 @@ def run(directory):
     directory = Path(directory)
     start = time.monotonic()
     status = json.loads((directory / 'status.json').read_text(encoding='utf-8'))
+
     def publish(**values):
         status.update(values, elapsed_s=time.monotonic() - start, updated_at_utc=datetime.now(timezone.utc).isoformat())
         write_json(directory / 'status.json', status)
+
     try:
         request = validate_request(json.loads((directory / 'request.json').read_text(encoding='utf-8')))
         info = model_info()
-        scene = request['scene']; controls = CONTROL_SETS[request.get('controls', 'all')]; coarse = request.get('engine') == 'coarse'
+        scene = request['scene']
+        controls = CONTROL_SETS[request.get('controls', 'all')]
+        coarse = request.get('engine') == 'coarse'
         network_v2 = scene.get('schema') == V2
         is_long = network_v2 or scene['acquisition']['duration_us'] >= 5000
         if is_long and 'long_model' not in info:
@@ -99,96 +135,193 @@ def run(directory):
         weight_path = MODEL / (info['long_model']['weights_file'] if is_long else 'weights.npz')
         with np.load(weight_path, allow_pickle=False) as saved:
             weights = dict(saved)
-        publish(phase='meshing', message='正在生成几何连接图', **({'engine': 'coarse', 'coarse_model': request['coarse_model']} if coarse else {}))
-        layer = request.get('time_stepping', 'auto'); coarse_extra = {}
+        publish(
+            phase='meshing',
+            message='正在生成几何连接图',
+            **({'engine': 'coarse', 'coarse_model': request['coarse_model']} if coarse else {}),
+        )
+        layer = request.get('time_stepping', 'auto')
+        coarse_extra = {}
         if network_v2:
             from graphnet.model import load as load_network
         if coarse:
             # Fast engine: the learned element operators on the model's own grid and time layer, through the same record path as the fine network.
             from .coarse_engine import model_path, prepare
             from coarsegraph.run import load_model
+
             network = load_network(load_model(model_path(request['coarse_model']))[0]['degree'], long_record=True)
             scene, mesh, network, layer, coarse_extra = prepare(scene, request['coarse_model'], network)
         else:
             mesh = make_mesh(scene, request['degree'], scene['numerics']['h_mm'])
-            if network_v2: network = load_network(request['degree'], long_record=True)
-        extra = None; browser_full = True; record = 'full'
+            if network_v2:
+                network = load_network(request['degree'], long_record=True)
+        extra = None
+        browser_full = True
+        record = 'full'
         if network_v2:
             # The machine limits the model, not the display: a large model keeps a compact record and is shown on a display mesh.
             from spectral3d.display import surface_faces
             from spectral3d.loads import prepare_excitation, loaded_surface_faces
             from physics.scene import summary
             from .resources import BROWSER_ENTRIES, BROWSER_NODES, BROWSER_TRIANGLES, memory_problem, record_mode
+
             frames = round(scene['acquisition']['duration_us'] / scene['acquisition']['sample_step_us']) + 1
             record = record_mode(request.get('record', 'auto'), frames, len(mesh['points']), len(controls))
             problem = memory_problem(len(mesh['points']), record, len(controls))
             if problem:
                 raise ValueError(f'模型太大：{problem}。请增大单元尺寸、缩小模型或使用对称面。')
-            browser_full = (record == 'full' and len(mesh['points']) <= BROWSER_NODES and mesh['elements'].size <= BROWSER_ENTRIES and
-                            len(surface_faces(mesh['elements'])) * 2 * int(mesh['degree']) ** 2 <= BROWSER_TRIANGLES)
+            browser_full = (
+                record == 'full'
+                and len(mesh['points']) <= BROWSER_NODES
+                and mesh['elements'].size <= BROWSER_ENTRIES
+                and len(surface_faces(mesh['elements'])) * 2 * int(mesh['degree']) ** 2 <= BROWSER_TRIANGLES
+            )
             excitation = prepare_excitation(mesh, scene)
-            extra = {'excitation': summary(scene), 'input_layer': 'v2_multi_source', 'engine_scope': 'graph_network_v2_input_layer_record', **coarse_extra}
-            if browser_full: extra['loaded_faces'] = loaded_surface_faces(surface_triangles(mesh['elements']), excitation['loads'])
+            extra = {
+                'excitation': summary(scene),
+                'input_layer': 'v2_multi_source',
+                'engine_scope': 'graph_network_v2_input_layer_record',
+                **coarse_extra,
+            }
+            if browser_full:
+                extra['loaded_faces'] = loaded_surface_faces(surface_triangles(mesh['elements']), excitation['loads'])
         else:
-            if len(mesh['points']) > 30000 or mesh['elements'].size > 100000 or len(mesh['points']) * 281 * 24 > 192 * 1024**2 or len(surface_triangles(mesh['elements'])) > 50000:
+            if (
+                len(mesh['points']) > 30000
+                or mesh['elements'].size > 100000
+                or len(mesh['points']) * 281 * 24 > 192 * 1024**2
+                or len(surface_triangles(mesh['elements'])) > 50000
+            ):
                 raise ValueError('网格超过离线显示预算，请增大网格尺寸。')
             boundary_data(mesh, scene)
         for rx in scene['receivers']:
             interpolation(mesh, rx['point_mm'])
-        publish(phase='running', nodes=len(mesh['points']), controls_completed=0,
-                duration_us=scene['acquisition']['duration_us'] if is_long else None, resumable=bool(is_long),
-                **({'record_mode': record} if network_v2 else {}), controls=list(controls), parts=list(parts_for(controls)),
-                message=('粗网格算子：' if coarse else '') + f'首次运行需要编译网络，随后计算 {len(controls)} 组控制')
+        publish(
+            phase='running',
+            nodes=len(mesh['points']),
+            controls_completed=0,
+            duration_us=scene['acquisition']['duration_us'] if is_long else None,
+            resumable=bool(is_long),
+            **({'record_mode': record} if network_v2 else {}),
+            controls=list(controls),
+            parts=list(parts_for(controls)),
+            message=('粗网格算子：' if coarse else '') + f'首次运行需要编译网络，随后计算 {len(controls)} 组控制',
+        )
+
         def progress(d):
             if not d['energy_balance_within_1_percent']:
                 raise ValueError('网络输出能量收支未通过 1% 检查。')
             publish(controls_completed=['linear', 'stvk', 'murnaghan'].index(d['law']) + 1, message=d['law'] + ' 控制完成')
+
         if is_long:
             temporal_path = MODEL / info['long_model']['time_weights_file']
             temporal = json.loads(temporal_path.read_text(encoding='utf-8'))
-            resumed = time.monotonic(); first = {}
+            resumed = time.monotonic()
+            first = {}
+
             def long_progress(m):
                 # Remaining time from the samples computed in this run (a resumed record starts part-way).
                 first.setdefault('frames', m['completed_frames'] - m['chunks'][-1]['frame_count'])
-                done = m['completed_frames'] - first['frames']; left = m['frame_count'] - m['completed_frames']
+                done = m['completed_frames'] - first['frames']
+                left = m['frame_count'] - m['completed_frames']
                 plan = m.get('time_plan') or {}
-                publish(completed_time_us=m['completed_time_us'],duration_us=m['duration_us'], remaining_s=(time.monotonic() - resumed) * left / max(done, 1),
-                        **({'time_plan': {k: plan.get(k) for k in ('scheme', 'time_order', 'layer_step_us', 'evaluations_per_control', 'frozen_evaluations_per_control', 'reason')}} if plan else {}),
-                        **({'threads': m['layer_threads'], 'spread': m['layer_spread'], 'flush_subnormals': m.get('flush_subnormals', False)} if 'layer_threads' in m else {}),
-                        message=f"已保存 {m['completed_time_us']/1000:.3f} / {m['duration_us']/1000:g} ms {'精简' if m.get('record_mode') == 'compact' else '完整'}记录")
+                publish(
+                    completed_time_us=m['completed_time_us'],
+                    duration_us=m['duration_us'],
+                    remaining_s=(time.monotonic() - resumed) * left / max(done, 1),
+                    **(
+                        {
+                            'time_plan': {
+                                k: plan.get(k)
+                                for k in (
+                                    'scheme',
+                                    'time_order',
+                                    'layer_step_us',
+                                    'evaluations_per_control',
+                                    'frozen_evaluations_per_control',
+                                    'reason',
+                                )
+                            }
+                        }
+                        if plan
+                        else {}
+                    ),
+                    **(
+                        {'threads': m['layer_threads'], 'spread': m['layer_spread'], 'flush_subnormals': m.get('flush_subnormals', False)}
+                        if 'layer_threads' in m
+                        else {}
+                    ),
+                    message=f'已保存 {m["completed_time_us"] / 1000:.3f} / {m["duration_us"] / 1000:g} ms {"精简" if m.get("record_mode") == "compact" else "完整"}记录',
+                )
                 if (directory / 'pause.request').exists() and m['phase'] != 'completed':
                     raise InterruptedError('已保存检查点，可继续计算。')
-            identity = {'weights_sha256':digest(weight_path),'time_weights_sha256':digest(temporal_path),
-                        'input_sha256':digest(directory/'request.json')}
+
+            identity = {
+                'weights_sha256': digest(weight_path),
+                'time_weights_sha256': digest(temporal_path),
+                'input_sha256': digest(directory / 'request.json'),
+            }
             if network_v2:
                 from graphnet.rollout import rollout as network_rollout
-                if coarse: identity['coarse_model_sha256'] = coarse_extra['coarse_model']['model_sha256']
-                if network['weights_sha256'] != identity['weights_sha256'] or network['time_weights_sha256'] != identity['time_weights_sha256']:
+
+                if coarse:
+                    identity['coarse_model_sha256'] = coarse_extra['coarse_model']['model_sha256']
+                if (
+                    network['weights_sha256'] != identity['weights_sha256']
+                    or network['time_weights_sha256'] != identity['time_weights_sha256']
+                ):
                     raise ValueError('v2 输入层读取的权重与软件包长记录模型不一致。')
                 # The layer spread over all threads keeps more arrays; when only one thread per control fits in memory, use that (same bits).
                 fits = memory_problem(len(mesh['points']), record, len(controls), spread=True) is None
                 # Subnormal numbers count as zero (graphnet/subnormal.py: no slow start where the wave has not arrived; only values below 1e-280
                 # can differ), except on the trained layer, which is the setting that reproduces earlier results bit for bit.
-                finished = network_rollout(scene, mesh, network, directory / 'record', identity, callback=long_progress,
-                                           time_plan=layer, record=record, controls=controls, spread=None if fits else False, flush=layer != 'frozen')
-                if directory.parent.name == 'jobs':   # the application's data directory: remember this machine's rate for later estimates
+                finished = network_rollout(
+                    scene,
+                    mesh,
+                    network,
+                    directory / 'record',
+                    identity,
+                    callback=long_progress,
+                    time_plan=layer,
+                    record=record,
+                    controls=controls,
+                    spread=None if fits else False,
+                    flush=layer != 'frozen',
+                )
+                if directory.parent.name == 'jobs':  # the application's data directory: remember this machine's rate for later estimates
                     from .resources import save_throughput
                     from graphnet.parallel import layer_time
-                    save_throughput(directory.parent.parent, len(mesh['points']), finished['time_plan']['evaluations_per_control'], finished['elapsed_s'],
-                                    layer_time(controls, finished['layer_threads'], finished['layer_spread']))
+
+                    save_throughput(
+                        directory.parent.parent,
+                        len(mesh['points']),
+                        finished['time_plan']['evaluations_per_control'],
+                        finished['elapsed_s'],
+                        layer_time(controls, finished['layer_threads'], finished['layer_spread']),
+                    )
             else:
                 rollout(scene, mesh, weights, temporal, directory / 'record', identity, callback=long_progress)
-            if browser_full: recording,times,fields,diagnostics = preview(directory/'record')
+            if browser_full:
+                recording, times, fields, diagnostics = preview(directory / 'record')
             else:
                 from spectral3d.display import loaded_triangles
+
                 recording, times, parts, diagnostics, display = display_preview(directory / 'record')
                 extra['loaded_faces'] = loaded_triangles(display, excitation['loads'])
             if not all(d['energy_balance_within_1_percent'] for d in diagnostics):
                 raise ValueError('长记录能量收支未通过 1% 检查；完整原始记录已保留供检查。')
-            if coarse:   # what the coarse model ran on, with every control's diagnostics
+            if coarse:  # what the coarse model ran on, with every control's diagnostics
                 model = coarse_extra['coarse_model']
-                for d in diagnostics: d.update(h_mm=model['h_mm'], degree=model['degree'], elements=int(len(mesh['elements'])), stability_number=finished['time_plan']['stability_number'],
-                                               engine='coarse_graph_learned_operator', neural_forward_only=True, numerical_correction=False)
+                for d in diagnostics:
+                    d.update(
+                        h_mm=model['h_mm'],
+                        degree=model['degree'],
+                        elements=int(len(mesh['elements'])),
+                        stability_number=finished['time_plan']['stability_number'],
+                        engine='coarse_graph_learned_operator',
+                        neural_forward_only=True,
+                        numerical_correction=False,
+                    )
             info = dict(info, weights_sha256=digest(weight_path))
         else:
             fields, diagnostics = predict(scene, mesh, weights, callback=progress)
@@ -197,16 +330,25 @@ def run(directory):
         if any(name in sys.modules for name in forbidden):
             raise RuntimeError('预测进程意外加载了数值求解模块。')
         publish(phase='exporting', message='正在保存动画及五种响应')
-        if browser_full: export_results(directory, scene, mesh, fields, diagnostics, info, times, recording, extra, controls)
-        else: export_display(directory, scene, mesh, display, parts, diagnostics, info, times, recording, extra)
-        publish(phase='completed', message='粗网格算子计算完成' if coarse else '本机预测完成', controls_completed=len(controls), remaining_s=0,
-                weights_sha256=info['weights_sha256'], numerical_correction=False)
+        if browser_full:
+            export_results(directory, scene, mesh, fields, diagnostics, info, times, recording, extra, controls)
+        else:
+            export_display(directory, scene, mesh, display, parts, diagnostics, info, times, recording, extra)
+        publish(
+            phase='completed',
+            message='粗网格算子计算完成' if coarse else '本机预测完成',
+            controls_completed=len(controls),
+            remaining_s=0,
+            weights_sha256=info['weights_sha256'],
+            numerical_correction=False,
+        )
     except InterruptedError as error:
-        publish(phase='paused',message=str(error))
+        publish(phase='paused', message=str(error))
     except Exception as error:
         message = str(error)
         if 'strain/J/finite-energy guard' in message:  # the frozen kernels' guard text (short records, coarse engine)
             from graphnet.rollout import GUARD_MESSAGE
+
             message = GUARD_MESSAGE + '。'
         publish(phase='failed', message=message)
         raise

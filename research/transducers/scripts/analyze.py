@@ -74,16 +74,23 @@ def main():
         if reference in done: compare('W-', reference, wedge)
     for reference in ('P-S0-peak', 'P-A0-peak'):
         if reference in done: compare('P-', reference, wafer)
+    # a wedge sends little backwards: the wave that leaves against the travelling load over the one that leaves with it, for the mode the wedge is set to
+    backward = []
+    for name in done:
+        if not name.startswith('W-') or name.endswith('-fine') or 'peak' not in name: continue
+        mode = name[2:4]; ahead, behind = wedge(name, mode, True), wedge(name, mode, False)
+        backward.append({'case': name, 'mode': mode, 'software': measured[name]['left'][mode]['outgoing'] / measured[name]['right'][mode]['outgoing'], **{f'theory_{key}': behind[key] / ahead[key] for key in ahead}})
     largest = lambda name: max(measured[name][s][m]['outgoing'] for s in ('right', 'left') for m in modes)
     for r in rows: r['difference_of_reference'] = r['software'] - r['theory_as_implemented' if 'theory_as_implemented' in r else 'theory_ideal']
     out = {'frequency_mhz': C.F, 'thickness_mm': C.THICKNESS, 'modes': modes, 'wedge_velocities_m_s': velocities, 'patch_lengths_mm': lengths, 'footprint_mm': C.FOOTPRINT, 'edge_mm': C.EDGE,
-           'amplitudes': measured, 'ratios': rows,
+           'amplitudes': measured, 'ratios': rows, 'backward_over_forward': backward,
            'mesh': {coarse: {m: {s: measured[coarse + '-fine'][s][m]['outgoing'] / measured[coarse][s][m]['outgoing'] - 1 for s in ('right', 'left')} for m in modes}
                     for coarse in ('W-S0-peak', 'P-S0-peak') if coarse in done and coarse + '-fine' in done},
            'wafer_symmetry': {n: {m: measured[n]['right'][m]['outgoing'] / measured[n]['left'][m]['outgoing'] - 1 for m in modes if measured[n]['left'][m]['outgoing'] > .05 * largest(n)} for n in done if n.startswith('P-')}}
     RESULTS.mkdir(exist_ok=True); (RESULTS / 'transducers.json').write_text(json.dumps(out, ensure_ascii=False, indent=1, allow_nan=False) + '\n', encoding='utf-8')
     for r in rows: print(f"{r['case']:16s} vs {r['reference']:10s} {r['mode']} {r['direction']}  software {r['software']:.4f}  ideal {r['theory_ideal']:.4f}" + (f"  as implemented {r['theory_as_implemented']:.4f}" if 'theory_as_implemented' in r else ''))
     for n in done: print(n, {s: {m: f"{v['outgoing']:.3e}/{v['returning']:.1e}" for m, v in measured[n][s].items() if m in modes} for s in ('right', 'left')}, 'residual', round(measured[n]['right']['fit_residual'], 4), round(measured[n]['left']['fit_residual'], 4))
+    for r in backward: print(f"{r['case']:16s} {r['mode']} backward / forward  software {r['software']:.5f}  ideal {r['theory_ideal']:.5f}  as implemented {r['theory_as_implemented']:.5f}")
     print('mesh', out['mesh']); print('wafer symmetry', out['wafer_symmetry'])
 
 

@@ -1,0 +1,9 @@
+# Formatting of the core modules (docs/developer-guide.md, section 5): `ruff format`, `ruff format --check`.
+# Only the formatter is configured; no lint rules are enforced.
+line-length = 140
+include = ["physics/**/*.py", "graphnet/**/*.py", "offline/**/*.py", "spectral3d/**/*.py", "spectral2d/**/*.py", "dispersion/**/*.py"]
+# The frozen network's runtime files are locked by hash (offline/model/model.json): not a character of them may change.
+extend-exclude = ["spectral3d/__init__.py", "spectral3d/mesh.py", "spectral3d/curved_mesh.py"]
+
+[format]
+quote-style = "single"

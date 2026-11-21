@@ -1,7 +1,9 @@
 """Verify immutable shipped files; generated data/cache are not package inputs."""
+
 import hashlib
 import json
 from pathlib import Path
+
 root = Path(__file__).resolve().parent
 manifest = json.loads((root / 'MANIFEST.json').read_text(encoding='utf-8'))
 failures = []

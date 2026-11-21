@@ -26,6 +26,7 @@ A plate here is infinitely wide. The model's plate has a width: with symmetry fa
 exactly these Lamb modes; with free sides it is a strip and its modes differ, the more the narrower it is
 (`validity` says which case a scene is).
 """
+
 import math
 from functools import lru_cache
 import numpy as np
@@ -36,27 +37,43 @@ SYMMETRY_TOLERANCE = 1e-9
 
 def _gll(degree):
     from spectral3d.mesh import gll
-    x, w, d, _ = gll(degree); return x, w, d
+
+    x, w, d, _ = gll(degree)
+    return x, w, d
 
 
 class Plate:
     """A free plate of thickness d (m), density ρ and elastic tensor C_ijkl (Pa, model axes), for waves travelling in
     the plane at `angle_deg` from the model's x axis."""
 
-    def __init__(self, thickness_m, rho, C, angle_deg=0., elements=8, degree=6, parity=None):
+    def __init__(self, thickness_m, rho, C, angle_deg=0.0, elements=8, degree=6, parity=None):
         """`parity` 'sym' or 'anti': only the modes that are symmetric or antisymmetric about the mid-plane (a model of half the plate with that
         condition on its mid-plane has no others); the plate must then be mirror symmetric."""
-        if not (thickness_m > 0 and rho > 0): raise ValueError('板厚和密度必须为正。')
-        a = math.radians(angle_deg); R = np.array([[math.cos(a), math.sin(a), 0.], [-math.sin(a), math.cos(a), 0.], [0., 0., 1.]])
-        C = np.einsum('ia,jb,kc,ld,abcd->ijkl', R, R, R, R, np.asarray(C, dtype=float))   # axis 0: propagation, 1: in-plane transverse, 2: thickness
+        if not (thickness_m > 0 and rho > 0):
+            raise ValueError('板厚和密度必须为正。')
+        a = math.radians(angle_deg)
+        R = np.array([[math.cos(a), math.sin(a), 0.0], [-math.sin(a), math.cos(a), 0.0], [0.0, 0.0, 1.0]])
+        C = np.einsum(
+            'ia,jb,kc,ld,abcd->ijkl', R, R, R, R, np.asarray(C, dtype=float)
+        )  # axis 0: propagation, 1: in-plane transverse, 2: thickness
         self.thickness, self.rho, self.C, self.angle_deg = float(thickness_m), float(rho), C, float(angle_deg)
-        xi, w, D = _gll(degree); edges = np.linspace(-thickness_m / 2, thickness_m / 2, elements + 1); half = thickness_m / elements / 2
-        self.nodes = n = elements * degree + 1; self.z = np.zeros(n); size = 3 * n
-        K0 = np.zeros((size, size)); A = np.zeros((size, size)); K2 = np.zeros((size, size)); mass = np.zeros(size)
+        xi, w, D = _gll(degree)
+        edges = np.linspace(-thickness_m / 2, thickness_m / 2, elements + 1)
+        half = thickness_m / elements / 2
+        self.nodes = n = elements * degree + 1
+        self.z = np.zeros(n)
+        size = 3 * n
+        K0 = np.zeros((size, size))
+        A = np.zeros((size, size))
+        K2 = np.zeros((size, size))
+        mass = np.zeros(size)
         for e in range(elements):
-            ids = e * degree + np.arange(degree + 1); self.z[ids] = edges[e] + (xi + 1) * half; dN = D / half   # dN[q, a] = N_a'(z_q)
+            ids = e * degree + np.arange(degree + 1)
+            self.z[ids] = edges[e] + (xi + 1) * half
+            dN = D / half  # dN[q, a] = N_a'(z_q)
             for q in range(degree + 1):
-                weight = w[q] * half; node = ids[q]
+                weight = w[q] * half
+                node = ids[q]
                 for i in range(3):
                     mass[3 * node + i] += rho * weight
                     for j in range(3):
@@ -64,49 +81,74 @@ class Plate:
                         A[3 * node + i, 3 * ids + j] += weight * C[i, 0, j, 2] * dN[q]
                         K0[np.ix_(3 * ids + i, 3 * ids + j)] += weight * C[i, 2, j, 2] * np.outer(dN[q], dN[q])
         self.K0, self.K1, self.K2, self.mass = K0, A.T - A, K2, mass
-        self.classes = self._classes(); self.parity = parity
+        self.classes = self._classes()
+        self.parity = parity
         if parity is not None:
-            if parity not in ('sym', 'anti'): raise ValueError("parity 需为 'sym' 或 'anti'。")
-            if not self.mirror_symmetric: raise ValueError('材料关于板的中面不对称，不能只取对称或反对称模态。')
+            if parity not in ('sym', 'anti'):
+                raise ValueError("parity 需为 'sym' 或 'anti'。")
+            if not self.mirror_symmetric:
+                raise ValueError('材料关于板的中面不对称，不能只取对称或反对称模态。')
             self.classes = [cls for cls in self.classes if cls['parity'] == parity]
 
     # ---------- symmetry ----------
     def _commutes(self, T):
-        scale = max(float(np.max(np.abs(M))) for M in (self.K0, self.K1, self.K2)) or 1.
+        scale = max(float(np.max(np.abs(M))) for M in (self.K0, self.K1, self.K2)) or 1.0
         return all(float(np.max(np.abs(T @ M @ T.T - M))) <= SYMMETRY_TOLERANCE * scale for M in (self.K0, self.K1, self.K2))
 
     def _classes(self):
         """[{'family', 'parity', 'Q'}]: orthonormal bases of the symmetry classes the plate has."""
-        n = self.nodes; size = 3 * n; mirror = np.zeros((size, size)); sagittal = np.zeros((size, size))
+        n = self.nodes
+        size = 3 * n
+        mirror = np.zeros((size, size))
+        sagittal = np.zeros((size, size))
         for node in range(n):
-            for c, (sm, ss) in enumerate(((1., 1.), (1., -1.), (-1., 1.))):
-                mirror[3 * (n - 1 - node) + c, 3 * node + c] = sm; sagittal[3 * node + c, 3 * node + c] = ss
+            for c, (sm, ss) in enumerate(((1.0, 1.0), (1.0, -1.0), (-1.0, 1.0))):
+                mirror[3 * (n - 1 - node) + c, 3 * node + c] = sm
+                sagittal[3 * node + c, 3 * node + c] = ss
         self.mirror_symmetric, self.sagittal_symmetric = self._commutes(mirror), self._commutes(sagittal)
         groups = [((0, 2), 'lamb'), ((1,), 'sh')] if self.sagittal_symmetric else [((0, 1, 2), 'all')]
         out = []
         for components, kind in groups:
             columns = {'sym': [], 'anti': []} if self.mirror_symmetric else {'none': []}
             for c in components:
-                sign = -1. if c == 2 else 1.
+                sign = -1.0 if c == 2 else 1.0
                 for node in range(n):
                     partner = n - 1 - node
                     if not self.mirror_symmetric:
-                        v = np.zeros(size); v[3 * node + c] = 1.; columns['none'].append(v)
+                        v = np.zeros(size)
+                        v[3 * node + c] = 1.0
+                        columns['none'].append(v)
                     elif node == partner:
-                        v = np.zeros(size); v[3 * node + c] = 1.; columns['sym' if sign > 0 else 'anti'].append(v)
+                        v = np.zeros(size)
+                        v[3 * node + c] = 1.0
+                        columns['sym' if sign > 0 else 'anti'].append(v)
                     elif node < partner:
                         for parity, s in (('sym', sign), ('anti', -sign)):
-                            v = np.zeros(size); v[3 * node + c] = math.sqrt(.5); v[3 * partner + c] = s * math.sqrt(.5); columns[parity].append(v)
+                            v = np.zeros(size)
+                            v[3 * node + c] = math.sqrt(0.5)
+                            v[3 * partner + c] = s * math.sqrt(0.5)
+                            columns[parity].append(v)
             for parity, vectors in columns.items():
-                family = {('lamb', 'sym'): 'S', ('lamb', 'anti'): 'A', ('sh', 'sym'): 'SH', ('sh', 'anti'): 'SH', ('all', 'sym'): 'Sq', ('all', 'anti'): 'Aq',
-                          ('lamb', 'none'): 'L', ('sh', 'none'): 'SH', ('all', 'none'): 'M'}[(kind, parity)]
-                Q = np.array(vectors).T; out.append({'family': family, 'kind': kind, 'parity': parity, 'Q': Q, 'root': 1 / np.sqrt((Q * Q).T @ self.mass)})
+                family = {
+                    ('lamb', 'sym'): 'S',
+                    ('lamb', 'anti'): 'A',
+                    ('sh', 'sym'): 'SH',
+                    ('sh', 'anti'): 'SH',
+                    ('all', 'sym'): 'Sq',
+                    ('all', 'anti'): 'Aq',
+                    ('lamb', 'none'): 'L',
+                    ('sh', 'none'): 'SH',
+                    ('all', 'none'): 'M',
+                }[(kind, parity)]
+                Q = np.array(vectors).T
+                out.append({'family': family, 'kind': kind, 'parity': parity, 'Q': Q, 'root': 1 / np.sqrt((Q * Q).T @ self.mass)})
         return out
 
     def name(self, cls, rank):
         """S0, A1, SH2, …: the family and the order of the cut-off (even SH numbers are symmetric)."""
-        if cls['kind'] == 'sh' and cls['parity'] != 'none': return f"SH{2 * rank + (cls['parity'] == 'anti')}"
-        return f"{cls['family'].rstrip('q')}{rank}"
+        if cls['kind'] == 'sh' and cls['parity'] != 'none':
+            return f'SH{2 * rank + (cls["parity"] == "anti")}'
+        return f'{cls["family"].rstrip("q")}{rank}'
 
     def secondary(self, cls):
         """True for the class a second harmonic belongs to: the quadratic forcing of any mode is even under every
@@ -119,8 +161,10 @@ class Plate:
         velocities (m/s) and the mode shapes (columns, three components per node, unit mass norm)."""
         Q, root = cls['Q'], cls['root']
         K = (Q.T @ (self.K0 + k * k * self.K2) @ Q + 1j * k * (Q.T @ self.K1 @ Q)) * root[:, None] * root[None, :]
-        if not vectors: return np.sqrt(np.maximum(np.linalg.eigvalsh(K), 0.))
-        values, v = np.linalg.eigh(K); omega = np.sqrt(np.maximum(values, 0.))
+        if not vectors:
+            return np.sqrt(np.maximum(np.linalg.eigvalsh(K), 0.0))
+        values, v = np.linalg.eigh(K)
+        omega = np.sqrt(np.maximum(values, 0.0))
         dK = (2 * k * (Q.T @ self.K2 @ Q) + 1j * (Q.T @ self.K1 @ Q)) * root[:, None] * root[None, :]
         with np.errstate(divide='ignore', invalid='ignore'):
             group = np.real(np.einsum('in,ij,jn->n', v.conj(), dK, v)) / (2 * omega)
@@ -128,21 +172,37 @@ class Plate:
 
     def reach(self, frequency_hz):
         """A wavenumber (rad/m) beyond every mode at this frequency: the slowest branch is above it there."""
-        omega = 2 * math.pi * frequency_hz; k = omega / math.sqrt(float(np.min(np.diag(self.C.reshape(9, 9))[[2, 5, 8]])) / self.rho)   # a shear speed as the first guess
+        omega = 2 * math.pi * frequency_hz
+        k = omega / math.sqrt(float(np.min(np.diag(self.C.reshape(9, 9))[[2, 5, 8]])) / self.rho)  # a shear speed as the first guess
         for _ in range(40):
-            if min(self.solve(cls, k)[0] for cls in self.classes) > omega: return k
+            if min(self.solve(cls, k)[0] for cls in self.classes) > omega:
+                return k
             k *= 1.4
         raise ValueError('无法确定这个频率下的最大波数。')
 
     def curves(self, frequency_max_hz, points=240):
         """Every branch up to a frequency: [{'name', 'family', 'k' (rad/m), 'omega' (rad/s), 'group' (m/s)}], sampled
         on a wavenumber grid that is denser near k = 0 (where the phase velocity of a branch above its cut-off changes fastest)."""
-        top = 2 * math.pi * frequency_max_hz; k = self.reach(frequency_max_hz) * 1.05 * (np.arange(points + 1) / points) ** 1.5; out = []
+        top = 2 * math.pi * frequency_max_hz
+        k = self.reach(frequency_max_hz) * 1.05 * (np.arange(points + 1) / points) ** 1.5
+        out = []
         for cls in self.classes:
-            solved = [self.solve(cls, float(v), vectors=True)[:2] for v in k]; omega = np.array([s[0] for s in solved]); group = np.array([s[1] for s in solved])
+            solved = [self.solve(cls, float(v), vectors=True)[:2] for v in k]
+            omega = np.array([s[0] for s in solved])
+            group = np.array([s[1] for s in solved])
             for rank in range(omega.shape[1]):
-                if omega[:, rank].min() > top: break
-                out.append({'name': self.name(cls, rank), 'family': cls['family'], 'secondary': self.secondary(cls), 'k': k.copy(), 'omega': omega[:, rank], 'group': group[:, rank]})
+                if omega[:, rank].min() > top:
+                    break
+                out.append(
+                    {
+                        'name': self.name(cls, rank),
+                        'family': cls['family'],
+                        'secondary': self.secondary(cls),
+                        'k': k.copy(),
+                        'omega': omega[:, rank],
+                        'group': group[:, rank],
+                    }
+                )
         return out
 
     def at(self, frequency_hz, points=240):
@@ -150,16 +210,32 @@ class Plate:
         'phase_velocity_m_s', 'group_velocity_m_s', 'backward', 'secondary', 'surface'}]. `surface` is the size of the
         displacement at the top face along the propagation direction, across it and through the thickness (largest = 1)."""
         from scipy.optimize import brentq
-        omega = 2 * math.pi * frequency_hz; k = self.reach(frequency_hz) * (np.arange(points + 1) / points) ** 1.5; out = []
+
+        omega = 2 * math.pi * frequency_hz
+        k = self.reach(frequency_hz) * (np.arange(points + 1) / points) ** 1.5
+        out = []
         for cls in self.classes:
             table = np.array([self.solve(cls, float(v)) for v in k]) - omega
             for rank in range(table.shape[1]):
-                if table[:, rank].min() > 0: break
+                if table[:, rank].min() > 0:
+                    break
                 for i in np.flatnonzero(table[:-1, rank] * table[1:, rank] < 0):
                     root = brentq(lambda v: self.solve(cls, v)[rank] - omega, k[i], k[i + 1], xtol=1e-12 * k[-1], rtol=1e-13)
-                    _, group, shapes = self.solve(cls, root, vectors=True); top = np.abs(shapes[3 * (self.nodes - 1):3 * self.nodes, rank]); scale = float(np.max(np.abs(shapes[:, rank]))) or 1.
-                    out.append({'name': self.name(cls, rank), 'family': cls['family'], 'k_rad_m': float(root), 'phase_velocity_m_s': omega / root, 'group_velocity_m_s': float(group[rank]),
-                                'backward': bool(group[rank] < 0), 'secondary': self.secondary(cls), 'surface': [float(v) for v in top / scale]})
+                    _, group, shapes = self.solve(cls, root, vectors=True)
+                    top = np.abs(shapes[3 * (self.nodes - 1) : 3 * self.nodes, rank])
+                    scale = float(np.max(np.abs(shapes[:, rank]))) or 1.0
+                    out.append(
+                        {
+                            'name': self.name(cls, rank),
+                            'family': cls['family'],
+                            'k_rad_m': float(root),
+                            'phase_velocity_m_s': omega / root,
+                            'group_velocity_m_s': float(group[rank]),
+                            'backward': bool(group[rank] < 0),
+                            'secondary': self.secondary(cls),
+                            'surface': [float(v) for v in top / scale],
+                        }
+                    )
         return sorted(out, key=lambda m: m['phase_velocity_m_s'])
 
     def pairs(self, frequency_hz):
@@ -167,13 +243,25 @@ class Plate:
         distance π/|Δk| over which the second harmonic grows before it falls again (None when matched to rounding).
         By increasing mismatch. Phase matching is necessary, not sufficient: the power flux from the primary to the
         secondary mode must not vanish, and the group velocities decide how long the two pulses stay together."""
-        first = [m for m in self.at(frequency_hz) if not m['backward']]; second = [m for m in self.at(2 * frequency_hz) if m['secondary'] and not m['backward']]; rows = []
+        first = [m for m in self.at(frequency_hz) if not m['backward']]
+        second = [m for m in self.at(2 * frequency_hz) if m['secondary'] and not m['backward']]
+        rows = []
         for a in first:
             for b in second:
                 dk = b['k_rad_m'] - 2 * a['k_rad_m']
-                rows.append({'primary': a['name'], 'secondary': b['name'], 'phase_velocity_primary_m_s': a['phase_velocity_m_s'], 'phase_velocity_secondary_m_s': b['phase_velocity_m_s'],
-                             'mismatch': b['phase_velocity_m_s'] / a['phase_velocity_m_s'] - 1, 'delta_k_rad_m': dk, 'coherence_length_m': math.pi / abs(dk) if abs(dk) > 1e-9 * b['k_rad_m'] else None,
-                             'group_velocity_primary_m_s': a['group_velocity_m_s'], 'group_velocity_secondary_m_s': b['group_velocity_m_s']})
+                rows.append(
+                    {
+                        'primary': a['name'],
+                        'secondary': b['name'],
+                        'phase_velocity_primary_m_s': a['phase_velocity_m_s'],
+                        'phase_velocity_secondary_m_s': b['phase_velocity_m_s'],
+                        'mismatch': b['phase_velocity_m_s'] / a['phase_velocity_m_s'] - 1,
+                        'delta_k_rad_m': dk,
+                        'coherence_length_m': math.pi / abs(dk) if abs(dk) > 1e-9 * b['k_rad_m'] else None,
+                        'group_velocity_primary_m_s': a['group_velocity_m_s'],
+                        'group_velocity_secondary_m_s': b['group_velocity_m_s'],
+                    }
+                )
         return sorted(rows, key=lambda r: abs(r['mismatch']))
 
 
@@ -182,15 +270,27 @@ def elements_for(thickness_m, shear_speed, frequency_max_hz):
     return int(min(40, max(4, math.ceil(2.5 * thickness_m * frequency_max_hz / shear_speed))))
 
 
-def plate_of(scene, angle_deg=0., frequency_max_hz=None):
+def plate_of(scene, angle_deg=0.0, frequency_max_hz=None):
     """The plate of a model. Raises ValueError for a pipe (its modes are those of a cylinder, which this module does not have)."""
     from physics.materials import is_custom, slowest_shear_speed, tensors
     from solid.schema import MATERIAL
+
     geometry = scene['geometry']
-    if geometry['kind'] == 'pipe': raise ValueError('圆管的导波模态与平板不同，目前没有它的理论频散曲线；f–k 谱仍可计算。')
-    material = scene['material']; rho = float((material if is_custom(material) else MATERIAL)['rho_kg_m3']); factor, parity = mid_plane(scene); thickness = factor * geometry['thickness_mm'] * 1e-3
+    if geometry['kind'] == 'pipe':
+        raise ValueError('圆管的导波模态与平板不同，目前没有它的理论频散曲线；f–k 谱仍可计算。')
+    material = scene['material']
+    rho = float((material if is_custom(material) else MATERIAL)['rho_kg_m3'])
+    factor, parity = mid_plane(scene)
+    thickness = factor * geometry['thickness_mm'] * 1e-3
     top = 2.6 * float(scene['source']['frequency_mhz']) * 1e6 if frequency_max_hz is None else frequency_max_hz
-    return _plate(thickness, rho, tensors(material)[0].tobytes(), float(angle_deg), elements_for(thickness, slowest_shear_speed(material), top), parity)
+    return _plate(
+        thickness,
+        rho,
+        tensors(material)[0].tobytes(),
+        float(angle_deg),
+        elements_for(thickness, slowest_shear_speed(material), top),
+        parity,
+    )
 
 
 def mid_plane(scene):
@@ -199,60 +299,138 @@ def mid_plane(scene):
     A model with a symmetry (antisymmetry) plane on one z face is the upper or lower half of a plate twice as thick, and only the
     modes that are symmetric (antisymmetric) about the mid-plane exist in it. With such a condition on both z faces the body is
     not a free plate at all."""
-    faces = {b['face']: b['type'] for b in scene.get('boundaries') or [] if b['face'] in ('zmin', 'zmax') and b['type'] in ('symmetry', 'antisymmetry')}
-    if len(faces) == 2: raise ValueError('两个 z 面都设了对称或反对称条件：这不是自由表面的平板，没有 Lamb 模态的理论曲线。')
-    if not faces: return 1, None
+    faces = {
+        b['face']: b['type']
+        for b in scene.get('boundaries') or []
+        if b['face'] in ('zmin', 'zmax') and b['type'] in ('symmetry', 'antisymmetry')
+    }
+    if len(faces) == 2:
+        raise ValueError('两个 z 面都设了对称或反对称条件：这不是自由表面的平板，没有 Lamb 模态的理论曲线。')
+    if not faces:
+        return 1, None
     return 2, 'sym' if next(iter(faces.values())) == 'symmetry' else 'anti'
 
 
 @lru_cache(maxsize=8)
 def _plate(thickness, rho, c2_bytes, angle_deg, elements, parity=None):
     from physics.materials import stiffness4
+
     return Plate(thickness, rho, stiffness4(np.frombuffer(c2_bytes).reshape(6, 6)), angle_deg, elements, parity=parity)
 
 
 def validity(scene):
     """How far the infinite plate describes the model: {'plane_strain', 'note'}."""
-    geometry = scene['geometry']; faces = {b['face']: b['type'] for b in scene.get('boundaries') or []}
+    geometry = scene['geometry']
+    faces = {b['face']: b['type'] for b in scene.get('boundaries') or []}
     both = faces.get('ymin') == 'symmetry' and faces.get('ymax') == 'symmetry'
-    if both: return {'plane_strain': True, 'note': '两个 y 面都是对称面：模型就是无限宽板里沿 x 传播的 Lamb 波，理论曲线直接适用（对称面不允许 SH 波）。'}
+    if both:
+        return {
+            'plane_strain': True,
+            'note': '两个 y 面都是对称面：模型就是无限宽板里沿 x 传播的 Lamb 波，理论曲线直接适用（对称面不允许 SH 波）。',
+        }
     free = [f for f in ('ymin', 'ymax') if faces.get(f) not in ('symmetry', 'absorbing')]
-    return {'plane_strain': False, 'note': f"理论曲线是无限宽板的。这个模型板宽 {geometry['width_mm']:g} mm" + ('、侧面自由' if free else '') +
-            '：宽度与波长相当时它是一根条带，模态会偏离这些曲线；要对照 Lamb 理论，请把两个 y 面设为对称面。'}
+    return {
+        'plane_strain': False,
+        'note': f'理论曲线是无限宽板的。这个模型板宽 {geometry["width_mm"]:g} mm'
+        + ('、侧面自由' if free else '')
+        + '：宽度与波长相当时它是一根条带，模态会偏离这些曲线；要对照 Lamb 理论，请把两个 y 面设为对称面。',
+    }
 
 
-def describe(scene, angle_deg=0., frequency_max_mhz=None, points=240):
+def describe(scene, angle_deg=0.0, frequency_max_mhz=None, points=240):
     """What the result page shows: the curves up to `frequency_max_mhz` (default 2.6 f), the modes at f and 2f and the pairs."""
-    f = float(scene['source']['frequency_mhz']); top = 2.6 * f if frequency_max_mhz is None else frequency_max_mhz
-    if not (0 < top <= 100): raise ValueError('频散曲线的频率上限需在 0–100 MHz。')
-    plate = plate_of(scene, angle_deg, top * 1e6); curves = _curves(plate, top * 1e6, points)
+    f = float(scene['source']['frequency_mhz'])
+    top = 2.6 * f if frequency_max_mhz is None else frequency_max_mhz
+    if not (0 < top <= 100):
+        raise ValueError('频散曲线的频率上限需在 0–100 MHz。')
+    plate = plate_of(scene, angle_deg, top * 1e6)
+    curves = _curves(plate, top * 1e6, points)
     from physics.damping import attenuation_np_m, decay_per_s
-    damping = scene.get('damping')   # Rayleigh damping: every mode decays at γ(ω) in time, so along its path at γ over its group velocity
-    public = lambda m, frequency: {'name': m['name'], 'family': m['family'], 'wavenumber_rad_mm': m['k_rad_m'] * 1e-3, 'phase_velocity_m_s': m['phase_velocity_m_s'], 'group_velocity_m_s': m['group_velocity_m_s'],
-                                   'wavelength_mm': 2e3 * math.pi / m['k_rad_m'], 'backward': m['backward'], 'secondary': m['secondary'], 'surface': m['surface'],
-                                   **({'attenuation_np_m': attenuation_np_m(damping, frequency, abs(m['group_velocity_m_s']))} if damping else {})}
-    pairs = [{**{k: r[k] for k in ('primary', 'secondary', 'mismatch', 'phase_velocity_primary_m_s', 'phase_velocity_secondary_m_s', 'group_velocity_primary_m_s', 'group_velocity_secondary_m_s')},
-              'delta_k_rad_mm': r['delta_k_rad_m'] * 1e-3, 'coherence_length_mm': None if r['coherence_length_m'] is None else r['coherence_length_m'] * 1e3} for r in _pairs(plate, f * 1e6)]
-    factor, parity = mid_plane(scene); checked = validity(scene)
-    if parity: checked = dict(checked, note=f"模型的一个 z 面是{'对称' if parity == 'sym' else '反对称'}面：它是 {factor * scene['geometry']['thickness_mm']:g} mm 厚的板的一半，只有关于中面{'对称' if parity == 'sym' else '反对称'}的模态。" + checked['note'])
-    return {'schema': 'workai.plate_dispersion.v1', 'thickness_mm': factor * scene['geometry']['thickness_mm'], 'model_thickness_mm': scene['geometry']['thickness_mm'], 'mid_plane': parity, 'angle_deg': float(angle_deg), 'frequency_mhz': f, 'frequency_max_mhz': top,
-            'symmetry': {'mid_plane': plate.mirror_symmetric, 'sagittal_plane': plate.sagittal_symmetric}, 'families': {key: FAMILY_WORDS[key] for key in sorted({c['family'] for c in curves})},
-            'validity': checked,
-            'curves': [{'name': c['name'], 'family': c['family'], 'secondary': c['secondary'], 'wavenumber_rad_mm': (c['k'] * 1e-3).tolist(), 'frequency_mhz': (c['omega'] / (2e6 * math.pi)).tolist(),
-                        'group_velocity_m_s': [None if not math.isfinite(v) else float(v) for v in c['group']]} for c in curves],
-            'modes': {'f': [public(m, f * 1e6) for m in _at(plate, f * 1e6)], '2f': [public(m, 2 * f * 1e6) for m in _at(plate, 2 * f * 1e6)]}, 'pairs': pairs,
-            **({'damping': {**damping, 'decay_per_s': {'f': decay_per_s(damping, f * 1e6), '2f': decay_per_s(damping, 2 * f * 1e6)}}} if damping else {}),
-            'note': '相位匹配（Δk = 0）是二次谐波累积的必要条件，不是充分条件：还要求一次模态到二次模态的功率流不为零，群速度决定两个波包能一起走多远。'
-                    '二次谐波只出现在对称 Lamb 模态里，所以配对的二次模态只列对称族。'}
+
+    damping = scene.get('damping')  # Rayleigh damping: every mode decays at γ(ω) in time, so along its path at γ over its group velocity
+    public = lambda m, frequency: {
+        'name': m['name'],
+        'family': m['family'],
+        'wavenumber_rad_mm': m['k_rad_m'] * 1e-3,
+        'phase_velocity_m_s': m['phase_velocity_m_s'],
+        'group_velocity_m_s': m['group_velocity_m_s'],
+        'wavelength_mm': 2e3 * math.pi / m['k_rad_m'],
+        'backward': m['backward'],
+        'secondary': m['secondary'],
+        'surface': m['surface'],
+        **({'attenuation_np_m': attenuation_np_m(damping, frequency, abs(m['group_velocity_m_s']))} if damping else {}),
+    }
+    pairs = [
+        {
+            **{
+                k: r[k]
+                for k in (
+                    'primary',
+                    'secondary',
+                    'mismatch',
+                    'phase_velocity_primary_m_s',
+                    'phase_velocity_secondary_m_s',
+                    'group_velocity_primary_m_s',
+                    'group_velocity_secondary_m_s',
+                )
+            },
+            'delta_k_rad_mm': r['delta_k_rad_m'] * 1e-3,
+            'coherence_length_mm': None if r['coherence_length_m'] is None else r['coherence_length_m'] * 1e3,
+        }
+        for r in _pairs(plate, f * 1e6)
+    ]
+    factor, parity = mid_plane(scene)
+    checked = validity(scene)
+    if parity:
+        checked = dict(
+            checked,
+            note=f'模型的一个 z 面是{"对称" if parity == "sym" else "反对称"}面：它是 {factor * scene["geometry"]["thickness_mm"]:g} mm 厚的板的一半，只有关于中面{"对称" if parity == "sym" else "反对称"}的模态。'
+            + checked['note'],
+        )
+    return {
+        'schema': 'workai.plate_dispersion.v1',
+        'thickness_mm': factor * scene['geometry']['thickness_mm'],
+        'model_thickness_mm': scene['geometry']['thickness_mm'],
+        'mid_plane': parity,
+        'angle_deg': float(angle_deg),
+        'frequency_mhz': f,
+        'frequency_max_mhz': top,
+        'symmetry': {'mid_plane': plate.mirror_symmetric, 'sagittal_plane': plate.sagittal_symmetric},
+        'families': {key: FAMILY_WORDS[key] for key in sorted({c['family'] for c in curves})},
+        'validity': checked,
+        'curves': [
+            {
+                'name': c['name'],
+                'family': c['family'],
+                'secondary': c['secondary'],
+                'wavenumber_rad_mm': (c['k'] * 1e-3).tolist(),
+                'frequency_mhz': (c['omega'] / (2e6 * math.pi)).tolist(),
+                'group_velocity_m_s': [None if not math.isfinite(v) else float(v) for v in c['group']],
+            }
+            for c in curves
+        ],
+        'modes': {'f': [public(m, f * 1e6) for m in _at(plate, f * 1e6)], '2f': [public(m, 2 * f * 1e6) for m in _at(plate, 2 * f * 1e6)]},
+        'pairs': pairs,
+        **(
+            {'damping': {**damping, 'decay_per_s': {'f': decay_per_s(damping, f * 1e6), '2f': decay_per_s(damping, 2 * f * 1e6)}}}
+            if damping
+            else {}
+        ),
+        'note': '相位匹配（Δk = 0）是二次谐波累积的必要条件，不是充分条件：还要求一次模态到二次模态的功率流不为零，群速度决定两个波包能一起走多远。'
+        '二次谐波只出现在对称 Lamb 模态里，所以配对的二次模态只列对称族。',
+    }
 
 
 @lru_cache(maxsize=8)
-def _curves(plate, top, points): return plate.curves(top, points)
+def _curves(plate, top, points):
+    return plate.curves(top, points)
 
 
 @lru_cache(maxsize=32)
-def _at(plate, frequency): return plate.at(frequency)
+def _at(plate, frequency):
+    return plate.at(frequency)
 
 
 @lru_cache(maxsize=16)
-def _pairs(plate, frequency): return plate.pairs(frequency)
+def _pairs(plate, frequency):
+    return plate.pairs(frequency)
