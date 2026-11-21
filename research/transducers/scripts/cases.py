@@ -3,10 +3,10 @@
     WORKAI_VERIFY_JOBS=<dir> python research/transducers/scripts/cases.py [name ...]
 
 A 2 mm aluminium plate, 0.5 MHz (fd = 1 MHz·mm: A0, S0 and SH0 propagate), plane strain by symmetry on both y faces,
-absorbing layers (40 mm) at both ends. Elements of 0.8 mm: only the linear response at f is used, which that resolves
-with 17 nodes per A0 wavelength. The transducer sits on the top face at x = 120 mm; sixteen receivers on the top face on
-each side of it read the waves that leave towards +x and towards −x. The amplitude is small (1 kPa), so the complete
-control is the linear response.
+absorbing layers (40 mm) at both ends. Elements of 1 mm: only the response at f is used, which that resolves with
+18 nodes per A0 wavelength. The transducer sits on the top face at x = 120 mm; sixteen receivers on the top face on
+each side of it read the waves that leave towards +x and towards −x. Only the complete control is computed; at 1 kPa
+it is the linear response.
 
 * W-<v>: a wedge with a 32 mm footprint and trace velocity v. A mode of wavenumber k is driven in proportion to the
   spectrum of the footprint at k, L·sinc((k − k_t)L/2) for a uniform one, whatever the mode's shape — so the amplitude
@@ -21,7 +21,7 @@ _spec = importlib.util.spec_from_file_location('damping_cases', Path(__file__).r
 _harness = importlib.util.module_from_spec(_spec); _spec.loader.exec_module(_harness)
 JOBS, load, run, scene = _harness.JOBS, _harness.load, _harness.run, _harness.scene
 
-F = .5; THICKNESS = 2.; LENGTH = 240.; CENTRE = 120.; FOOTPRINT = 32.; EDGE = .5; H = .8
+F = .5; THICKNESS = 2.; LENGTH = 240.; CENTRE = 120.; FOOTPRINT = 32.; EDGE = .5; H = 1.
 RIGHT = [CENTRE + 30. + 2. * i for i in range(16)]; LEFT = [CENTRE - 30. - 2. * i for i in range(16)]
 
 
@@ -72,8 +72,8 @@ def patch_lengths():
 
 def cases():
     out = {f'W-{label}': (lambda v=v: wedge(v)) for label, v in wedge_velocities().items()}
-    out['W-S0-peak-hann'] = lambda: wedge(wedge_velocities()['S0-peak'], 'hann'); out['W-S0-peak-fine'] = lambda: wedge(wedge_velocities()['S0-peak'], h=.55)
-    out['P-S0-peak-fine'] = lambda: patch(patch_lengths()['S0-peak'], h=.55)
+    out['W-S0-peak-hann'] = lambda: wedge(wedge_velocities()['S0-peak'], 'hann'); out['W-S0-peak-fine'] = lambda: wedge(wedge_velocities()['S0-peak'], h=.7)
+    out['P-S0-peak-fine'] = lambda: patch(patch_lengths()['S0-peak'], h=.7)
     out.update({f'P-{label}': (lambda length=length: patch(length)) for label, length in patch_lengths().items()})
     return out
 
@@ -81,4 +81,4 @@ def cases():
 if __name__ == '__main__':
     table = cases()
     for name in sys.argv[1:] or table:
-        job = run(name, table[name]()); print(name, 'done', (job / 'elapsed_s').read_text(), flush=True)
+        job = run(name, table[name](), controls='full'); print(name, 'done', (job / 'elapsed_s').read_text(), flush=True)

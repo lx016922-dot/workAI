@@ -13,10 +13,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'literature-verific
 from harness import JOBS, REPO, scene
 
 
-def run(name, s, degree=4, time_stepping='auto'):
+def run(name, s, degree=4, time_stepping='auto', controls='all'):
     """One job with a compact record (the receivers at every sample); a finished job with the same request is reused."""
     from offline.domain import validate_request
-    job = JOBS / name; request = validate_request({'scene': s, 'degree': degree, 'controls': 'all', 'record': 'compact', 'time_stepping': time_stepping})
+    job = JOBS / name; request = validate_request({'scene': s, 'degree': degree, 'controls': controls, 'record': 'compact', 'time_stepping': time_stepping})
     key = hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest(); status = job / 'status.json'
     if status.exists() and json.loads(status.read_text()).get('phase') == 'completed' and (job / 'key').exists() and (job / 'key').read_text() == key: return job
     import shutil

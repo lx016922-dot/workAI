@@ -270,6 +270,10 @@ test('export: file names, sizes and the report document', async () => {
   assert.equal(fileName('local-abc A₂/A₁² 随沿程距离的变化', 'png'), 'local-abc-A₂-A₁²-随沿程距离的变化.png'); assert.equal(fileName('  //  ', 'svg'), 'figure.svg'); assert.equal(fileName('x'.repeat(200)).length, 80);
   assert.deepEqual(exportSize({ width: 899.6, height: 300.2 }, null), { width: 900, height: 300 }); assert.deepEqual(exportSize({ width: 0, height: 0 }, { width: 640, height: 280 }), { width: 640, height: 280 });
   assert.throws(() => exportSize({ width: 0, height: 0 }, null), /没有尺寸/);
+  const { legendRows, textUnits } = await import('../offline/web/export.js');
+  assert.ok(Math.abs(textUnits('A₂ 拟合') - (2 * .58 + .58 + 2)) < 1e-12);
+  const rows = legendRows([{ text: 'A₂/A₁²（各点）', colour: 'red' }, { text: '扣除衰减后', colour: 'blue' }, { text: '直线拟合（0–200 mm）', colour: 'black' }], 300, 12);
+  assert.equal(rows.length, 2); assert.equal(rows[0][0].x, 0); assert.ok(rows[0][1].x > 100); assert.equal(rows[1][0].x, 0); assert.deepEqual(legendRows([], 300), []);
   const html = reportHtml({ title: 'S0 板 <1>', facts: [['计算记录', 'local-abc'], ['网格节点数', 78065], ['空的', '']], sections: [{ heading: '位移场', html: '<p>内容</p>' }, { heading: '没有内容', html: '  ' }], footer: 'WorkAI 1.4.0' });
   assert.match(html, /^<!DOCTYPE html>/); assert.match(html, /<title>S0 板 &lt;1&gt;<\/title>/); assert.match(html, /<td>网格节点数<\/td><td>78065<\/td>/); assert.ok(!html.includes('空的'));
   assert.match(html, /<section><h2>位移场<\/h2><p>内容<\/p><\/section>/); assert.ok(!html.includes('没有内容')); assert.match(html, /<footer>WorkAI 1\.4\.0<\/footer>/); assert.match(html, /@media print/);

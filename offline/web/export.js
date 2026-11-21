@@ -17,6 +17,26 @@ export function exportSize(box, viewBox) {
   return { width, height };
 }
 
+/** How wide a legend entry is drawn, in units of the font size: CJK characters count one, others a little over half. */
+export const textUnits = text => [...String(text)].reduce((sum, ch) => sum + (/[\u2e80-\u9fff\uff00-\uffef]/.test(ch) ? 1 : .58), 0);
+
+/** Rows of a legend that fit a width: [[{text, colour, x}]], entries placed left to right and wrapped. `size` is the font size. */
+export function legendRows(items, width, size = 12) {
+  const rows = [[]]; let x = 0;
+  for (const item of items) {
+    const w = size * (1.6 + textUnits(item.text)) + size;   // the swatch, the text and a gap
+    if (x > 0 && x + w > width) { rows.push([]); x = 0; }
+    rows.at(-1).push({ ...item, x }); x += w;
+  }
+  return rows.filter(row => row.length);
+}
+
+/** The legend the page shows beside a chart (a list next to it), as [{text, colour}]. */
+function legendOf(svg) {
+  const list = svg.nextElementSibling?.matches?.('.scan-legend') ? svg.nextElementSibling : svg.parentElement?.querySelector(':scope > .scan-legend');
+  return list ? [...list.querySelectorAll('li')].map(li => ({ text: li.textContent.trim(), colour: li.querySelector('i') ? getComputedStyle(li.querySelector('i')).backgroundColor : '#748995' })) : [];
+}
+
 /** A chart as a stand-alone SVG document: the styles the page's stylesheet gives it are written into the elements, on a white ground. */
 export function standaloneSvg(svg) {
   const copy = svg.cloneNode(true), originals = [svg, ...svg.querySelectorAll('*')], copies = [copy, ...copy.querySelectorAll('*')];
@@ -27,10 +47,20 @@ export function standaloneSvg(svg) {
   const view = svg.viewBox?.baseVal, { width, height } = exportSize(svg.getBoundingClientRect(), view);
   copy.setAttribute('xmlns', 'http://www.w3.org/2000/svg'); copy.setAttribute('width', width); copy.setAttribute('height', height);
   if (!copy.getAttribute('viewBox')) copy.setAttribute('viewBox', `0 0 ${width} ${height}`);
-  const ground = document.createElementNS('http://www.w3.org/2000/svg', 'rect'), box = (copy.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
-  ground.setAttribute('x', box[0] || 0); ground.setAttribute('y', box[1] || 0); ground.setAttribute('width', box[2] || width); ground.setAttribute('height', box[3] || height); ground.setAttribute('fill', '#ffffff');
+  const NS = 'http://www.w3.org/2000/svg', ground = document.createElementNS(NS, 'rect'), box = (copy.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+  // the legend of the page goes under the drawing, in the drawing's own units
+  const unit = (box[2] || width) / width, size = 12 * unit, rows = legendRows(legendOf(svg), (box[2] || width) - 2 * size, size), extra = rows.length ? (rows.length * 1.7 + .8) * size : 0;
+  rows.forEach((row, r) => row.forEach(item => {
+    const y = (box[1] || 0) + (box[3] || height) + (r * 1.7 + 1.2) * size, x = (box[0] || 0) + size + item.x;
+    const swatch = document.createElementNS(NS, 'rect'); swatch.setAttribute('x', x); swatch.setAttribute('y', y - .8 * size); swatch.setAttribute('width', size); swatch.setAttribute('height', .8 * size); swatch.setAttribute('rx', .15 * size); swatch.setAttribute('fill', item.colour);
+    const label = document.createElementNS(NS, 'text'); label.setAttribute('x', x + 1.4 * size); label.setAttribute('y', y); label.setAttribute('style', `font-size:${size}px;font-family:${getComputedStyle(svg).fontFamily};fill:#173147`); label.textContent = item.text;
+    copy.appendChild(swatch); copy.appendChild(label);
+  }));
+  const total = (box[3] || height) + extra, pixels = Math.round(height + extra / unit);
+  copy.setAttribute('viewBox', `${box[0] || 0} ${box[1] || 0} ${box[2] || width} ${total}`); copy.setAttribute('height', pixels);
+  ground.setAttribute('x', box[0] || 0); ground.setAttribute('y', box[1] || 0); ground.setAttribute('width', box[2] || width); ground.setAttribute('height', total); ground.setAttribute('fill', '#ffffff');
   copy.insertBefore(ground, copy.firstChild);
-  return { text: '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(copy), width, height };
+  return { text: '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(copy), width, height: pixels };
 }
 
 /** PNG of an SVG document at `scale` device pixels per pixel. */
@@ -115,9 +145,11 @@ export function panelContent(panel) {
     if (!isFigure(node)) { if (node instanceof HTMLCanvasElement) clone.remove(); return; }
     const figure = document.createElement('figure');
     if (node instanceof HTMLCanvasElement) { const image = document.createElement('img'); image.src = node.toDataURL('image/png'); image.width = Math.round(node.getBoundingClientRect().width); image.alt = captionOf(node); figure.appendChild(image); }
-    else figure.innerHTML = standaloneSvg(node).text.replace(/^<\?xml[^>]*>\n/, '');
+    else { figure.innerHTML = standaloneSvg(node).text.replace(/^<\?xml[^>]*>\n/, ''); figure.dataset.drawn = 'legend'; }
     clone.replaceWith(figure);
   });
+  // a legend the page shows as a list beside a drawing is inside the drawing now
+  copy.querySelectorAll('figure[data-drawn]').forEach(figure => { figure.removeAttribute('data-drawn'); figure.parentElement.querySelectorAll(':scope > .scan-legend').forEach(list => list.remove()); });
   copy.querySelectorAll('[hidden], button, input, select, textarea, label.field, label.wb-field, label.nl-check, .solid-path-actions, .nl-tabs, .panel-heading, .wb-result-tools, progress, script, style').forEach(node => node.remove());
   copy.querySelectorAll('[id]').forEach(node => node.removeAttribute('id'));
   copy.querySelectorAll('*').forEach(node => { if (!node.children.length && !node.textContent.trim() && !/^(IMG|svg|path|line|rect|circle|polyline|polygon|text|g|TD|TH|BR|HR)$/i.test(node.tagName)) node.remove(); });
