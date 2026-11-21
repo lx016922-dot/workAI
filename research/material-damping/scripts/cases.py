@@ -20,8 +20,12 @@ def run(name, s, degree=4, time_stepping='auto', controls='all'):
     key = hashlib.sha256(json.dumps(request, sort_keys=True).encode()).hexdigest(); status = job / 'status.json'
     if status.exists() and json.loads(status.read_text()).get('phase') == 'completed' and (job / 'key').exists() and (job / 'key').read_text() == key: return job
     import shutil
-    shutil.rmtree(job, ignore_errors=True); job.mkdir(parents=True)
-    (job / 'request.json').write_text(json.dumps(request)); status.write_text(json.dumps({'job_id': name, 'phase': 'starting'})); started = time.monotonic()
+    pending = job / 'key.pending'; before = 0.
+    if pending.exists() and pending.read_text() == key and (job / 'record' / 'recording.json').exists():   # the same request, interrupted: the worker continues from its checkpoint
+        before = float(json.loads(status.read_text()).get('elapsed_s') or 0.)
+    else:
+        shutil.rmtree(job, ignore_errors=True); job.mkdir(parents=True); pending.write_text(key)
+    (job / 'request.json').write_text(json.dumps(request)); status.write_text(json.dumps({'job_id': name, 'phase': 'starting'})); started = time.monotonic() - before
     done = subprocess.run([sys.executable, '-X', 'utf8', '-m', 'offline.worker', '--job-dir', str(job)], cwd=REPO, capture_output=True, text=True); st = json.loads(status.read_text())
     if done.returncode or st.get('phase') != 'completed': raise RuntimeError(f'{name}: {st.get("message")} {done.stderr[-1500:]}')
     (job / 'key').write_text(key); (job / 'elapsed_s').write_text(f'{time.monotonic() - started:.1f}'); return job
