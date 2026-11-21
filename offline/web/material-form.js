@@ -93,9 +93,12 @@ export function dampingMarkup(scene) {
 /** What the damping does at f and 2f, from the server preview (offline/preview.py damping_summary). */
 export function dampingDerivedMarkup(d) {
   if (!d) return '';
-  const row = r => `<tr><th>${fmt(r.frequency_mhz)} MHz</th><td>${fmt(r.decay_per_s)}</td><td>${fmt(r.loss_factor, 3)}</td><td>${r.q ? fmt(r.q, 3) : '—'}</td><td>${fmt(r.longitudinal_np_m, 3)}（${fmt(r.longitudinal_db_m, 3)} dB/m）</td><td>${fmt(r.shear_np_m, 3)}（${fmt(r.shear_db_m, 3)} dB/m）</td></tr>`;
+  const decay = r => `<tr><th>${fmt(r.frequency_mhz)} MHz</th><td>${fmt(r.decay_per_s)}</td><td>${fmt(r.loss_factor, 3)}</td><td>${r.q ? fmt(r.q, 3) : '—'}</td></tr>`;
+  const bulk = r => `<tr><th>${fmt(r.frequency_mhz)} MHz</th><td>${fmt(r.longitudinal_np_m, 3)}（${fmt(r.longitudinal_db_m, 3)} dB/m）</td><td>${fmt(r.shear_np_m, 3)}（${fmt(r.shear_db_m, 3)} dB/m）</td></tr>`;
   return `<section class="wb-section"><h3>阻尼在 f 和 2f 处的效果</h3>
-    <table class="wb-table"><tr><th>频率</th><th>衰减率 γ (1/s)</th><th>损耗因子</th><th>Q</th><th>纵波 Np/m</th><th>横波 Np/m</th></tr>${d.at.map(row).join('')}</table>
+    <table class="wb-table"><tr><th>频率</th><th>衰减率 γ (1/s)</th><th>损耗因子</th><th>Q</th></tr>${d.at.map(decay).join('')}</table>
+    <div class="wb-sub">体波的沿程衰减（Np/m）</div>
+    <table class="wb-table"><tr><th>频率</th><th>纵波</th><th>横波</th></tr>${d.at.map(bulk).join('')}</table>
     <p class="wb-note">体波的沿程衰减供参考；导波各模态的衰减是 γ 除以它自己的群速度，算完后在结果页“频散与 f–k 谱”里列出。</p></section>`;
 }
 
