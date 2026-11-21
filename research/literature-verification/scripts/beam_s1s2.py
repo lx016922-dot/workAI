@@ -36,7 +36,7 @@ JOBS, run, scene = _harness.JOBS, _harness.run, _harness.scene
 import cases_s1s2 as first
 
 HALF = first.HALF; ELEMENTS = 3; H = HALF / ELEMENTS
-LENGTH, WIDTH, APERTURE = 220., 96., 30.          # mm: plate length, half width of the model, half width of the loaded strip
+LENGTH, WIDTH, APERTURE = 180., 80., 30.          # mm: plate length, half width of the model, half width of the loaded strip
 END_LAYER, SIDE_LAYER = 40., 24.                   # absorbing layers
 DURATION = 60.                                     # μs: the record keeps the complete field at 15, 30, 45 and 60 μs
 NAMES = {'3d': 'N6-beam', '2d': 'N6-plane'}
