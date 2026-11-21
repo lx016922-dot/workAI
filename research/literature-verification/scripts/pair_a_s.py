@@ -9,16 +9,27 @@ symmetric too, and such pairs are synchronous where two branches meet the condit
 finds one in the software's aluminium at fd = 5.033 MHz·mm: phase velocity 8273 m/s, both group velocities 1856 m/s,
 κ₂/k² = 0.367 (geometric +0.107, material −0.474). The coupling runs through different terms than for a symmetric
 primary — an antisymmetric field has its shear and its bending where S1 has compression — and the modes are found
-among nine propagating at f and nineteen at 2f.
+among six Lamb modes propagating at f and eleven at 2f. It is a crossing point: S2 has the same wavenumber as the primary
+at f, and A4 the same as the second harmonic at 2f; the antisymmetric drive and the symmetry of the second harmonic pick
+A2 and S4.
 
 The model: the whole 8 mm thickness (no mid-plane symmetry: both parities must exist), plane strain, 0.6291 MHz. Two
 combs of tangential tractions with the pitch of the primary wavelength (13.15 mm), eight teeth, one on the top face and
 one on the bottom face in the opposite direction: an antisymmetric drive at the wavenumber of the pair. 32 receivers of
 uₓ on the top face. Elements of 1 mm (9.9 nodes per shear wavelength at 2f).
 
-The analysis is `analyze_s1s2.analyse` with the theory of this pair: the phase and group velocity of the primary, and
-the growth rate κ₂ of the second harmonic at the receivers for the three increments, against the single frequency and
-against the theory summed over the spectrum of the burst.
+The analysis is that of the first pair at the receivers (`analyze_s1s2.analyse`) with the theory of this pair: the phase
+velocity of the primary, and the growth rate κ₂ of the second harmonic for the three increments against the theory for
+one frequency.
+
+What this case can and cannot show. The primary is strongly dispersive here (group velocity 22 % of the phase
+velocity): over the band of a 20-cycle burst its wavenumber changes by ±70 % and the branch nears its cut-off, so the
+theory summed over the burst's spectrum, which sharpened the comparison of the first pair, does not hold together
+(its table is still written, and its columns in the results should not be used). The comb also drives A0 through its
+third spatial harmonic, and A0 and A1 travel faster than the pair: the receivers see several modes, the straight-line
+fit of the growth has a residual of 0.2–0.3 and the slope a standard error of about 4 %. Within that the growth rate
+agrees with the theory. A sharper test needs a source that selects one wavenumber (the wedge profile) and a burst of
+some hundred cycles.
 """
 import importlib.util, json, math, sys
 from pathlib import Path
@@ -52,11 +63,7 @@ def plate(amplitude=2.):
 
 
 def analyse():
-    import analyze_s1s2 as A
-    f, cp, theory = point()
-    # the analysis of the first pair with the frequency, the wavenumber and the theory of this one
-    A.pair = lambda thickness, **material: synchronous(thickness, **material, **GUESS); A.burst_table = lambda thickness, span=.16, count=17, **material: table(thickness, **material, **GUESS, span=span, count=count)
-    A.frequency_mhz = lambda half: f; A.CL = cp; A.CASES = {NAME: plate}; A.JOBS = JOBS / 'pair-a-s'
+    A, f, cp, theory = patched()
     t, values, manifest = load(NAME); result, _ = A.analyse(NAME, THICKNESS / 2, data=(t, values['linear'], values['stvk'], values['murnaghan']))
     result.update(pair='antisymmetric primary → symmetric second harmonic', nodes=manifest['nodes'], elapsed_s=float((JOBS / NAME / 'elapsed_s').read_text()), layer_step_us=manifest['layer_step_us'],
                   theory={'f_mhz': f, 'fd_mhz_mm': f * THICKNESS, 'phase_velocity': cp, 'group_1': theory['group_1'], 'group_2': theory['group_2'], 'surface_uz_over_ux_1': theory['surface_uz_over_ux_1'],
@@ -69,10 +76,19 @@ def analyse():
     except Exception as error: result['software_theory'] = {'error': str(error)}
     (HERE.parent / 'results' / 'results-pair-a-s.json').write_text(json.dumps(result, ensure_ascii=False, indent=1, allow_nan=False) + '\n', encoding='utf-8')
     print('f', round(result['f_mhz'], 5), 'MHz, fd', round(result['fd_mhz_mm'], 4), '| modes', result.get('software_theory'), '| phase velocity', f"{result['phase_velocity']['difference']:+.3e}",
-          '| group velocity vs burst theory', f"{result['group_velocity']['difference_from_burst']:+.3%}", 'vs single frequency', f"{result['group_velocity']['difference']:+.3%}")
+          '| the envelope at the receivers moves at', round(result['group_velocity']['software']), 'm/s (several modes; the pair: ', round(theory['group_1']), 'm/s)')
     for part, p in result['parts'].items():
         print(f"  {part:9s} κ₂/k² software {p['slope_over_k_squared']:.4f}  theory {p['theory_over_k_squared']:.4f}  vs single frequency {p['magnitude_difference']:+.2%} ({p['phase_difference_deg']:+.1f}°)"
-              f"  vs burst theory {p['magnitude_difference_from_burst']:+.2%} ({p['phase_difference_from_burst_deg']:+.1f}°)  fit residual {p['fit_residual']:.3f}")
+              f"  standard error of the slope {p['slope_standard_error']:.1%}  fit residual {p['fit_residual']:.3f}")
+
+
+def patched():
+    """`analyze_s1s2` with the frequency, the wavenumber and the theory of this pair."""
+    import analyze_s1s2 as A
+    f, cp, theory = point()
+    A.pair = lambda thickness, **material: synchronous(thickness, **material, **GUESS); A.burst_table = lambda thickness, span=.16, count=17, **material: table(thickness, **material, **GUESS, span=span, count=count)
+    A.frequency_mhz = lambda half: f; A.CL = cp; A.CASES = {NAME: plate}; A.JOBS = JOBS / 'pair-a-s'
+    return A, f, cp, theory
 
 
 if __name__ == '__main__':
