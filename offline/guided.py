@@ -43,7 +43,9 @@ class Plate:
     """A free plate of thickness d (m), density ρ and elastic tensor C_ijkl (Pa, model axes), for waves travelling in
     the plane at `angle_deg` from the model's x axis."""
 
-    def __init__(self, thickness_m, rho, C, angle_deg=0., elements=8, degree=6):
+    def __init__(self, thickness_m, rho, C, angle_deg=0., elements=8, degree=6, parity=None):
+        """`parity` 'sym' or 'anti': only the modes that are symmetric or antisymmetric about the mid-plane (a model of half the plate with that
+        condition on its mid-plane has no others); the plate must then be mirror symmetric."""
         if not (thickness_m > 0 and rho > 0): raise ValueError('板厚和密度必须为正。')
         a = math.radians(angle_deg); R = np.array([[math.cos(a), math.sin(a), 0.], [-math.sin(a), math.cos(a), 0.], [0., 0., 1.]])
         C = np.einsum('ia,jb,kc,ld,abcd->ijkl', R, R, R, R, np.asarray(C, dtype=float))   # axis 0: propagation, 1: in-plane transverse, 2: thickness
@@ -62,7 +64,11 @@ class Plate:
                         A[3 * node + i, 3 * ids + j] += weight * C[i, 0, j, 2] * dN[q]
                         K0[np.ix_(3 * ids + i, 3 * ids + j)] += weight * C[i, 2, j, 2] * np.outer(dN[q], dN[q])
         self.K0, self.K1, self.K2, self.mass = K0, A.T - A, K2, mass
-        self.classes = self._classes()
+        self.classes = self._classes(); self.parity = parity
+        if parity is not None:
+            if parity not in ('sym', 'anti'): raise ValueError("parity 需为 'sym' 或 'anti'。")
+            if not self.mirror_symmetric: raise ValueError('材料关于板的中面不对称，不能只取对称或反对称模态。')
+            self.classes = [cls for cls in self.classes if cls['parity'] == parity]
 
     # ---------- symmetry ----------
     def _commutes(self, T):
@@ -182,15 +188,27 @@ def plate_of(scene, angle_deg=0., frequency_max_hz=None):
     from solid.schema import MATERIAL
     geometry = scene['geometry']
     if geometry['kind'] == 'pipe': raise ValueError('圆管的导波模态与平板不同，目前没有它的理论频散曲线；f–k 谱仍可计算。')
-    material = scene['material']; rho = float((material if is_custom(material) else MATERIAL)['rho_kg_m3']); thickness = geometry['thickness_mm'] * 1e-3
+    material = scene['material']; rho = float((material if is_custom(material) else MATERIAL)['rho_kg_m3']); factor, parity = mid_plane(scene); thickness = factor * geometry['thickness_mm'] * 1e-3
     top = 2.6 * float(scene['source']['frequency_mhz']) * 1e6 if frequency_max_hz is None else frequency_max_hz
-    return _plate(thickness, rho, tensors(material)[0].tobytes(), float(angle_deg), elements_for(thickness, slowest_shear_speed(material), top))
+    return _plate(thickness, rho, tensors(material)[0].tobytes(), float(angle_deg), elements_for(thickness, slowest_shear_speed(material), top), parity)
+
+
+def mid_plane(scene):
+    """(how many model thicknesses the plate is, which modes it has: None, 'sym' or 'anti').
+
+    A model with a symmetry (antisymmetry) plane on one z face is the upper or lower half of a plate twice as thick, and only the
+    modes that are symmetric (antisymmetric) about the mid-plane exist in it. With such a condition on both z faces the body is
+    not a free plate at all."""
+    faces = {b['face']: b['type'] for b in scene.get('boundaries') or [] if b['face'] in ('zmin', 'zmax') and b['type'] in ('symmetry', 'antisymmetry')}
+    if len(faces) == 2: raise ValueError('两个 z 面都设了对称或反对称条件：这不是自由表面的平板，没有 Lamb 模态的理论曲线。')
+    if not faces: return 1, None
+    return 2, 'sym' if next(iter(faces.values())) == 'symmetry' else 'anti'
 
 
 @lru_cache(maxsize=8)
-def _plate(thickness, rho, c2_bytes, angle_deg, elements):
+def _plate(thickness, rho, c2_bytes, angle_deg, elements, parity=None):
     from physics.materials import stiffness4
-    return Plate(thickness, rho, stiffness4(np.frombuffer(c2_bytes).reshape(6, 6)), angle_deg, elements)
+    return Plate(thickness, rho, stiffness4(np.frombuffer(c2_bytes).reshape(6, 6)), angle_deg, elements, parity=parity)
 
 
 def validity(scene):
@@ -215,9 +233,11 @@ def describe(scene, angle_deg=0., frequency_max_mhz=None, points=240):
                                    **({'attenuation_np_m': attenuation_np_m(damping, frequency, abs(m['group_velocity_m_s']))} if damping else {})}
     pairs = [{**{k: r[k] for k in ('primary', 'secondary', 'mismatch', 'phase_velocity_primary_m_s', 'phase_velocity_secondary_m_s', 'group_velocity_primary_m_s', 'group_velocity_secondary_m_s')},
               'delta_k_rad_mm': r['delta_k_rad_m'] * 1e-3, 'coherence_length_mm': None if r['coherence_length_m'] is None else r['coherence_length_m'] * 1e3} for r in _pairs(plate, f * 1e6)]
-    return {'schema': 'workai.plate_dispersion.v1', 'thickness_mm': scene['geometry']['thickness_mm'], 'angle_deg': float(angle_deg), 'frequency_mhz': f, 'frequency_max_mhz': top,
+    factor, parity = mid_plane(scene); checked = validity(scene)
+    if parity: checked = dict(checked, note=f"模型的一个 z 面是{'对称' if parity == 'sym' else '反对称'}面：它是 {factor * scene['geometry']['thickness_mm']:g} mm 厚的板的一半，只有关于中面{'对称' if parity == 'sym' else '反对称'}的模态。" + checked['note'])
+    return {'schema': 'workai.plate_dispersion.v1', 'thickness_mm': factor * scene['geometry']['thickness_mm'], 'model_thickness_mm': scene['geometry']['thickness_mm'], 'mid_plane': parity, 'angle_deg': float(angle_deg), 'frequency_mhz': f, 'frequency_max_mhz': top,
             'symmetry': {'mid_plane': plate.mirror_symmetric, 'sagittal_plane': plate.sagittal_symmetric}, 'families': {key: FAMILY_WORDS[key] for key in sorted({c['family'] for c in curves})},
-            'validity': validity(scene),
+            'validity': checked,
             'curves': [{'name': c['name'], 'family': c['family'], 'secondary': c['secondary'], 'wavenumber_rad_mm': (c['k'] * 1e-3).tolist(), 'frequency_mhz': (c['omega'] / (2e6 * math.pi)).tolist(),
                         'group_velocity_m_s': [None if not math.isfinite(v) else float(v) for v in c['group']]} for c in curves],
             'modes': {'f': [public(m, f * 1e6) for m in _at(plate, f * 1e6)], '2f': [public(m, 2 * f * 1e6) for m in _at(plate, 2 * f * 1e6)]}, 'pairs': pairs,

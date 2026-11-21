@@ -66,6 +66,10 @@ def analyse(name, fine=False):
     # the quasi-monochromatic formula for the cumulative second harmonic with attenuation, from the software's A₁ at the first receiver
     a1f, a2f = row['attenuation_np_m']['exact_f'], row['attenuation_np_m']['exact_2f']; c11 = m['lambda_pa'] + 2 * m['mu_pa']; beta_nl = -(3 + 2 * (m['l_pa'] + 2 * m['m_pa']) / c11)
     row['beta_nl'] = beta_nl; row['a2_formula_m'] = second_harmonic(x * 1e-3, a1[0] * np.exp(a1f * x[0] * 1e-3), w / speed, beta_nl, a1f, a2f).tolist()
+    # A burst so long that the echo from the far end overlaps it at the receivers has no one-way propagation to compare with:
+    # the comparison with the reference (which has the same free end) stands, the one-way checks do not.
+    burst = s['source']['cycles'] / f; length = s['geometry']['length_mm']; row['echo_free'] = bool(x[-1] / speed * 1e3 + burst < (2 * length - x[-1]) / speed * 1e3)
+    if not row['echo_free']: row['linear_against_exact_propagation_l2'] = None; row['attenuation_np_m']['software'] = None; row['a2_formula_m'] = None
     if fine:   # the reference on elements half the size: its own convergence
         finer = reference(request, .25); fi = increments(finer)
         row['reference_convergence_l2'] = {'murnaghan': max(l2(ref['murnaghan'][:, i], finer['murnaghan'][:, i]) for i in range(len(x))), 'nonlinear_increment': max(l2(ri['nonlinear'][:, i], fi['nonlinear'][:, i]) for i in range(len(x)))}
@@ -73,11 +77,22 @@ def analyse(name, fine=False):
 
 
 if __name__ == '__main__':
-    names = sys.argv[1:] or [n for n in CASES if n.startswith('B-') and (JOBS / n / 'key').exists()]
+    names = [n for n in sys.argv[1:] if n != '--formula'] if sys.argv[1:] else [n for n in CASES if n.startswith('B-') and (JOBS / n / 'key').exists()]
     path = RESULTS / 'bar.json'; out = json.loads(path.read_text()) if path.exists() else {}
     for name in names:
         out[name] = row = analyse(name, fine=name == 'B-both'); worst = lambda v: max(abs(np.asarray(v)))
-        print(name, '| linear vs exact propagation', f"{worst(row['linear_against_exact_propagation_l2']):.2e}", '| vs reference: linear', f"{worst(row['against_reference_l2']['linear']):.2e}",
+        print(name, '| linear vs exact propagation', f"{worst(row['linear_against_exact_propagation_l2']):.2e}" if row['echo_free'] else 'echo in the record', '| vs reference: linear', f"{worst(row['against_reference_l2']['linear']):.2e}",
               'complete', f"{worst(row['against_reference_l2']['murnaghan']):.2e}", '| increments', ' '.join(f"{k} {worst(v):.2e}" for k, v in row['increment_against_reference_l2'].items()),
               '| A2 nonlinear vs reference', f"{worst(row['a2_nonlinear_against_reference']):.2e}", '| attenuation', row['attenuation_np_m'], row.get('reference_convergence_l2', ''), flush=True)
+    # The quasi-monochromatic formula for the cumulative second harmonic with attenuation, on a ratio that does not depend on the shape of
+    # the burst: A₂ with damping over A₂ without, at the same receiver, against e^{−2a₁x}(1 − e^{−mx})/(mx), m = a₂ − 2a₁.
+    if 'B-none' in out:
+        plain = np.array(out['B-none']['a2_nonlinear_m']); x = np.array(out['B-none']['x_mm']) * 1e-3; table = {}
+        for name in ('B-mass', 'B-stiffness', 'B-both'):
+            if name not in out: continue
+            a1, a2 = out[name]['attenuation_np_m']['exact_f'], out[name]['attenuation_np_m']['exact_2f']; m = a2 - 2 * a1
+            formula = np.exp(-2 * a1 * x) * (1. if abs(m * x[-1]) < 1e-9 else -np.expm1(-m * x) / (m * x)); measured = np.array(out[name]['a2_nonlinear_m']) / plain
+            table[name] = {'x_mm': (x * 1e3).tolist(), 'a1_np_m': a1, 'a2_np_m': a2, 'software': measured.tolist(), 'formula': formula.tolist(), 'difference': (measured / formula - 1).tolist()}
+            print(name, 'A2 damped / undamped against the formula:', ' '.join(f'{v:+.2%}' for v in table[name]['difference']), flush=True)
+        (RESULTS / 'formula.json').write_text(json.dumps(table, ensure_ascii=False, indent=1, allow_nan=False) + '\n', encoding='utf-8')
     RESULTS.mkdir(exist_ok=True); path.write_text(json.dumps(out, ensure_ascii=False, indent=1, allow_nan=False) + '\n', encoding='utf-8')

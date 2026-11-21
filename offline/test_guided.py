@@ -82,6 +82,22 @@ class Model(unittest.TestCase):
         self.assertEqual(d['pairs'][0]['primary'] + d['pairs'][0]['secondary'], 'S0S0'); self.assertLess(abs(d['pairs'][0]['mismatch']), .01)
         self.assertIs(plate_of(s), plate_of(self.scene()))   # the same plate is computed once
 
+    def test_half_a_plate_with_its_mid_plane_as_a_symmetry_plane(self):
+        from .guided import mid_plane
+        whole = self.scene(); half = self.scene(); half['geometry']['thickness_mm'] = .5; half['boundaries'] = (half.get('boundaries') or []) + [{'type': 'symmetry', 'face': 'zmin'}]
+        self.assertEqual((mid_plane(whole), mid_plane(half)), ((1, None), (2, 'sym')))
+        a, b = describe(whole), describe(half); self.assertEqual((b['thickness_mm'], b['model_thickness_mm'], b['mid_plane']), (1., .5, 'sym')); self.assertIsNone(a['mid_plane'])
+        names = lambda d: [m['name'] for m in d['modes']['f']]; self.assertEqual(names(a), ['A0', 'SH0', 'S0']); self.assertEqual(names(b), ['SH0', 'S0'])   # no antisymmetric modes in the half
+        for name in ('S0', 'SH0'):
+            x, y = (next(m for m in d['modes']['f'] if m['name'] == name) for d in (a, b))
+            self.assertAlmostEqual(x['wavenumber_rad_mm'], y['wavenumber_rad_mm'], places=9); self.assertAlmostEqual(x['group_velocity_m_s'], y['group_velocity_m_s'], places=4)
+        self.assertEqual({c['family'] for c in b['curves']}, {'S', 'SH'}); self.assertIn('1 mm 厚的板的一半', b['validity']['note'])
+        anti = self.scene(); anti['geometry']['thickness_mm'] = .5; anti['boundaries'] = (anti.get('boundaries') or []) + [{'type': 'antisymmetry', 'face': 'zmax'}]
+        self.assertEqual(mid_plane(anti), (2, 'anti')); self.assertEqual([m['name'] for m in describe(anti)['modes']['f']], ['A0'])
+        both = self.scene(); both['boundaries'] = (both.get('boundaries') or []) + [{'type': 'symmetry', 'face': 'zmin'}, {'type': 'symmetry', 'face': 'zmax'}]
+        with self.assertRaisesRegex(ValueError, '不是自由表面的平板'): describe(both)
+        with self.assertRaises(ValueError): Plate(1e-3, RHO, C, 0., 8, parity='even')
+
     def test_what_the_infinite_plate_says_about_a_model(self):
         s = self.scene(); self.assertFalse(validity(s)['plane_strain']); self.assertIn('对称面', validity(s)['note'])
         s['boundaries'] = [{'type': 'symmetry', 'face': 'ymin'}, {'type': 'symmetry', 'face': 'ymax'}]; self.assertTrue(validity(s)['plane_strain'])

@@ -9,6 +9,7 @@ import { drawScene, pick } from './model-view.js';
 import { inspectorMarkup, bindInspector, escapeHtml, COARSE_MODELS, DEFAULT_COARSE_MODEL, RECORD_MODES, TIME_LAYERS, CONTROL_SETS } from './inspector.js';
 import { signalsMarkup } from './signal-view.js';
 import { materialDerivedMarkup, dampingDerivedMarkup } from './material-form.js';
+import { buildReport, fileName, mountFigureTools, saveBlob } from './export.js';
 import { mountRibbon } from './ribbon.js';
 import { icon } from './icons.js';
 import { renderTreeView, popupMenu, createLog, dialog, initSplitters, previewMessages, renderMessages, fmtBytes, fmtDuration, estimateMarkup } from './shell.js';
@@ -451,10 +452,19 @@ async function openJob(id, restore = false) {
       ${done ? '' : `<progress max="100" value="${progress.toFixed(1)}"></progress>`}
       <div class="wb-result-tools">${s.phase === 'completed' ? `<label class="wb-field inline"><span>响应</span><select id="part">${parts.map(k => `<option value="${k}" ${k === state.part ? 'selected' : ''}>${responseLabels[k] || k}</option>`).join('')}</select></label>
         <a class="wb-button" href="/api/jobs/${id}/export">${icon('export')}下载全部结果 ZIP</a>` : ''}
+        ${s.phase === 'completed' ? `<button type="button" class="wb-button" id="report" title="把这一页现在显示的内容（图、表、分析结果）存成一个 HTML 文件，可以打印成 PDF">${icon('export')}导出报告</button>` : ''}
         <button type="button" class="wb-button" id="reuse">${icon('open')}载入该计算的模型</button>
         ${(s.resumable ?? s.duration_us >= 5000) && !done ? `<button type="button" class="wb-button" id="pause-job">${icon('pause')}保存后暂停</button>` : ''}${s.phase === 'paused' ? `<button type="button" class="wb-button primary" id="resume-job">${icon('resume')}继续计算</button>` : ''}</div>`;
     $('#part')?.addEventListener('change', ev => { state.part = ev.target.value; openJob(id, true); });
     $('#reuse').onclick = () => reuseJob(id);
+    $('#report')?.addEventListener('click', () => {
+      try {
+        const facts = [['计算记录', id], ['状态', PHASES[s.phase] || s.phase], ['显示的响应', responseLabels[state.part] || state.part], ['网格节点数', s.nodes], ['记录方式', s.record_mode === 'compact' ? '精简记录' : '完整记录'],
+          ['时间层', s.time_plan?.scheme ? `${s.time_plan.scheme === 'verlet2' ? '二阶单级' : '三级四阶'}，Δt ${(+s.time_plan.layer_step_us * 1000).toFixed(2)} ns` : ''], ['计算用时', `${Math.round(s.elapsed_s || 0)} 秒`], ['导出时间', new Date().toLocaleString('zh-CN')]];
+        const html = buildReport($('#results'), { title: s.name || id, facts, footer: `${document.title} · 本报告由结果页当前显示的内容生成；数值结果以“下载全部结果 ZIP”中的记录为准。` });
+        saveBlob(new Blob([html], { type: 'text/html;charset=utf-8' }), fileName(`${s.name || id}-报告`, 'html')); toast('报告已保存；用浏览器打开后可以打印成 PDF。', 'info');
+      } catch (e) { fail(e); }
+    });
     $('#pause-job')?.addEventListener('click', () => command('pause'));
     $('#resume-job')?.addEventListener('click', () => command('resume'));
     if (s.phase === 'completed') {
@@ -622,6 +632,7 @@ function bindView() {
 // ---------- start ----------
 async function start() {
   log = createLog($('#dock-log'));
+  mountFigureTools(document.body, () => state.job || state.scanOpen || 'WorkAI', fail);   // every chart of the page can be saved as PNG or SVG
   ribbon = mountRibbon($('#ribbon'), { command, disabled, active,
     menu: kind => kind === 'boundary' ? boundaryMenu() : kind === 'defect' ? defectMenu() : Object.entries(state.templates).map(([k, t]) => ({ id: k, label: t.label, icon: 'new' })) });
   $('#command-run').addEventListener('click', interpretText);

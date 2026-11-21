@@ -1,0 +1,141 @@
+{
+ "frequency_mhz": 0.2,
+ "damping": {
+  "mass_per_s": 32000.0,
+  "stiffness_s": 3.25e-09
+ },
+ "mode": "S0",
+ "mode_2f": "S0",
+ "points": 6,
+ "attenuation_np_m": {
+  "theory_f": 3.423708593231123,
+  "theory_2f": 4.871565959008289,
+  "a1_ratio_fit": 3.4220866795921148,
+  "difference": -0.0004737300488174556,
+  "a1_of_damped_plate_alone": 3.420779804146914
+ },
+ "group_velocity_m_s": {
+  "measured_undamped": 5422.8534538411905,
+  "measured_damped": 5422.8534538411905,
+  "theory": 5422.802974817869
+ },
+ "ratio_slope_per_m2": {
+  "undamped": 90976.20426448219,
+  "damped_uncorrected": 120556.66731203679,
+  "damped_corrected": 90929.70816395224,
+  "corrected_against_undamped": -0.0005110798027446739,
+  "uncorrected_against_undamped": 0.32514505619029266,
+  "r_squared": {
+   "undamped": 0.9999997319379589,
+   "damped_uncorrected": 0.9967565925811231,
+   "damped_corrected": 0.9999995111735588
+  }
+ },
+ "wavenumber_f_against_theory": {
+  "undamped": 2.4074156890208087e-08,
+  "damped": 5.172542653220091e-05
+ },
+ "notes": {
+  "undamped": [
+   "f 处点距 40 mm 大于最短波长的一半，相位斜率只确定到 2π/Δx 的整数倍；按唯一落在理论值（S0）上的那一个取了波数。加密点列可以不依赖理论。",
+   "2f 处点距 40 mm 大于最短波长的一半，相位斜率只确定到 2π/Δx 的整数倍；按唯一落在理论值（S0、受迫波 2k(f)）上的那一个取了波数。加密点列可以不依赖理论。",
+   "2 个点的时间窗超出记录的末尾，未参与分析。"
+  ],
+  "damped": [
+   "f 处点距 40 mm 大于最短波长的一半，相位斜率只确定到 2π/Δx 的整数倍；按唯一落在理论值（S0）上的那一个取了波数。加密点列可以不依赖理论。",
+   "2f 处点距 40 mm 大于最短波长的一半，相位斜率只确定到 2π/Δx 的整数倍；按唯一落在理论值（S0、受迫波 2k(f)）上的那一个取了波数。加密点列可以不依赖理论。",
+   "拟合范围内基频幅值 A₁ 变化了 68%（波束扩散、多模态叠加或反射）：A₂/A₁² 只部分抵消这种变化。",
+   "2 个点的时间窗超出记录的末尾，未参与分析。"
+  ]
+ },
+ "elapsed_s": {
+  "P-none": 439.3,
+  "P-both": 367.0
+ },
+ "plate_theory": {
+  "group_velocity_f_m_s": 5422.802974817869,
+  "group_velocity_2f_m_s": 5391.364665517041,
+  "attenuation_f_np_m": 3.423708593231123,
+  "attenuation_2f_np_m": 4.871565959008289,
+  "a1_ratio_fit_against_it": -0.0004737300488174556,
+  "measured_group_velocity_against_it": 9.308658927231761e-06
+ },
+ "rows": {
+  "source_offset_mm": 40.0,
+  "undamped_fit": {
+   "slope_per_m2": 90976.20426448219,
+   "intercept_per_m": 3657.5423909594488,
+   "r_squared": 0.9999997319379589
+  },
+  "undamped": [
+   {
+    "distance_mm": 0.0,
+    "ratio_per_m": 3654.0886069828057,
+    "a1_m": 1.577346053790361e-07
+   },
+   {
+    "distance_mm": 40.0,
+    "ratio_per_m": 7296.031990961827,
+    "a1_m": 1.5781246355446104e-07
+   },
+   {
+    "distance_mm": 80.0,
+    "ratio_per_m": 10939.055487623622,
+    "a1_m": 1.5781150077485875e-07
+   },
+   {
+    "distance_mm": 120.0,
+    "ratio_per_m": 14578.894026846989,
+    "a1_m": 1.5781111014876653e-07
+   },
+   {
+    "distance_mm": 160.0,
+    "ratio_per_m": 18214.573760651278,
+    "a1_m": 1.578095487796052e-07
+   },
+   {
+    "distance_mm": 200.0,
+    "ratio_per_m": 21848.333031379483,
+    "a1_m": 1.5779416178028624e-07
+   }
+  ],
+  "damped": [
+   {
+    "distance_mm": 0.0,
+    "ratio_per_m": 3800.480868644611,
+    "ratio_corrected_per_m": 3652.2752378712007,
+    "a1_m": 1.375301508658061e-07
+   },
+   {
+    "distance_mm": 40.0,
+    "ratio_per_m": 7902.023951381232,
+    "ratio_corrected_per_m": 7293.941172256907,
+    "a1_m": 1.1999364319853122e-07
+   },
+   {
+    "distance_mm": 80.0,
+    "ratio_per_m": 12341.193309557546,
+    "ratio_corrected_per_m": 10935.893339843642,
+    "a1_m": 1.0464139014260022e-07
+   },
+   {
+    "distance_mm": 120.0,
+    "ratio_per_m": 17140.94698274293,
+    "ratio_corrected_per_m": 14574.031375426799,
+    "a1_m": 9.125391454558297e-08
+   },
+   {
+    "distance_mm": 160.0,
+    "ratio_per_m": 22329.704204271467,
+    "ratio_corrected_per_m": 18207.516367135835,
+    "a1_m": 7.957909044595353e-08
+   },
+   {
+    "distance_mm": 200.0,
+    "ratio_per_m": 27939.78882964371,
+    "ratio_corrected_per_m": 21836.820799733836,
+    "a1_m": 6.939507633673857e-08
+   }
+  ]
+ }
+}

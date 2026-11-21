@@ -324,7 +324,7 @@ def handler(application):
         def do_POST(self):
             try:
                 self.local_request()
-                match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume|accumulation|fk|converge|converge-plan)',self.path)
+                match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume|accumulation|fk|mixing|converge|converge-plan)',self.path)
                 scan = re.fullmatch(r'/api/scans/(' + SCAN_ID + r')/(pause|resume|retry)', self.path)
                 if self.path not in ('/api/jobs', '/api/preview', '/api/shutdown', '/api/interpret', '/api/defect', '/api/scans', '/api/scans/plan') and not match and not scan:
                     raise FileNotFoundError()
@@ -345,7 +345,7 @@ def handler(application):
                             raise ValueError('提取参数无效。')
                         with application.trace_lock:
                             return self.reply(200,traces(application.path(job)/'record',body['part'],body['points']))
-                    if action in ('accumulation', 'fk'):
+                    if action in ('accumulation', 'fk', 'mixing'):
                         # Nonlinear guided-wave post-processing on the finished record (offline/nonlinear.py).
                         if application.status(job)['phase'] != 'completed':
                             raise ValueError('任务尚未完成。')

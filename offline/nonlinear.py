@@ -200,6 +200,31 @@ def _plate(scene, e, top_mhz):
     except ValueError as error: return None, str(error)
 
 
+def _windows(window, scene, times, reference, distance, f):
+    """The analysis window of every point: (arrival of the envelope at each point in μs, fit of arrival against distance,
+    measured group velocity or None, [(start, end) in μs], the window as used).
+
+    `window`: {'mode': 'fixed', 'start_us', 'end_us'} — the same at every point, or {'mode': 'follow', 'speed_m_s'
+    (optional), 'length_us' (optional)} — one that travels with the wave packet (the default)."""
+    from physics.signals import support_us
+    arrival = arrivals(times, envelope(reference), 1 / f)
+    group = linear_fit(distance * 1e-3, arrival * 1e-6); speed_measured = 1 / group['slope'] if group and group['slope'] > 0 else None
+    window = window or {'mode': 'follow'}
+    if not isinstance(window, dict) or window.get('mode') not in ('fixed', 'follow'): raise ValueError('时间窗需为同一时间窗（fixed）或跟随波包（follow）。')
+    if window['mode'] == 'fixed':
+        if not (number(window.get('start_us')) and number(window.get('end_us')) and window['start_us'] < window['end_us']): raise ValueError('时间窗需要起点早于终点的两个时刻（μs）。')
+        windows = [(float(window['start_us']), float(window['end_us']))] * len(distance); used = {'mode': 'fixed', 'start_us': float(window['start_us']), 'end_us': float(window['end_us'])}
+    else:
+        speed = window.get('speed_m_s'); length = window.get('length_us'); lo, hi = support_us(scene['source'])
+        if speed is not None and not (number(speed) and 10 <= speed <= 2e4): raise ValueError('跟随速度需在 10–20000 m/s。')
+        if length is not None and not (number(length) and length > 0): raise ValueError('时间窗长度需为正数（μs）。')
+        if speed is None and speed_measured is None: raise ValueError('没有量出沿这条线向前传播的波包（包络到达时刻不随距离增加）：请手动填写跟随速度，或改用同一时间窗。')
+        speed_used = float(speed) if speed is not None else speed_measured; length = float(length) if length is not None else 1.5 * (hi - lo)
+        windows = [(arrival[0] + d * 1e-3 / speed_used * 1e6 - length / 2, arrival[0] + d * 1e-3 / speed_used * 1e6 + length / 2) for d in distance]
+        used = {'mode': 'follow', 'speed_m_s': speed_used, 'speed_source': 'given' if speed is not None else 'measured', 'length_us': length, 'centre_first_us': float(arrival[0])}
+    return arrival, group, speed_measured, windows, used
+
+
 def accumulation(job, body):
     """A1, A2 and A2/A1² along a line, with the fits. `body`: {'points', 'direction', 'window', 'fit_mm'}.
 
@@ -209,7 +234,6 @@ def accumulation(job, body):
     used; without a length, 1.5 times the duration of the excitation signal."""
     from .domain import parts_for, response
     from .recording import controls_of, is_compact, manifest
-    from physics.signals import support_us
     if not isinstance(body, dict) or set(body) - {'points', 'direction', 'window', 'fit_mm', 'receiver'}: raise ValueError('沿程分析只接受 points、direction、window、fit_mm、receiver。')
     job, scene, f = _job(job); m = manifest(job / 'record'); compact = is_compact(m)
     points, distance, e, names, notes = line_of(body, scene, compact, MAX_LINE)
@@ -221,23 +245,7 @@ def accumulation(job, body):
     have = lambda part: part in parts_for(controls) or (part == 'nonlinear' and {'linear', 'murnaghan'} <= set(controls))
     part = lambda name: response(values, name)
     full = part('full'); basis = 'nonlinear' if have('nonlinear') else 'full'
-    # ---- group velocity: arrival of the envelope of the fundamental ----
-    arrival = arrivals(times, envelope(part('linear') if have('linear') else full), 1 / f)
-    group = linear_fit(distance * 1e-3, arrival * 1e-6); speed_measured = 1 / group['slope'] if group and group['slope'] > 0 else None
-    # ---- analysis windows ----
-    window = body.get('window') or {'mode': 'follow'}
-    if not isinstance(window, dict) or window.get('mode') not in ('fixed', 'follow'): raise ValueError('时间窗需为同一时间窗（fixed）或跟随波包（follow）。')
-    if window['mode'] == 'fixed':
-        if not (number(window.get('start_us')) and number(window.get('end_us')) and window['start_us'] < window['end_us']): raise ValueError('时间窗需要起点早于终点的两个时刻（μs）。')
-        windows = [(float(window['start_us']), float(window['end_us']))] * len(points); used = {'mode': 'fixed', 'start_us': float(window['start_us']), 'end_us': float(window['end_us'])}
-    else:
-        speed = window.get('speed_m_s'); length = window.get('length_us'); lo, hi = support_us(scene['source'])
-        if speed is not None and not (number(speed) and 10 <= speed <= 2e4): raise ValueError('跟随速度需在 10–20000 m/s。')
-        if length is not None and not (number(length) and length > 0): raise ValueError('时间窗长度需为正数（μs）。')
-        if speed is None and speed_measured is None: raise ValueError('没有量出沿这条线向前传播的波包（包络到达时刻不随距离增加）：请手动填写跟随速度，或改用同一时间窗。')
-        speed_used = float(speed) if speed is not None else speed_measured; length = float(length) if length is not None else 1.5 * (hi - lo)
-        windows = [(arrival[0] + d * 1e-3 / speed_used * 1e6 - length / 2, arrival[0] + d * 1e-3 / speed_used * 1e6 + length / 2) for d in distance]
-        used = {'mode': 'follow', 'speed_m_s': speed_used, 'speed_source': 'given' if speed is not None else 'measured', 'length_us': length, 'centre_first_us': float(arrival[0])}
+    arrival, group, speed_measured, windows, used = _windows(body.get('window'), scene, times, part('linear') if have('linear') else full, distance, f)
     # ---- harmonics ----
     wanted = [p for p in ('full', 'nonlinear', 'geometric', 'material') if have(p)]; data = {p: part(p) for p in wanted}; rows = []
     # The plate is at rest before the record starts: a window that begins earlier sees zeros there.
@@ -381,6 +389,103 @@ def _attenuation(scene, f, e, points, distance, rows, chosen, x, a1, pair, wave,
     fit = linear_fit(x + offset * 1e-3, [r['ratio_corrected_per_m'] for r in chosen])
     out.update(source_offset_mm=offset, corrected={'slope_per_m2': fit['slope'], 'intercept_per_m': fit['intercept'], 'r_squared': fit['r_squared']})
     return out
+
+
+def carriers(scene):
+    """The distinct carrier frequencies (MHz) a model is driven at, in increasing order: the frequency of every source and
+    every component of a multi-tone signal."""
+    from physics.scene import sources
+    found = set()
+    for src in sources(scene):
+        signal = src.get('signal') or {}
+        if signal.get('type') == 'multi_tone': found.update(round(c['frequency_mhz'], 9) for c in signal['components'] if c['weight'] > 0)
+        else: found.add(round(src['frequency_mhz'], 9))
+    return sorted(found)
+
+
+def _tone(times, values, frequency, window):
+    """(amplitude in m, phase in degrees) of a waveform at one frequency: the Hann-weighted Fourier coefficient over the window."""
+    from dispersion.analysis import harmonic_coefficients
+    h = harmonic_coefficients(times, values, frequency, window[0], window[1], orders=(1,))['harmonics'][0]
+    return (h['amplitude'], h['phase_deg']) if h['available'] else (None, None)
+
+
+def mixing(job, body):
+    """Wave mixing along a line: the amplitudes at the two driving frequencies f_a < f_b and at their sum and difference,
+    the mixing ratios A±/(A_a A_b) against the distance, and what the plate theory says about the phase matching.
+
+    `body`: {'points', 'direction', 'window', 'fit_mm'} as in `accumulation`, and 'frequencies_mhz': [f_a, f_b] (default:
+    the two carriers of the model when it has exactly two). A_a and A_b are taken from the complete response, the sum
+    and difference components from the nonlinear increment when the linear control was computed. The second harmonics
+    2f_a and 2f_b are listed beside them."""
+    from .domain import parts_for, response
+    from .recording import controls_of, is_compact, manifest
+    if not isinstance(body, dict) or set(body) - {'points', 'direction', 'window', 'fit_mm', 'frequencies_mhz'}: raise ValueError('混频分析只接受 points、direction、window、fit_mm、frequencies_mhz。')
+    job, scene, f = _job(job); m = manifest(job / 'record'); compact = is_compact(m); found = carriers(scene)
+    pair = body.get('frequencies_mhz', found if len(found) == 2 else None)
+    if pair is None: raise ValueError(f'这个模型有 {len(found)} 个载频（{"、".join(f"{v:g}" for v in found)} MHz）：混频分析需要指定两个频率 frequencies_mhz。')
+    if not (isinstance(pair, list) and len(pair) == 2 and all(number(v) and v > 0 for v in pair) and abs(pair[0] - pair[1]) > 1e-9): raise ValueError('混频分析需要两个不同的正频率（MHz）。')
+    fa, fb = sorted(float(v) for v in pair); tones = {'a': fa, 'b': fb, 'sum': fa + fb, 'difference': fb - fa, '2a': 2 * fa, '2b': 2 * fb}
+    points, distance, e, names, notes = line_of(body, scene, compact, MAX_LINE)
+    direction = _vector(body.get('direction', scene['receivers'][0]['direction']), '接收方向', unit=True)
+    times, values, m = series(job / 'record', points, direction); controls = controls_of(m); step = m['sample_step_us']
+    if max(tones.values()) > .5 / step: raise ValueError(f'最高的分量 {max(tones.values()):g} MHz 超过了记录的 Nyquist 频率：请用更小的采样间隔重新计算。')
+    have = lambda part: part in parts_for(controls) or (part == 'nonlinear' and {'linear', 'murnaghan'} <= set(controls))
+    full = response(values, 'full'); basis = 'nonlinear' if have('nonlinear') else 'full'; mixed = response(values, basis)
+    arrival, group, speed_measured, windows, used = _windows(body.get('window'), scene, times, response(values, 'linear') if have('linear') else full, distance, fb)
+    lead = max(0, int(math.ceil((times[0] - min(w[0] for w in windows)) / step - 1e-9)))
+    if lead:   # the plate is at rest before the record starts
+        times = np.concatenate([times[0] - step * np.arange(lead, 0, -1), times]); full = np.concatenate([np.zeros((lead, full.shape[1])), full]); mixed = np.concatenate([np.zeros((lead, mixed.shape[1])), mixed])
+    rows = []
+    for i in range(len(points)):
+        start, end = windows[i]; row = {'index': i + 1, 'point_mm': [float(v) for v in points[i]], 'distance_mm': float(distance[i]), 'window_us': [float(start), float(end)]}
+        if names: row['name'] = names[i]
+        if end > times[-1] + 1e-9 or (end - start) / step < 8:
+            row.update(usable=False, reason='时间窗超出记录的末尾' if (end - start) / step >= 8 else '时间窗不足 8 个采样点'); rows.append(row); continue
+        row['usable'] = True
+        for key, frequency in tones.items():
+            amplitude, phase = _tone(times, (full if key in ('a', 'b') else mixed)[:, i], frequency, (start, end)); row[f'{key}_m'] = amplitude; row[f'{key}_phase_deg'] = phase
+        product = row['a_m'] * row['b_m']
+        for key in ('sum', 'difference'): row[f'{key}_ratio_per_m'] = row[f'{key}_m'] / product if product > 0 else None
+        rows.append(row)
+    good = [r for r in rows if r['usable'] and r['sum_ratio_per_m'] is not None and all(r[f'{k}_phase_deg'] is not None for k in ('a', 'b', 'sum', 'difference'))]
+    if len(good) < 2: raise ValueError('可用的点不足两个：' + ('时间窗超出了记录的末尾，请缩短线段、调整时间窗或跟随速度。' if any(not r['usable'] for r in rows) else '信号幅值为零。'))
+    for key in ('a', 'b', 'sum', 'difference'):
+        for r, v in zip(good, np.unwrap(np.radians([r[f'{key}_phase_deg'] for r in good]))): r[f'{key}_phase_unwrapped_rad'] = float(v)
+    fit_range = body.get('fit_mm')
+    if fit_range is not None and not (isinstance(fit_range, list) and len(fit_range) == 2 and all(number(v) for v in fit_range) and fit_range[0] < fit_range[1]): raise ValueError('拟合范围需要起点小于终点的两个沿程距离（mm）。')
+    chosen = [r for r in good if fit_range is None or fit_range[0] - 1e-9 <= r['distance_mm'] <= fit_range[1] + 1e-9]
+    if len(chosen) < 2: raise ValueError('拟合范围内的可用点不足两个。')
+    x = np.array([r['distance_mm'] for r in chosen]) * 1e-3; plate, why = _plate(scene, e, 1.3 * tones['2b'])
+    if why: notes.append(why)
+    fits = {key: (lambda g: {'slope_per_m2': g['slope'], 'intercept_per_m': g['intercept'], 'r_squared': g['r_squared']})(linear_fit(x, [r[f'{key}_ratio_per_m'] for r in chosen])) for key in ('sum', 'difference')}
+    wave = {key: wavenumber(x, [r[f'{key}_phase_unwrapped_rad'] for r in chosen], tones[key] * 1e6, plate, f'{tones[key]:g} MHz', notes) for key in ('a', 'b')}
+    ka, kb = (1e3 * wave[key]['wavenumber_rad_mm'] if wave[key]['reliable'] and wave[key]['wavenumber_rad_mm'] > 0 else None for key in ('a', 'b'))   # rad/m
+    for key, forced in (('sum', ka + kb if ka and kb else None), ('difference', kb - ka if ka and kb and kb > ka else None)):
+        wave[key] = wavenumber(x, [r[f'{key}_phase_unwrapped_rad'] for r in chosen], tones[key] * 1e6, plate, f'{tones[key]:g} MHz', notes, forced=forced)
+    # phase matching from the theory, for the primary modes that were found: k of every mode at the mixed frequency against k_a ± k_b
+    matching = None
+    if plate and all(wave[k]['theory'] and wave[k]['theory']['matched'] for k in ('a', 'b')):
+        from . import guided
+        ta, tb = wave['a']['theory'], wave['b']['theory']; matching = {'primary': [ta['mode'], tb['mode']]}
+        for key, target in (('sum', ta['wavenumber_rad_mm'] + tb['wavenumber_rad_mm']), ('difference', tb['wavenumber_rad_mm'] - ta['wavenumber_rad_mm'])):
+            modes = [mode for mode in guided._at(plate, tones[key] * 1e6) if not mode['backward']] if target > 0 else []
+            matching[key] = sorted(({'mode': mode['name'], 'wavenumber_rad_mm': mode['k_rad_m'] * 1e-3, 'delta_k_rad_mm': mode['k_rad_m'] * 1e-3 - target, 'mismatch': mode['k_rad_m'] * 1e-3 / target - 1,
+                                     'coherence_length_mm': None if abs(mode['k_rad_m'] * 1e-3 - target) < 1e-9 else math.pi / abs(mode['k_rad_m'] * 1e-3 - target), 'group_velocity_m_s': mode['group_velocity_m_s']}
+                                    for mode in modes), key=lambda r: abs(r['mismatch']))[:4]
+            matching[key + '_forced_rad_mm'] = target
+    # can the window tell the components apart? The Hann window's main lobe is 4/T wide.
+    length = min(w[1] - w[0] for w in windows); nearest = min(abs(a - b) for a in tones.values() for b in tones.values() if abs(a - b) > 1e-9)
+    if nearest * length < 4: notes.append(f'时间窗长 {length:.3g} μs，频率分辨约 {4 / length:.3g} MHz；最接近的两个分量只差 {nearest:.3g} MHz，会互相泄漏。请加长时间窗（需要更长的猝发音），或把两个频率取得更开。')
+    if basis == 'full': notes.append('这次计算没有线性控制：和频、差频分量取自完整响应，里面还有两个猝发音自身的线性频谱。请在“求解器配置”里选“完整 + 线性”或“全部”后重新计算。')
+    if any(not r['usable'] for r in rows): notes.append(f"{sum(1 for r in rows if not r['usable'])} 个点的时间窗超出记录的末尾，未参与分析。")
+    return {'schema': 'workai.nonlinear.mixing.v1', 'job_id': job.name, 'frequencies_mhz': tones, 'carriers_mhz': found, 'direction': [float(v) for v in direction], 'line_direction': [float(v) for v in e],
+            'points_mode': (body.get('points') or {'mode': 'receivers'})['mode'], 'controls': list(controls), 'mixed_basis': basis, 'window': used,
+            'group': {'velocity_m_s': speed_measured, 'r_squared': group['r_squared'] if group else None}, 'rows': rows,
+            'fit': {'range_mm': [float(x[0] * 1e3), float(x[-1] * 1e3)], 'points': len(chosen), 'sum': fits['sum'], 'difference': fits['difference'], 'waves': wave, 'matching': matching},
+            'notes': notes,
+            'note': 'A±/(A_a·A_b) 是这个模型、激励和接收方向下的相对混频参数，不是材料常数；它的数值与分析时间窗的长度有关。对共线的平面纵波，它随距离的斜率是 β·k_a·k_b/4。'
+                    '和频、差频分量只在相位匹配（k± 等于 k_a ± k_b）时随距离累积。'}
 
 
 def fk(job, body):

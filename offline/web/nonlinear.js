@@ -166,6 +166,58 @@ export function accumulationCsv(a) {
   return lines.join('\n');
 }
 
+// ---------- wave mixing ----------
+/** The distinct carrier frequencies (MHz) a model is driven at: every source's frequency and every component of a multi-tone signal. */
+export function carriersOf(scene) {
+  const found = new Set();
+  for (const s of [scene.source, ...(scene.sources || [])].filter(Boolean)) {
+    if (s.signal?.type === 'multi_tone') s.signal.components.filter(c => c.weight > 0).forEach(c => found.add(+c.frequency_mhz.toPrecision(9))); else found.add(+s.frequency_mhz.toPrecision(9));
+  }
+  return [...found].sort((a, b) => a - b);
+}
+
+/** The request of the mixing analysis: the line, the window and the fit range of the accumulation form, and the two frequencies. */
+export function mixingBody(form) {
+  const body = accumulationBody({ ...form, receiver: 'point' }), [fa, fb] = numbers([form.mixA, form.mixB], '两个混频频率');
+  if (!(fa > 0 && fb > 0) || Math.abs(fa - fb) < 1e-9) throw new Error('混频分析需要两个不同的正频率（MHz）。');
+  return { ...body, frequencies_mhz: [fa, fb] };
+}
+
+const MIX = [['sum', '和频 f_a + f_b'], ['difference', '差频 f_b − f_a']];
+
+export function mixingMarkup(m, width = 900) {
+  const rows = m.rows.filter(r => r.usable), f = m.frequencies_mhz, fit = m.fit, [x0, x1] = fit.range_mm, where = r => `${r.name ? r.name + ' · ' : ''}${num(r.distance_mm)} mm`, small = rows.length > 40;
+  const half = width >= 860 ? Math.floor((width - 18) / 2) : width, line = g => [[x0, g.intercept_per_m + g.slope_per_m2 * x0 * 1e-3], [x1, g.intercept_per_m + g.slope_per_m2 * x1 * 1e-3]];
+  const ratio = seriesChart([...MIX.map(([key, name]) => ({ name: `${name}：A/(A_a·A_b)`, small, points: rows.map(r => [r.distance_mm, r[key + '_ratio_per_m'], `${where(r)}：${name} ${num(r[key + '_ratio_per_m'])} 1/m`]) })),
+    ...MIX.map(([key, name], i) => ({ name: `${name}的直线拟合`, points: line(fit[key]), markers: false, dash: true, colour: i ? MUTED : INK }))], '沿程距离 (mm)', 'A±/(A_a·A_b) (1/m)', width);
+  const primary = seriesChart([['a', `A_a（${num(f.a)} MHz）`], ['b', `A_b（${num(f.b)} MHz）`]].map(([key, name]) => ({ name, small, points: rows.map(r => [r.distance_mm, r[key + '_m'] * 1e9, `${where(r)}：${name} ${num(r[key + '_m'] * 1e9)} nm`]) })), '沿程距离 (mm)', '基频幅值 (nm)', half);
+  const mixed = seriesChart([['sum', `和频 ${num(f.sum)} MHz`], ['difference', `差频 ${num(f.difference)} MHz`], ['2a', `2f_a ${num(f['2a'])} MHz`], ['2b', `2f_b ${num(f['2b'])} MHz`]].map(([key, name]) => ({ name, small,
+    points: rows.map(r => [r.distance_mm, r[key + '_m'] * 1e12, `${where(r)}：${name} ${num(r[key + '_m'] * 1e12)} pm`]) })), '沿程距离 (mm)', '混频与二次谐波幅值 (pm)', half);
+  const match = key => (fit.matching?.[key] || []).map(r => `${escapeHtml(r.mode)}：Δk = ${num(r.delta_k_rad_mm, 3)} rad/mm（${pct(r.mismatch, 3)}）${r.coherence_length_mm === null ? '，匹配' : `，π/|Δk| = ${num(r.coherence_length_mm, 3)} mm`}`).join('；');
+  const summary = `<table class="wb-table nl-summary">
+    ${MIX.map(([key, name]) => `<tr><th>${name}（${num(f[key])} MHz）</th><td><b>A/(A_a·A_b) 的斜率 ${num(fit[key].slope_per_m2)} m⁻²</b>；截距 ${num(fit[key].intercept_per_m)} m⁻¹；R² ${fit[key].r_squared === null ? '—' : fit[key].r_squared.toFixed(4)}
+      ${fit.matching ? `<br><span class="muted">理论：受迫波数 k_a ${key === 'sum' ? '+' : '−'} k_b 取 ${num(fit.matching[key + '_forced_rad_mm'], 5)} rad/mm（${escapeHtml(fit.matching.primary.join('、'))}）；${num(f[key])} MHz 处最接近的模态 — ${match(key) || '没有传播模态'}</span>` : ''}</td></tr>`).join('')}
+    ${waveRow(`${num(f.a)} MHz 处的波数`, fit.waves.a)}${waveRow(`${num(f.b)} MHz 处的波数`, fit.waves.b)}${waveRow('和频的相位斜率', fit.waves.sum)}${waveRow('差频的相位斜率', fit.waves.difference)}
+    <tr><th>拟合与取值</th><td>拟合 ${num(x0)}–${num(x1)} mm 内的 ${fit.points} 个点；A_a、A_b 取完整响应，和频、差频取${m.mixed_basis === 'nonlinear' ? '非线性增量（完整 − 线性）' : '完整响应'}；
+      ${m.window.mode === 'fixed' ? `各点同一时间窗 ${num(m.window.start_us)}–${num(m.window.end_us)} μs` : `时间窗长 ${num(m.window.length_us)} μs，按 ${num(m.window.speed_m_s, 5)} m/s 跟随波包`}</td></tr></table>`;
+  const notes = m.notes.length ? `<ul class="nl-notes">${m.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '';
+  const table = `<div class="table-scroll nl-rows"><table><thead><tr><th>点</th><th>沿程 / mm</th><th>A_a / nm</th><th>A_b / nm</th><th>和频 / pm</th><th>差频 / pm</th><th>2f_a / pm</th><th>2f_b / pm</th><th>和频比 / m⁻¹</th><th>差频比 / m⁻¹</th></tr></thead><tbody>
+    ${m.rows.map(r => `<tr><td>${escapeHtml(r.name || String(r.index))}</td><td>${num(r.distance_mm, 5)}</td>${r.usable ? `<td>${num(r.a_m * 1e9, 5)}</td><td>${num(r.b_m * 1e9, 5)}</td><td>${num(r.sum_m * 1e12, 5)}</td><td>${num(r.difference_m * 1e12, 5)}</td>
+      <td>${num(r['2a_m'] * 1e12, 5)}</td><td>${num(r['2b_m'] * 1e12, 5)}</td><td>${num(r.sum_ratio_per_m, 5)}</td><td>${num(r.difference_ratio_per_m, 5)}</td>` : `<td colspan="8">${escapeHtml(r.reason || '不可用')}</td>`}</tr>`).join('')}</tbody></table></div>`;
+  return `${summary}${notes}<h3 class="scan-h">混频比随沿程距离的变化</h3>${ratio}
+    <div class="nl-pair"><div><h3 class="scan-h">两个基频的幅值</h3>${primary}</div><div><h3 class="scan-h">和频、差频与二次谐波</h3>${mixed}</div></div><p class="section-note">${escapeHtml(m.note)}</p>${table}`;
+}
+
+export function mixingCsv(m) {
+  const f = m.frequencies_mhz, fit = m.fit, blank = v => (v === null || v === undefined ? '' : v), keys = ['a', 'b', 'sum', 'difference', '2a', '2b'];
+  const lines = ['# schema,' + m.schema, '# job_id,' + m.job_id, ...keys.map(k => `# frequency_${k}_mhz,${f[k]}`), '# mixed_components_taken_from,' + m.mixed_basis, '# window,' + Object.entries(m.window).map(([k, v]) => `${k}=${v}`).join(';'),
+    '# fit_range_mm,' + fit.range_mm.join(','), ...['sum', 'difference'].flatMap(k => [`# ${k}_ratio_slope_per_m2,${fit[k].slope_per_m2}`, `# ${k}_ratio_intercept_per_m,${fit[k].intercept_per_m}`, `# ${k}_ratio_r_squared,${blank(fit[k].r_squared)}`]),
+    ['point', 'x_mm', 'y_mm', 'z_mm', 'distance_mm', 'window_start_us', 'window_end_us', ...keys.map(k => `amplitude_${k}_m`), ...keys.map(k => `phase_${k}_deg`), 'sum_over_product_per_m', 'difference_over_product_per_m'].join(',')];
+  for (const r of m.rows) lines.push([r.name || r.index, ...r.point_mm, r.distance_mm, ...r.window_us, ...keys.map(k => (r.usable ? blank(r[k + '_m']) : '')), ...keys.map(k => (r.usable ? blank(r[k + '_phase_deg']) : '')),
+    r.usable ? blank(r.sum_ratio_per_m) : '', r.usable ? blank(r.difference_ratio_per_m) : ''].join(','));
+  return lines.join('\n');
+}
+
 // ---------- dispersion ----------
 export const DISPERSION_QUANTITIES = { cp: ['相速度', 'km/s'], cg: ['群速度', 'km/s'], k: ['波数', 'rad/mm'] };
 let clipCount = 0;
@@ -319,11 +371,11 @@ export function convergenceTable(t) {
 }
 
 // ---------- the panel ----------
-const TABS = [['accumulation', '沿程累积（A₂/A₁²）'], ['dispersion', '频散与 f–k 谱'], ['convergence', '收敛检查']];
+const TABS = [['accumulation', '沿程累积（A₂/A₁²）'], ['dispersion', '频散与 f–k 谱'], ['mixing', '混频（f_a ± f_b）'], ['convergence', '收敛检查']];
 
 export function nonlinearMarkup(result) {
   const compact = result.recording?.record_mode === 'compact', receivers = result.scene.receivers, laws = (result.controls || []).map(c => c.law);
-  const parts = ['full', ...(laws.includes('linear') ? ['linear', 'nonlinear'] : []), ...(laws.length === 3 ? ['geometric', 'material'] : [])];
+  const parts = ['full', ...(laws.includes('linear') ? ['linear', 'nonlinear'] : []), ...(laws.length === 3 ? ['geometric', 'material'] : [])], carriers = carriersOf(result.scene);
   const vector = (id, label) => ['X', 'Y', 'Z'].map((axis, j) => `<label class="field"><span>${label} ${axis}</span><input id="${id}-${j}" type="number" step="any"></label>`).join('');
   return `<section class="panel" id="nl-panel"><div class="panel-heading"><h2>非线性导波分析</h2><span class="muted small-text">读取已保存的记录，不重新求解</span></div><div class="panel-body">
     <div class="nl-tabs" role="tablist">${TABS.map(([key, label]) => `<button type="button" role="tab" class="nl-tab" data-nl-tab="${key}">${label}</button>`).join('')}</div>
@@ -349,6 +401,13 @@ export function nonlinearMarkup(result) {
       <p id="nl-message" class="section-note" role="status">沿一条线提取基频和二次谐波，拟合 A₂/A₁² 随传播距离的增长，并由相位斜率得到 f、2f 处的波数。</p>
       <div id="nl-accumulation"></div>
     </div>
+    <div data-nl-page="mixing" hidden>
+      <div class="form-grid"><label class="field"><span>频率 f_a / MHz</span><input id="nl-mix-a" type="number" step="any" min="0" value="${carriers.length === 2 ? carriers[0] : ''}"></label>
+        <label class="field"><span>频率 f_b / MHz</span><input id="nl-mix-b" type="number" step="any" min="0" value="${carriers.length === 2 ? carriers[1] : ''}"></label></div>
+      <div class="solid-path-actions"><button class="button primary small" id="nl-mix-run">计算和频、差频分量</button><button class="button secondary small" id="nl-mix-csv" disabled>下载 CSV</button></div>
+      <p id="nl-mix-message" class="section-note" role="status">${carriers.length === 2 ? `模型的两个载频是 ${carriers.join('、')} MHz。` : `模型有 ${carriers.length} 个载频（${carriers.join('、')} MHz）：混频需要两个不同频率的激励（两个激励源，或一个多频信号），也可以手动填两个频率。`}点列、接收方向、时间窗和拟合范围沿用“沿程累积”页的设置（接收方式按点）。</p>
+      <div id="nl-mixing"></div>
+    </div>
     <div data-nl-page="dispersion" hidden>
       <div class="form-grid"><label class="field"><span>纵轴</span><select id="nl-quantity">${Object.entries(DISPERSION_QUANTITIES).map(([key, [name, unit]]) => `<option value="${key}">${name} (${unit})</option>`).join('')}</select></label>
         <label class="field"><span>传播方向与 x 轴的夹角 / °（各向异性材料有影响）</span><input id="nl-angle" type="number" step="any" value="0"></label>
@@ -367,13 +426,13 @@ export function nonlinearMarkup(result) {
   </div></section>`;
 }
 
-const FORM_IDS = ['nl-mode', 'nl-count', 'nl-window', 'nl-speed', 'nl-length', 'nl-window-start', 'nl-window-end', 'nl-fit-from', 'nl-fit-to', 'nl-quantity', 'nl-angle', 'nl-theory-fmax', 'nl-part', 'nl-range-start', 'nl-range-end', 'nl-fk-fmax',
+const FORM_IDS = ['nl-mode', 'nl-count', 'nl-window', 'nl-speed', 'nl-length', 'nl-window-start', 'nl-window-end', 'nl-fit-from', 'nl-fit-to', 'nl-quantity', 'nl-angle', 'nl-theory-fmax', 'nl-part', 'nl-range-start', 'nl-range-end', 'nl-fk-fmax', 'nl-receiver', 'nl-receiver-length', 'nl-receiver-speed', 'nl-mix-a', 'nl-mix-b',
   ...['nl-start', 'nl-end', 'nl-direction'].flatMap(id => [0, 1, 2].map(j => `${id}-${j}`))];
 
 /** Bind the panel. `ctx`: {job, result, api(url, body), busy(), openScan(id), refresh()}; `saved`: an earlier snapshot(). */
 export function mountNonlinear(container, ctx, saved = null) {
   const $ = id => container.querySelector('#' + id), result = ctx.result, base = '/api/jobs/' + ctx.job, receivers = result.scene.receivers, compact = result.recording?.record_mode === 'compact';
-  let disposed = false, tab = saved?.tab || 'accumulation', accumulation = saved?.accumulation || null, theory = saved?.theory || null, fk = saved?.fk || null, reader = null, timer = 0, stamp = 0;
+  let disposed = false, tab = saved?.tab || 'accumulation', accumulation = saved?.accumulation || null, mixing = saved?.mixing || null, theory = saved?.theory || null, fk = saved?.fk || null, reader = null, timer = 0, stamp = 0;
   let convergence = { plan: null, error: '', check: null, table: null, levels: saved?.levels || 1 };
   const listeners = [], listen = (element, event, callback) => { if (!element) return; element.addEventListener(event, callback); listeners.push(() => element.removeEventListener(event, callback)); };
   const widthOf = element => Math.max(360, Math.round(element.getBoundingClientRect().width) || 900);
@@ -387,7 +446,7 @@ export function mountNonlinear(container, ctx, saved = null) {
   if (saved?.inputs) for (const id of FORM_IDS) if (saved.inputs[id] !== undefined && $(id)) $(id).value = saved.inputs[id];
   const form = () => ({ mode: $('nl-mode').value, count: $('nl-count').value, start: [0, 1, 2].map(j => $('nl-start-' + j).value), end: [0, 1, 2].map(j => $('nl-end-' + j).value), direction: [0, 1, 2].map(j => $('nl-direction-' + j).value),
     window: $('nl-window').value, speed: $('nl-speed').value, length: $('nl-length').value, windowStart: $('nl-window-start').value, windowEnd: $('nl-window-end').value, fitFrom: $('nl-fit-from').value, fitTo: $('nl-fit-to').value,
-    receiver: $('nl-receiver').value, receiverLength: $('nl-receiver-length').value, receiverSpeed: $('nl-receiver-speed').value,
+    receiver: $('nl-receiver').value, receiverLength: $('nl-receiver-length').value, receiverSpeed: $('nl-receiver-speed').value, mixA: $('nl-mix-a').value, mixB: $('nl-mix-b').value,
     part: $('nl-part').value, rangeStart: $('nl-range-start').value, rangeEnd: $('nl-range-end').value, fmax: $('nl-fk-fmax').value });
   function layout() {
     const line = $('nl-mode').value === 'line'; $('nl-segment').hidden = !line; $('nl-count-field').hidden = !line;
@@ -412,6 +471,19 @@ export function mountNonlinear(container, ctx, saved = null) {
       say('nl-message', `已分析 ${next.rows.length} 个点（${next.points_mode === 'receivers' ? '接收点' : '线段采样'}），接收方向 [${next.direction.map(v => v.toFixed(3)).join(', ')}]，f = ${num(next.frequency_mhz)} MHz。改动设置后请重新计算。`);
       if (theory) showTheory();
     } catch (error) { if (!disposed && token === stamp) say('nl-message', error.message, true); } finally { if (!disposed) $('nl-run').disabled = false; }
+  }
+
+  // ----- wave mixing -----
+  function showMixing() {
+    if (!mixing) { $('nl-mixing').replaceChildren(); $('nl-mix-csv').disabled = true; return; }
+    $('nl-mixing').innerHTML = mixingMarkup(mixing, widthOf($('nl-mixing'))); $('nl-mix-csv').disabled = false;
+  }
+  async function runMixing() {
+    const token = ++stamp; $('nl-mix-run').disabled = true; say('nl-mix-message', '正在读取记录并计算…');
+    try {
+      const next = await ctx.api(base + '/mixing', mixingBody(form())); if (disposed || token !== stamp) return;
+      mixing = next; showMixing(); say('nl-mix-message', `已分析 ${next.rows.length} 个点：f_a = ${num(next.frequencies_mhz.a)} MHz，f_b = ${num(next.frequencies_mhz.b)} MHz。改动设置后请重新计算。`);
+    } catch (error) { if (!disposed && token === stamp) say('nl-mix-message', error.message, true); } finally { if (!disposed) $('nl-mix-run').disabled = false; }
   }
 
   // ----- dispersion -----
@@ -482,12 +554,18 @@ export function mountNonlinear(container, ctx, saved = null) {
   function open(next) {
     tab = next; layout();
     if (tab === 'accumulation') showAccumulation();
+    if (tab === 'mixing') showMixing();
     if (tab === 'dispersion') { if (theory) showTheory(); else loadTheory(); showFk(); }
     if (tab === 'convergence') { showConvergence(); loadConvergence(); }
   }
   container.querySelectorAll('[data-nl-tab]').forEach(b => listen(b, 'click', () => open(b.dataset.nlTab)));
   listen($('nl-mode'), 'change', layout); listen($('nl-window'), 'change', layout); listen($('nl-receiver'), 'change', layout);
-  listen($('nl-run'), 'click', runAccumulation); listen($('nl-fk-run'), 'click', runFk);
+  listen($('nl-run'), 'click', runAccumulation); listen($('nl-fk-run'), 'click', runFk); listen($('nl-mix-run'), 'click', runMixing);
+  listen($('nl-mix-csv'), 'click', () => {
+    if (!mixing) return;
+    const link = document.createElement('a'), url = URL.createObjectURL(new Blob(['\ufeff' + mixingCsv(mixing)], { type: 'text/csv;charset=utf-8' }));
+    link.href = url; link.download = ctx.job + '-mixing.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
   listen($('nl-quantity'), 'change', showTheory); listen($('nl-angle'), 'change', loadTheory); listen($('nl-theory-fmax'), 'change', loadTheory);
   listen($('nl-fk-curves'), 'change', showFk);
   listen($('nl-fk-canvas'), 'mousemove', ev => {
@@ -500,9 +578,9 @@ export function mountNonlinear(container, ctx, saved = null) {
     link.href = url; link.download = ctx.job + '-accumulation.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   let previous = null;
-  const resize = new ResizeObserver(entries => { const width = Math.round(entries[0].contentRect.width); if (disposed || width === previous) return; previous = width; if (tab === 'accumulation') showAccumulation(); if (tab === 'dispersion') { showTheory(); showFk(); } });
+  const resize = new ResizeObserver(entries => { const width = Math.round(entries[0].contentRect.width); if (disposed || width === previous) return; previous = width; if (tab === 'accumulation') showAccumulation(); if (tab === 'mixing') showMixing(); if (tab === 'dispersion') { showTheory(); showFk(); } });
   resize.observe($('nl-panel'));
   open(tab);
-  return { snapshot: () => ({ tab, accumulation, theory: theory?.error ? null : theory, fk, levels: convergence.levels, inputs: Object.fromEntries(FORM_IDS.filter(id => $(id)).map(id => [id, $(id).value])) }),
+  return { snapshot: () => ({ tab, accumulation, mixing, theory: theory?.error ? null : theory, fk, levels: convergence.levels, inputs: Object.fromEntries(FORM_IDS.filter(id => $(id)).map(id => [id, $(id).value])) }),
     cleanup: () => { disposed = true; stamp++; clearTimeout(timer); resize.disconnect(); listeners.forEach(remove => remove()); } };
 }
