@@ -5,7 +5,8 @@ export const FACE_LABELS = { xmin: 'X 最小端', xmax: 'X 最大端', ymin: 'Y 
 export const KIND_LABELS = { plate: '平板', pipe: '圆管', hole: '带通孔板', notch: '带缺口板' };
 export const SIGNAL_LABELS = { tone_burst: '猝发音（加窗正弦）', gaussian_pulse: '高斯脉冲', ricker: 'Ricker 子波', chirp: '线性调频', multi_tone: '多频合成', samples: '任意采样信号' };
 export const WINDOW_LABELS = { hann: 'Hann', tukey: 'Tukey', gaussian: 'Gaussian', rectangular: '矩形' };
-export const PROFILE_LABELS = { uniform: '均匀', gaussian: '高斯分布', comb: '梳状（叉指）' };
+export const PROFILE_LABELS = { uniform: '均匀', gaussian: '高斯分布', comb: '梳状（叉指）', wedge: '斜楔换能器（相速度匹配）', patch: '压电片（边缘剪力）' };
+export const PATCH_SHAPES = { strip: '条形（两条边）', rectangle: '矩形（四条边）', disc: '圆片（径向）' };
 export const BOUNDARY_LABELS = { symmetry: '对称面', antisymmetry: '反对称面', absorbing: '吸收层' };
 export const RAMP_LABELS = { linear: '线性', quadratic: '二次', cubic: '三次' };
 export const DEFECT_LABELS = { crack: '裂纹', delamination: '分层', contact: '接触界面', notch: '缺口', hole: '孔' };
@@ -48,7 +49,19 @@ export function defaultProfile(type, source) {
   if (type === 'uniform') return { type };
   if (type === 'gaussian') return { type, sigma_mm: 1 };
   const along = source.face[0] === 'x' ? 'y' : 'x';
+  // transducers by the traction they put on the surface (physics/loads.py): a travelling pressure under a wedge, edge shear of a bonded wafer
+  if (type === 'wedge') return { type, along, length_mm: 20, width_mm: 0, trace_velocity_m_s: 5400, reverse: false, apodization: 'uniform' };
+  if (type === 'patch') return { type, shape: 'strip', length_mm: 10, width_mm: 0, edge_mm: 1 };
   return { type, pitch_mm: 4, teeth: 3, tooth_width_mm: 1.5, along, alternating_sign: false };
+}
+
+/** The in-plane axis a transducer on `face` is laid along by default, as a unit vector. */
+export function inPlaneAxis(face) { const v = [0, 0, 0]; v[face[0] === 'x' ? 1 : 0] = 1; return v; }
+/** Trace velocity along the surface under a wedge: the wedge's wave speed over the sine of its angle (from the normal). */
+export function traceVelocity(wedgeSpeed, angleDeg) {
+  const s = Math.sin(angleDeg * Math.PI / 180);
+  if (!(wedgeSpeed > 0) || !(angleDeg > 0 && angleDeg < 90)) throw Error('需要正的楔块声速和 0–90° 之间的入射角。');
+  return +(wedgeSpeed / s).toPrecision(8);
 }
 
 /** A new source on `face`, centred on it, pushing inward, with the scene's carrier settings. */
@@ -100,12 +113,18 @@ export function removeReceiver(scene, index) { if (scene.receivers.length <= 1) 
 
 /** Switch a source's signal family, keeping the carrier settings. */
 export function setSignalType(source, type) { source.signal = defaultSignal(type, source); if (type !== 'tone_burst') source.cycles = Math.max(1, Math.min(20, source.cycles || 1)); }
-export function setProfileType(source, type) { source.profile = defaultProfile(type, source); }
+export function setProfileType(source, type) {
+  source.profile = defaultProfile(type, source);
+  if (type === 'wedge' || type === 'patch') source.radius_mm = 0;                       // their own size is the region
+  if (type === 'patch') source.direction = inPlaneAxis(source.face);                    // the wafer's length axis, in the face
+  else if (source.direction[axisOf(source.face)] === 0) source.direction = inwardNormal(source.face);   // back from a wafer: push inward again
+}
 
 /** Moving a source to another face re-centres it and points it inward. */
 export function setSourceFace(scene, source, face) {
   source.face = face; source.center_mm = faceCenter(scene.geometry, face); source.direction = inwardNormal(face);
-  if (source.profile?.type === 'comb' && source.profile.along === face[0]) source.profile.along = face[0] === 'x' ? 'y' : 'x';
+  if (['comb', 'wedge'].includes(source.profile?.type) && source.profile.along === face[0]) source.profile.along = face[0] === 'x' ? 'y' : 'x';
+  if (source.profile?.type === 'patch') source.direction = inPlaneAxis(face);
 }
 
 /** Parse a signal from CSV/TSV/whitespace text: one value per line, or `time,value` pairs (time in μs). */
@@ -156,7 +175,7 @@ export function materialSummary(m) {
 /** Model tree rows for the left panel: [{id, label, detail, group, removable}]. */
 export function tree(scene) {
   const rows = [{ id: 'geometry', group: 'model', label: '几何', detail: geometrySummary(scene.geometry) },
-    { id: 'material', group: 'model', label: '材料与本构', detail: materialSummary(scene.material) }];
+    { id: 'material', group: 'model', label: '材料与本构', detail: materialSummary(scene.material) + (scene.damping ? ' · 有阻尼' : '') }];
   rows.push({ id: 'sources', group: 'header', label: '激励源', detail: String(sourcesOf(scene).length), add: 'source' });
   sourcesOf(scene).forEach((s, i) => rows.push({ id: `source:${i}`, group: 'item', label: s.name || (i ? `激励 ${i + 1}` : '主激励'), detail: sourceSummary(s), removable: i > 0 }));
   rows.push({ id: 'boundaries', group: 'header', label: '边界条件', detail: String((scene.boundaries || []).length + (scene.boundary.fixed_face !== 'none' ? 1 : 0)), add: 'boundary' });

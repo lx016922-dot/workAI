@@ -212,3 +212,69 @@ test('the cost table says how the cores are used', async () => {
   assert.match(estimateMarkup({ ...estimate, threads: 2, spread: false }), /2 个线程，每组控制一个线程/);
   assert.doesNotMatch(estimateMarkup(estimate), /个线程/);   // older previews carry no thread information
 });
+
+test('material damping: the form, the conversion from measured attenuation and the summary', async () => {
+  const { dampingFromAttenuation, dampingMarkup, dampingDerivedMarkup, materialMarkup } = await import('../offline/web/material-form.js');
+  const { scanParameters } = await import('../offline/web/scan.js');
+  const { tree } = await import('../offline/web/scene-model.js');
+  // γ = a·c at f and 2f; α/2 + βω²/2 through both
+  const alpha = 2e4, beta = 4e-9, gamma = f => alpha / 2 + beta * (2 * Math.PI * f * 1e6) ** 2 / 2;
+  const back = dampingFromAttenuation({ f1: .5, a1: gamma(.5) / 5000, c1: 5000, f2: 1, a2: gamma(1) / 4000, c2: 4000 });
+  assert.ok(Math.abs(back.mass_per_s / alpha - 1) < 1e-9 && Math.abs(back.stiffness_s / beta - 1) < 1e-9);
+  const decibel = dampingFromAttenuation({ f1: .5, a1: gamma(.5) / 5000 * 20 / Math.log(10), c1: 5000, f2: 1, a2: gamma(1) / 4000 * 20 / Math.log(10), c2: 4000, unit: 'db' });
+  assert.ok(Math.abs(decibel.stiffness_s / beta - 1) < 1e-9);
+  const single = dampingFromAttenuation({ f1: .5, a1: 5, c1: 6000, f2: 1, a2: NaN, c2: NaN });   // one point: stiffness-proportional
+  assert.equal(single.mass_per_s, 0); assert.ok(Math.abs(single.stiffness_s * (2 * Math.PI * .5e6) ** 2 / 2 - 30000) < 1e-6);
+  assert.throws(() => dampingFromAttenuation({ f1: .5, a1: 5, c1: 6000, f2: 1, a2: 1, c2: 6000 }), /质量比例加刚度比例/);    // falls with frequency
+  assert.throws(() => dampingFromAttenuation({ f1: .5, a1: 5, c1: 6000, f2: 1, a2: 50, c2: 6000 }), /质量比例加刚度比例/);   // rises faster than ω²
+  assert.throws(() => dampingFromAttenuation({ f1: .5, a1: 5, c1: NaN }), /群速度/);
+  const scene = { source: { frequency_mhz: .4 }, material: { rho_kg_m3: 2700, lambda_pa: 5.1e10, mu_pa: 2.6e10, l_pa: -2.5e11, m_pa: -3.3e11, n_pa: -3.5e11 }, damping: { mass_per_s: 2e4, stiffness_s: 4e-9 } };
+  const form = dampingMarkup(scene); assert.match(form, /id="damping-alpha" value="20000"/); assert.match(form, /id="damping-beta" value="4"/); assert.match(form, /id="damping-f1" value="0.4"/);
+  assert.match(dampingMarkup({ source: { frequency_mhz: .4 } }), /id="damping-alpha" value="0"/);
+  assert.match(materialMarkup(scene, {}), /材料阻尼[\s\S]*damping-derived[\s\S]*material-derived/);
+  assert.equal(dampingDerivedMarkup(null), '');
+  const derived = dampingDerivedMarkup({ at: [{ frequency_mhz: .4, decay_per_s: 22633, loss_factor: .018, q: 55.5, longitudinal_np_m: 3.54, longitudinal_db_m: 30.8, shear_np_m: 7.28, shear_db_m: 63.2 }] });
+  assert.match(derived, /0\.4000 MHz/); assert.match(derived, /3\.54（30\.8 dB\/m）/);
+  // the two coefficients can be scanned, and the model tree says the material is damped
+  const g = { kind: 'plate', length_mm: 100, width_mm: 2, thickness_mm: 1 }, full = { ...scene, geometry: g, source: { frequency_mhz: .4, amplitude_mpa: 1, cycles: 5, delay_us: 0, radius_mm: 0 }, receivers: [], boundaries: [] };
+  assert.deepEqual(scanParameters(full).filter(r => r.path.startsWith('damping.')).map(r => [r.path, r.owner, r.name]), [['damping.mass_per_s', '材料', '阻尼 α'], ['damping.stiffness_s', '材料', '阻尼 β']]);
+  assert.equal(scanParameters({ ...full, damping: undefined }).filter(r => r.path.startsWith('damping.')).length, 0);
+  assert.match(tree({ ...full, boundary: { fixed_face: 'none' }, acquisition: { duration_us: 30, sample_step_us: .05 }, numerics: { h_mm: 1 } }).find(r => r.id === 'material').detail, /有阻尼/);
+});
+
+test('transducer sources: a wedge and a bonded wafer in the source form', async () => {
+  const m = await import('../offline/web/scene-model.js');
+  const source = { face: 'zmax', center_mm: [50, 1, 2], radius_mm: 3, direction: [0, 0, -1], amplitude_mpa: 1, frequency_mhz: .5, cycles: 5, delay_us: 0, phase_deg: 0 };
+  assert.match(m.PROFILE_LABELS.wedge, /斜楔/); assert.match(m.PROFILE_LABELS.patch, /压电片/);
+  m.setProfileType(source, 'wedge');
+  assert.deepEqual(source.profile, { type: 'wedge', along: 'x', length_mm: 20, width_mm: 0, trace_velocity_m_s: 5400, reverse: false, apodization: 'uniform' });
+  assert.equal(source.radius_mm, 0); assert.deepEqual(source.direction, [0, 0, -1]);                 // its own size is the region; it still presses on the face
+  m.setProfileType(source, 'patch'); assert.equal(source.profile.shape, 'strip'); assert.deepEqual(source.direction, [1, 0, 0]);   // the wafer's length axis lies in the face
+  m.setProfileType(source, 'uniform'); assert.deepEqual(source.direction, [0, 0, -1]);                 // back to a pressure
+  // moving a transducer to another face keeps it in that face
+  const scene = { geometry: { kind: 'plate', length_mm: 100, width_mm: 20, thickness_mm: 2 } };
+  m.setProfileType(source, 'wedge'); m.setSourceFace(scene, source, 'xmin'); assert.equal(source.profile.along, 'y');
+  m.setProfileType(source, 'patch'); assert.deepEqual(source.direction, [0, 1, 0]); m.setSourceFace(scene, source, 'zmin'); assert.deepEqual(source.direction, [1, 0, 0]);
+  // Snell: the trace velocity under a wedge
+  assert.ok(Math.abs(m.traceVelocity(2720, 30) - 5440) < 1e-6); assert.ok(Math.abs(m.traceVelocity(2720, 90 - 1e-9) - 2720) < 1e-3);
+  assert.throws(() => m.traceVelocity(2720, 0), /入射角/); assert.throws(() => m.traceVelocity(0, 30), /楔块声速/);
+  assert.match(m.sourceSummary({ ...source, profile: { type: 'wedge' } }), /斜楔换能器/);
+  const { scanParameters } = await import('../offline/web/scan.js');
+  const full = { geometry: scene.geometry, source: { ...source, face: 'zmax', profile: m.defaultProfile('wedge', { face: 'zmax' }) }, receivers: [], boundaries: [] };
+  const names = scanParameters(full).map(r => r.path); assert.ok(names.includes('source.profile.trace_velocity_m_s') && names.includes('source.profile.length_mm'));
+  assert.equal(scanParameters(full).find(r => r.path === 'source.profile.trace_velocity_m_s').name, '迹线速度');
+});
+
+test('export: file names, sizes and the report document', async () => {
+  const { fileName, exportSize, reportHtml } = await import('../offline/web/export.js');
+  assert.equal(fileName('local-abc A₂/A₁² 随沿程距离的变化', 'png'), 'local-abc-A₂-A₁²-随沿程距离的变化.png'); assert.equal(fileName('  //  ', 'svg'), 'figure.svg'); assert.equal(fileName('x'.repeat(200)).length, 80);
+  assert.deepEqual(exportSize({ width: 899.6, height: 300.2 }, null), { width: 900, height: 300 }); assert.deepEqual(exportSize({ width: 0, height: 0 }, { width: 640, height: 280 }), { width: 640, height: 280 });
+  assert.throws(() => exportSize({ width: 0, height: 0 }, null), /没有尺寸/);
+  const { legendRows, textUnits } = await import('../offline/web/export.js');
+  assert.ok(Math.abs(textUnits('A₂ 拟合') - (2 * .58 + .58 + 2)) < 1e-12);
+  const rows = legendRows([{ text: 'A₂/A₁²（各点）', colour: 'red' }, { text: '扣除衰减后', colour: 'blue' }, { text: '直线拟合（0–200 mm）', colour: 'black' }], 300, 12);
+  assert.equal(rows.length, 2); assert.equal(rows[0][0].x, 0); assert.ok(rows[0][1].x > 100); assert.equal(rows[1][0].x, 0); assert.deepEqual(legendRows([], 300), []);
+  const html = reportHtml({ title: 'S0 板 <1>', facts: [['计算记录', 'local-abc'], ['网格节点数', 78065], ['空的', '']], sections: [{ heading: '位移场', html: '<p>内容</p>' }, { heading: '没有内容', html: '  ' }], footer: 'WorkAI 1.4.0' });
+  assert.match(html, /^<!DOCTYPE html>/); assert.match(html, /<title>S0 板 &lt;1&gt;<\/title>/); assert.match(html, /<td>网格节点数<\/td><td>78065<\/td>/); assert.ok(!html.includes('空的'));
+  assert.match(html, /<section><h2>位移场<\/h2><p>内容<\/p><\/section>/); assert.ok(!html.includes('没有内容')); assert.match(html, /<footer>WorkAI 1\.4\.0<\/footer>/); assert.match(html, /@media print/);
+});

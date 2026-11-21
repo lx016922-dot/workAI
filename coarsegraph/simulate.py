@@ -32,6 +32,8 @@ class Coarse:
         self.taps = [interpolation(self.mesh, rx['point_mm']) for rx in receivers]; self.directions = np.array([rx['direction'] for rx in receivers], dtype=float)
         self.dt, self.subdivisions, self.frames, self.steps = layers(s, self.mesh, cfl)
         self.signals = signal_table(self.inputs, np.arange(self.steps + 1) * self.dt * 1e6)
+        from physics.damping import only_mass
+        only_mass(self.inputs, '粗网格算子的训练模拟')
         self.damped = self.inputs['alpha'] is not None; self.alpha = self.inputs['alpha'] if self.damped else np.zeros(len(self.mesh['mass']))
         self.inverse = inverse_mapping(self.mesh); self.rho = s['material']['rho_kg_m3']
         self.times_us = np.arange(self.frames) * s['acquisition']['sample_step_us']

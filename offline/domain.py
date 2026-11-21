@@ -1,4 +1,5 @@
 """Bounded inputs for the original frozen graph network."""
+
 import copy
 import hashlib
 import json
@@ -13,15 +14,22 @@ PARTS = ('full', 'linear', 'stvk', 'geometric', 'material')
 # Constitutive controls a computation runs and the responses they give. Each response is one control or the difference of two.
 LAWS = ('linear', 'stvk', 'murnaghan')
 CONTROL_SETS = {'all': LAWS, 'full_linear': ('linear', 'murnaghan'), 'full': ('murnaghan',)}
-RECIPES = {'full': ('murnaghan', None), 'linear': ('linear', None), 'stvk': ('stvk', None), 'geometric': ('stvk', 'linear'), 'material': ('murnaghan', 'stvk'),
-           'nonlinear': ('murnaghan', 'linear')}
+RECIPES = {
+    'full': ('murnaghan', None),
+    'linear': ('linear', None),
+    'stvk': ('stvk', None),
+    'geometric': ('stvk', 'linear'),
+    'material': ('murnaghan', 'stvk'),
+    'nonlinear': ('murnaghan', 'linear'),
+}
 ALL_PARTS = tuple(RECIPES)
 
 
 def parts_for(controls):
     """Responses available from the computed controls. All three give the original five (the total nonlinear increment is
     then geometric + material); linear and complete give complete, linear and their difference; complete alone gives complete."""
-    if tuple(controls) == LAWS: return PARTS
+    if tuple(controls) == LAWS:
+        return PARTS
     return tuple(part for part, (a, b) in RECIPES.items() if a in controls and (b is None or b in controls))
 
 
@@ -50,11 +58,15 @@ def model_info():
     release = json.loads((MODEL / 'release.json').read_text(encoding='utf-8'))
     base = json.loads((MODEL / 'metrics.json').read_text(encoding='utf-8'))
     refined = json.loads((MODEL / 'refined-metrics.json').read_text(encoding='utf-8'))
-    if (release['weights_sha256'] != info['weights_sha256'] or
-        release['metrics_sha256'] != digest(MODEL / 'metrics.json') or
-        release['refined_metrics_sha256'] != digest(MODEL / 'refined-metrics.json') or
-        not base['acceptance']['all_gates_passed'] or not refined['all_gates_passed'] or
-        len(base['cases']) != 8 or len(refined['cases']) != 8):
+    if (
+        release['weights_sha256'] != info['weights_sha256']
+        or release['metrics_sha256'] != digest(MODEL / 'metrics.json')
+        or release['refined_metrics_sha256'] != digest(MODEL / 'refined-metrics.json')
+        or not base['acceptance']['all_gates_passed']
+        or not refined['all_gates_passed']
+        or len(base['cases']) != 8
+        or len(refined['cases']) != 8
+    ):
         raise ValueError('原始模型与八例验收记录不一致。')
     extension = MODEL / 'extension.json'
     if extension.exists():
@@ -73,17 +85,25 @@ def templates():
     result = {}
     for kind in ('plate', 'pipe', 'hole', 'notch'):
         s = default_scene(kind)
-        s['geometry'].update(length_mm=10., width_mm=3.5, thickness_mm=1.8,
-                             outer_radius_mm=2.5, inner_radius_mm=1.5,
-                             hole_x_mm=5., hole_y_mm=1.75, hole_radius_mm=.55,
-                             notch_x_mm=5., notch_width_mm=.8, notch_depth_mm=.45)
-        s['source'].update(center_mm=[0., 1.75, .9] if kind != 'pipe' else [0., 0., 0.],
-                           delay_us=.2, cycles=5.)
-        s['acquisition'] = {'duration_us': 5000., 'sample_step_us': .2}
-        s['signal'] = {'kind': 'hann', 'end_frequency_mhz': .28}
-        s['numerics']['h_mm'] = 2. if kind == 'hole' else 1.4
+        s['geometry'].update(
+            length_mm=10.0,
+            width_mm=3.5,
+            thickness_mm=1.8,
+            outer_radius_mm=2.5,
+            inner_radius_mm=1.5,
+            hole_x_mm=5.0,
+            hole_y_mm=1.75,
+            hole_radius_mm=0.55,
+            notch_x_mm=5.0,
+            notch_width_mm=0.8,
+            notch_depth_mm=0.45,
+        )
+        s['source'].update(center_mm=[0.0, 1.75, 0.9] if kind != 'pipe' else [0.0, 0.0, 0.0], delay_us=0.2, cycles=5.0)
+        s['acquisition'] = {'duration_us': 5000.0, 'sample_step_us': 0.2}
+        s['signal'] = {'kind': 'hann', 'end_frequency_mhz': 0.28}
+        s['numerics']['h_mm'] = 2.0 if kind == 'hole' else 1.4
         for i, rx in enumerate(s['receivers']):
-            rx['point_mm'] = [3. if i == 0 else 8., 2. if kind == 'pipe' else 1.75, 0. if kind == 'pipe' else .9]
+            rx['point_mm'] = [3.0 if i == 0 else 8.0, 2.0 if kind == 'pipe' else 1.75, 0.0 if kind == 'pipe' else 0.9]
         result[kind] = s
     return result
 
@@ -100,18 +120,24 @@ def validate_v2_request(body, controls=3, trained=False):
 
     Element sizes: 0.1–2.5 mm; `trained` (the trained time layer, the fast engine) keeps 0.8–2.5 mm (offline/automesh.py)."""
     from .automesh import H_MAX, H_MIN, H_MIN_TRAINED, size_range
+
     h_min = H_MIN_TRAINED if trained else H_MIN
     from graphnet.model import load
     from graphnet.inputs import network_scene
     from physics.scene import sources
     from physics.signals import highest_frequency_mhz
+
     raw = copy.deepcopy(body['scene'])
     raw.pop('signal', None)  # version-1 form field; v2 signals live in each source
     acquisition = raw.get('acquisition')
     if not isinstance(acquisition, dict) or set(acquisition) != {'duration_us', 'sample_step_us'}:
         raise ValueError('采样配置需要时长和采样间隔。')
     duration, sample = acquisition['duration_us'], acquisition['sample_step_us']
-    if any(type(v) not in (int, float) or not math.isfinite(v) for v in (duration, sample)) or not 0 < duration <= 20000 or not .01 <= sample <= .2:
+    if (
+        any(type(v) not in (int, float) or not math.isfinite(v) for v in (duration, sample))
+        or not 0 < duration <= 20000
+        or not 0.01 <= sample <= 0.2
+    ):
         raise ValueError('v2 记录时长需在 20 ms（20000 μs）以内，采样间隔为 0.01–0.2 μs。')
     ratio = duration / sample
     if abs(ratio - round(ratio)) > 1e-7 or round(ratio) > 200000:
@@ -120,20 +146,29 @@ def validate_v2_request(body, controls=3, trained=False):
     if body.get('mesh') == 'auto':
         # The software chooses the degree and element size (offline/automesh.py); any h_mm in the scene is replaced.
         from .automesh import choose
-        if not isinstance(raw.get('numerics'), dict): raise ValueError('场景需要 numerics。')
-        s, report = choose(raw, lambda trial, degree: _bounded_network_scene(trial, degree, load(degree, long_record=True)['material']), controls=controls, h_min=h_min)
+
+        if not isinstance(raw.get('numerics'), dict):
+            raise ValueError('场景需要 numerics。')
+        s, report = choose(
+            raw,
+            lambda trial, degree: _bounded_network_scene(trial, degree, load(degree, long_record=True)['material']),
+            controls=controls,
+            h_min=h_min,
+        )
         degree = report['degree']
     else:
         h = raw.get('numerics', {}).get('h_mm')
         if type(h) not in (int, float) or not h_min <= h <= H_MAX:
-            sizes, note = size_range(h_min); raise ValueError(f'网格尺寸需要在 {sizes} 之间。{note}')
+            sizes, note = size_range(h_min)
+            raise ValueError(f'网格尺寸需要在 {sizes} 之间。{note}')
         degree = body['degree']
         s = _bounded_network_scene(raw, degree, load(degree, long_record=True)['material'])
     for src in sources(s):
         if sample * 2 * highest_frequency_mhz(src) > 1 / 8 + 1e-12:
             raise ValueError(f'{src.get("name", "主激励")}：二次谐波最高频率至少需要 8 个输出采样点/周期。')
     _receivers_inside(s)
-    if report is None: return {'scene': s, 'degree': degree}
+    if report is None:
+        return {'scene': s, 'degree': degree}
     return {'scene': s, 'degree': degree, 'mesh': 'auto', 'mesh_report': report}
 
 
@@ -141,13 +176,16 @@ def _receivers_inside(scene):
     """Every receiver lies in the plate or the pipe wall (a point in a hole or a notch is found when the mesh is searched)."""
     g = scene['geometry']
     for rx in scene['receivers']:
-        x, y, z = rx['point_mm']; where = f"接收点 {rx['name']}（{x:g}, {y:g}, {z:g}）mm"
+        x, y, z = rx['point_mm']
+        where = f'接收点 {rx["name"]}（{x:g}, {y:g}, {z:g}）mm'
         if g['kind'] == 'pipe':
             r = math.hypot(y, z)
             if not (-1e-9 <= x <= g['length_mm'] + 1e-9 and g['inner_radius_mm'] - 1e-9 <= r <= g['outer_radius_mm'] + 1e-9):
-                raise ValueError(f"{where} 不在管壁内：x 需在 0–{g['length_mm']:g} mm，到管轴的距离需在 {g['inner_radius_mm']:g}–{g['outer_radius_mm']:g} mm。")
+                raise ValueError(
+                    f'{where} 不在管壁内：x 需在 0–{g["length_mm"]:g} mm，到管轴的距离需在 {g["inner_radius_mm"]:g}–{g["outer_radius_mm"]:g} mm。'
+                )
         elif not all(-1e-9 <= v <= size + 1e-9 for v, size in zip((x, y, z), (g['length_mm'], g['width_mm'], g['thickness_mm']))):
-            raise ValueError(f"{where} 在板外：板的范围是 0–{g['length_mm']:g} × 0–{g['width_mm']:g} × 0–{g['thickness_mm']:g} mm。")
+            raise ValueError(f'{where} 在板外：板的范围是 0–{g["length_mm"]:g} × 0–{g["width_mm"]:g} × 0–{g["thickness_mm"]:g} mm。')
 
 
 def _bounded_network_scene(raw, degree, material):
@@ -158,18 +196,24 @@ def _bounded_network_scene(raw, degree, material):
     per period), then the real record is restored; signal coverage of the real record follows because the
     proxy is never longer than it. Sampling of the real record is checked by the caller."""
     from graphnet.inputs import network_scene
-    acquisition = raw['acquisition']; duration, sample = acquisition['duration_us'], acquisition['sample_step_us']
+
+    acquisition = raw['acquisition']
+    duration, sample = acquisition['duration_us'], acquisition['sample_step_us']
     if duration <= 1000 and round(duration / sample) <= 2000:
         return network_scene(raw, degree, material)
     error = None
-    for step in sorted({sample, .01, .02, .05, .1, .2, .25, .5}):
-        proxy_duration = min(1000., 2000 * step, duration); proxy_duration = math.floor(proxy_duration / step + 1e-9) * step
-        if proxy_duration / step < 20: continue
-        probe = copy.deepcopy(raw); probe['acquisition'] = {'duration_us': round(proxy_duration, 9), 'sample_step_us': step}
+    for step in sorted({sample, 0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5}):
+        proxy_duration = min(1000.0, 2000 * step, duration)
+        proxy_duration = math.floor(proxy_duration / step + 1e-9) * step
+        if proxy_duration / step < 20:
+            continue
+        probe = copy.deepcopy(raw)
+        probe['acquisition'] = {'duration_us': round(proxy_duration, 9), 'sample_step_us': step}
         try:
             scene = network_scene(probe, degree, material)
         except ValueError as failure:
-            error = error or failure; continue
+            error = error or failure
+            continue
         scene['acquisition'] = dict(acquisition)
         return scene
     raise error
@@ -209,7 +253,14 @@ def validate_request(body):
         raise ValueError('记录方式设置需要 v2 场景。')
     if 'time_stepping' in options and not (body.get('engine', 'network') == 'network' and v2):
         raise ValueError('时间层设置只用于 v2 场景的冻结网络引擎；快速引擎使用模型训练时的时间层。')
-    return dict(_validate_request(body, len(CONTROL_SETS[options.get('controls', 'all')]), options.get('time_stepping') == 'frozen'), **options)
+    checked = _validate_request(body, len(CONTROL_SETS[options.get('controls', 'all')]), options.get('time_stepping') == 'frozen')
+    if (checked['scene'].get('damping') or {}).get('stiffness_s'):
+        # the stiffness-proportional term needs the one-stage layer of the automatic plan (graphnet/timestep.py)
+        if options.get('time_stepping') == 'frozen':
+            raise ValueError('刚度比例阻尼需要自动时间层；请把时间层设为自动，或只用质量比例阻尼。')
+        if checked.get('engine') == 'coarse':
+            raise ValueError('快速引擎不支持刚度比例阻尼（未核验）；请改用冻结网络，或只用质量比例阻尼。')
+    return dict(checked, **options)
 
 
 def _validate_request(body, controls=3, trained=False):
@@ -234,16 +285,21 @@ def _validate_request(body, controls=3, trained=False):
         if not (isinstance(body['scene'], dict) and body['scene'].get('schema') == V2):
             raise ValueError('快速引擎只接受 v2 场景。')
         from .coarse_engine import DEFAULT_MODEL, check, model_path
-        name = body.get('coarse_model', DEFAULT_MODEL); model_path(name)
+
+        name = body.get('coarse_model', DEFAULT_MODEL)
+        model_path(name)
         check(body['scene'], name)  # the engine's own limits first, so a refusal names them
         if auto:
             # The fast engine runs on its model's own coarse grid: validate the scene at the accuracy-based size, without the fine-mesh budget.
             from .automesh import DEGREE, H_MAX, H_MIN_TRAINED, accuracy_h
+
             scene = copy.deepcopy(body['scene'])
-            if not isinstance(scene.get('numerics'), dict): raise ValueError('场景需要 numerics。')
+            if not isinstance(scene.get('numerics'), dict):
+                raise ValueError('场景需要 numerics。')
             scene['numerics']['h_mm'] = round(min(H_MAX, max(H_MIN_TRAINED, accuracy_h(scene))), 4)
             result = dict(validate_v2_request({'scene': scene, 'degree': DEGREE}, trained=True), mesh='auto')
-        else: result = validate_v2_request({k: v for k, v in body.items() if k in ('scene', 'degree')}, trained=True)
+        else:
+            result = validate_v2_request({k: v for k, v in body.items() if k in ('scene', 'degree')}, trained=True)
         check(result['scene'], name)
         return dict(result, engine='coarse', coarse_model=name)
     if isinstance(body['scene'], dict) and body['scene'].get('schema') == V2:
@@ -256,22 +312,22 @@ def _validate_request(body, controls=3, trained=False):
     if set(acquisition) != {'duration_us', 'sample_step_us'}:
         raise ValueError('采样配置需要时长和采样间隔。')
     duration, sample = acquisition['duration_us'], acquisition['sample_step_us']
-    if any(type(v) not in (int,float) or not math.isfinite(v) for v in (duration,sample)):
+    if any(type(v) not in (int, float) or not math.isfinite(v) for v in (duration, sample)):
         raise ValueError('时长和采样间隔需要有限数值。')
-    legacy = acquisition == {'duration_us': 14., 'sample_step_us': .05} and signal.get('kind') == 'hann'
+    legacy = acquisition == {'duration_us': 14.0, 'sample_step_us': 0.05} and signal.get('kind') == 'hann'
     if legacy and body['degree'] == 5:
         raise ValueError('历史 14 μs 记录重现只支持原有 3/4 阶设置；五阶请使用长记录配置。')
     if not legacy:
-        if not 5000 <= duration <= 20000 or not .025 <= sample <= .2:
+        if not 5000 <= duration <= 20000 or not 0.025 <= sample <= 0.2:
             raise ValueError('长记录时长为 5–20 ms（5000–20000 μs），采样间隔为 0.025–0.2 μs。')
         ratio = duration / sample
-        if abs(ratio-round(ratio)) > 1e-7 or round(ratio) > 200000:
+        if abs(ratio - round(ratio)) > 1e-7 or round(ratio) > 200000:
             raise ValueError('时长需要为采样间隔的整数倍，最多 200001 个采样点。')
         # Validate unchanged material/geometric rules on a bounded acquisition;
         # restore the separately checked real record length below.
-        raw['acquisition'] = {'duration_us': 200., 'sample_step_us': .2}
+        raw['acquisition'] = {'duration_us': 200.0, 'sample_step_us': 0.2}
     h = raw['numerics']['h_mm']
-    if type(h) not in (int, float) or not .8 <= h <= 2.5:
+    if type(h) not in (int, float) or not 0.8 <= h <= 2.5:
         raise ValueError('网格尺寸需要在 0.8–2.5 mm 之间。')
     raw['numerics']['h_mm'] = h / body['degree']
     s = validate_scene(raw)
@@ -279,34 +335,49 @@ def _validate_request(body, controls=3, trained=False):
     s['acquisition'] = acquisition
     s['signal'] = signal
     spec = specification(s)
-    if sample * 2 * max(spec['start_frequency_mhz'], spec['end_frequency_mhz']) > 1/8 + 1e-12:
+    if sample * 2 * max(spec['start_frequency_mhz'], spec['end_frequency_mhz']) > 1 / 8 + 1e-12:
         raise ValueError('二次谐波最高频率至少需要 8 个输出采样点/周期。')
     g, tx, acq = s['geometry'], s['source'], s['acquisition']
-    limits = [('长度', g['length_mm'], 8, 12), ('频率', tx['frequency_mhz'], .18, .28),
-              ('幅值', tx['amplitude_mpa'], .6, 1.5), ('周期', tx['cycles'], 1, 20),
-              ('延迟', tx['delay_us'], .05, .5), ('相位', tx['phase_deg'], -75, 75)]
+    limits = [
+        ('长度', g['length_mm'], 8, 12),
+        ('频率', tx['frequency_mhz'], 0.18, 0.28),
+        ('幅值', tx['amplitude_mpa'], 0.6, 1.5),
+        ('周期', tx['cycles'], 1, 20),
+        ('延迟', tx['delay_us'], 0.05, 0.5),
+        ('相位', tx['phase_deg'], -75, 75),
+    ]
     if g['kind'] not in ('plate', 'pipe', 'hole', 'notch'):
         raise ValueError('本模型只支持参数化板、管、孔与缺口。')
     if g['kind'] == 'pipe':
-        limits += [('管外半径', g['outer_radius_mm'], 2.2, 2.8),
-                   ('管壁厚度', g['outer_radius_mm'] - g['inner_radius_mm'], .85, 1.1)]
+        limits += [('管外半径', g['outer_radius_mm'], 2.2, 2.8), ('管壁厚度', g['outer_radius_mm'] - g['inner_radius_mm'], 0.85, 1.1)]
     else:
         limits += [('板宽', g['width_mm'], 3, 4), ('板厚', g['thickness_mm'], 1.5, 2.1)]
     for label, value, lo, hi in limits:
         if not lo <= value <= hi:
             raise ValueError(f'{label} 超出原模型范围 {lo}–{hi}。')
     dx, dy, dz = tx['direction']
-    if (tx['face'] not in ('xmin', 'xmax') or tx['radius_mm'] != 0 or dx == 0 or
-        abs(dy / dx) > .15 + 1e-10 or abs(dz / dx) > .12 + 1e-10 or
-        (dx <= 0 if tx['face'] == 'xmin' else dx >= 0)):
+    if (
+        tx['face'] not in ('xmin', 'xmax')
+        or tx['radius_mm'] != 0
+        or dx == 0
+        or abs(dy / dx) > 0.15 + 1e-10
+        or abs(dz / dx) > 0.12 + 1e-10
+        or (dx <= 0 if tx['face'] == 'xmin' else dx >= 0)
+    ):
         raise ValueError('使用完整 X 端面、近轴向牵引。')
     if s['constitutive'] != 'murnaghan':
         raise ValueError('原网络使用记录中的 Murnaghan 铝材料及三组控制。')
-    if g['kind'] == 'hole' and not (.55 <= g['hole_radius_mm'] <= .8 and
-        .44 <= g['hole_x_mm'] / g['length_mm'] <= .56 and .43 <= g['hole_y_mm'] / g['width_mm'] <= .57):
+    if g['kind'] == 'hole' and not (
+        0.55 <= g['hole_radius_mm'] <= 0.8
+        and 0.44 <= g['hole_x_mm'] / g['length_mm'] <= 0.56
+        and 0.43 <= g['hole_y_mm'] / g['width_mm'] <= 0.57
+    ):
         raise ValueError('孔半径需为 0.55–0.8 mm，孔中心需位于原验证范围。')
-    if g['kind'] == 'notch' and not (.44 <= g['notch_x_mm'] / g['length_mm'] <= .57 and
-        .7 <= g['notch_width_mm'] <= 1.2 and .22 <= g['notch_depth_mm'] / g['thickness_mm'] <= .4):
+    if g['kind'] == 'notch' and not (
+        0.44 <= g['notch_x_mm'] / g['length_mm'] <= 0.57
+        and 0.7 <= g['notch_width_mm'] <= 1.2
+        and 0.22 <= g['notch_depth_mm'] / g['thickness_mm'] <= 0.4
+    ):
         raise ValueError('缺口位置、宽度或深度超出原验证范围。')
     if s['boundary']['fixed_face'] not in ('none', 'xmin', 'xmax'):
         raise ValueError('固定面只支持另一 X 端面。')

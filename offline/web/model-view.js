@@ -209,6 +209,25 @@ function drawSource(ctx, P, src, index, selected, picks) {
       const corners = [[-w, -span], [w, -span], [w, span], [-w, span]].map(([a, b]) => { const p = [...center]; p[axis] = face.endsWith('min') ? min[axis] : min[axis] + size[axis]; p[along] += offset + a; p[other] += b; return p; });
       polygon(ctx, clampToFace(corners, face, min, size).map(project), prof.alternating_sign && t % 2 ? 'rgba(28,110,214,.28)' : COLORS.sourceFill, stroke, lw);
     }
+  } else if (prof.type === 'wedge' || prof.type === 'patch') {
+    // transducers: the footprint of a wedge (with the direction the load travels), the edge zones of a bonded wafer
+    const at = face.endsWith('min') ? min[axis] : min[axis] + size[axis];
+    const box = (along, a0, a1, other, b0, b1) => clampToFace([[a0, b0], [a1, b0], [a1, b1], [a0, b1]].map(([a, b]) => { const q = [...center]; q[axis] = at; q[along] += a; q[other] += b; return q; }), face, min, size).map(project);
+    if (prof.type === 'wedge') {
+      const along = 'xyz'.indexOf(prof.along), other = along === u ? v : u, half = prof.length_mm / 2, span = prof.width_mm > 0 ? prof.width_mm / 2 : size[other];
+      polygon(ctx, box(along, -half, half, other, -span, span), COLORS.sourceFill, stroke, lw);
+      const from = [...center], to = [...center]; from[axis] = to[axis] = at; from[along] += (prof.reverse ? .8 : -.8) * half; to[along] += (prof.reverse ? -.8 : .8) * half;
+      drawArrow(ctx, project(from), project(to), stroke);
+    } else if (prof.shape === 'disc') {
+      polygon(ctx, ellipse(project, face, min, size, center, prof.length_mm / 2, prof.length_mm / 2), 'rgba(217,72,15,.10)', stroke, lw);
+      const inner = prof.length_mm / 2 - prof.edge_mm; if (inner > 0) polygon(ctx, ellipse(project, face, min, size, center, inner, inner), null, stroke, 1);
+    } else {
+      const dir = src.direction.map(Math.abs), along = dir.indexOf(Math.max(...dir)) === axis ? u : dir.indexOf(Math.max(...dir)), other = along === u ? v : u, half = prof.length_mm / 2;
+      const span = prof.width_mm > 0 ? prof.width_mm / 2 : size[other];
+      polygon(ctx, box(along, -half, half, other, -span, span), 'rgba(217,72,15,.10)', stroke, 1);
+      for (const side of [-1, 1]) polygon(ctx, box(along, side * half, side * (half - prof.edge_mm), other, -span, span), COLORS.sourceFill, stroke, lw);
+      if (prof.shape === 'rectangle') for (const side of [-1, 1]) polygon(ctx, box(other, side * span, side * (span - prof.edge_mm), along, -half, half), COLORS.sourceFill, stroke, lw);
+    }
   } else if (radius > 0) polygon(ctx, ellipse(project, face, min, size, center, radius, radius), COLORS.sourceFill, stroke, lw);
   else wholeFace(ctx, P, face, COLORS.sourceFill, stroke, lw);
   const c = project(center), d = src.direction, n = Math.hypot(...d) || 1, L = Math.max(...size) * .1;

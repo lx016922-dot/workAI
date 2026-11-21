@@ -20,12 +20,13 @@ affected. `flush` false does nothing, which is the default everywhere: the froze
 Only x86 is switched (`AVAILABLE`). On other processors `enter` does nothing and the record says so
 (`flush_subnormals` false in the manifest).
 """
+
 import platform
 from numba import njit, types
 from numba.extending import intrinsic
 
 AVAILABLE = platform.machine().lower() in ('x86_64', 'amd64')
-FLUSH_BITS = 0x8040   # MXCSR: flush-to-zero (bit 15) and denormals-are-zero (bit 6)
+FLUSH_BITS = 0x8040  # MXCSR: flush-to-zero (bit 15) and denormals-are-zero (bit 6)
 
 if AVAILABLE:
     from llvmlite import ir
@@ -36,38 +37,47 @@ if AVAILABLE:
     @intrinsic
     def _read(typingctx):
         """The MXCSR register of this thread."""
+
         def codegen(context, builder, signature, args):
             slot = builder.alloca(ir.IntType(32))
             builder.call(_register(builder, 'llvm.x86.sse.stmxcsr'), [builder.bitcast(slot, ir.IntType(8).as_pointer())])
             return builder.load(slot)
+
         return types.uint32(), codegen
 
     @intrinsic
     def _write(typingctx, value):
         """Set the MXCSR register of this thread."""
+
         def codegen(context, builder, signature, args):
-            slot = builder.alloca(ir.IntType(32)); builder.store(args[0], slot)
+            slot = builder.alloca(ir.IntType(32))
+            builder.store(args[0], slot)
             builder.call(_register(builder, 'llvm.x86.sse.ldmxcsr'), [builder.bitcast(slot, ir.IntType(8).as_pointer())])
             return context.get_dummy_value()
+
         return types.void(types.uint32), codegen
 
     @njit(cache=True)
     def enter(flush):
         """Switch this thread to flushing when `flush`; returns what `leave` needs to put the previous mode back."""
-        if not flush: return -1
-        saved = _read(); _write(saved | types.uint32(FLUSH_BITS))
+        if not flush:
+            return -1
+        saved = _read()
+        _write(saved | types.uint32(FLUSH_BITS))
         return types.int64(saved)
 
     @njit(cache=True)
     def leave(saved):
         """Put back the mode `enter` found."""
-        if saved >= 0: _write(types.uint32(saved))
+        if saved >= 0:
+            _write(types.uint32(saved))
 
     @njit(cache=True)
     def flushing():
         """Whether this thread flushes subnormal numbers now."""
         return (_read() & types.uint32(FLUSH_BITS)) == types.uint32(FLUSH_BITS)
 else:
+
     @njit(cache=True)
     def enter(flush):
         return -1

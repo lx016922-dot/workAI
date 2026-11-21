@@ -53,6 +53,17 @@ export function accumulationBody(form) {
     const speed = optional(form.speed, '跟随速度'), length = optional(form.length, '时间窗长度');
     body.window = { mode: 'follow', ...(speed === null ? {} : { speed_m_s: speed }), ...(length === null ? {} : { length_us: length }) };
   }
+  if (form.receiver && form.receiver !== 'point') {   // a receiver of finite size along the line (offline/nonlinear.py aperture)
+    if (form.mode !== 'line') throw new Error('有尺寸的接收换能器需要等距的点列：请把“分析的点”改为线段等距采样。');
+    const [size] = numbers([form.receiverLength], '接收换能器的长度');
+    if (!(size > 0)) throw new Error('接收换能器的长度需要是正数。');
+    body.receiver = { type: form.receiver, length_mm: size };
+    if (form.receiver === 'wedge') {
+      const [velocity] = numbers([form.receiverSpeed], '接收斜楔的迹线速度');
+      if (!(velocity >= 100 && velocity <= 1e5)) throw new Error('接收斜楔的迹线速度需在 100–100000 m/s。');
+      body.receiver.trace_velocity_m_s = velocity;
+    }
+  }
   const from = optional(form.fitFrom, '拟合范围'), to = optional(form.fitTo, '拟合范围');
   if ((from === null) !== (to === null)) throw new Error('拟合范围需要同时填写起点和终点，或者都留空（用全部点）。');
   if (from !== null) { if (!(from < to)) throw new Error('拟合范围的起点需要小于终点。'); body.fit_mm = [from, to]; }
@@ -79,14 +90,28 @@ const inFit = (a, r) => r.usable && r.distance_mm >= a.fit.range_mm[0] - 1e-9 &&
 /** The three charts of an accumulation analysis: A₂/A₁² with its fit, A₁, and the second harmonics. */
 export function accumulationCharts(a, width = 900) {
   const rows = usable(a), fit = a.fit.ratio, [x0, x1] = a.fit.range_mm, where = r => `${r.name ? r.name + ' · ' : ''}${num(r.distance_mm)} mm`, small = rows.length > 40, half = width >= 860 ? Math.floor((width - 18) / 2) : width;
+  const c = a.fit.attenuation?.corrected, shift = a.fit.attenuation?.source_offset_mm ?? 0, line = (g, o) => [[x0, g.intercept_per_m + g.slope_per_m2 * (x0 + o) * 1e-3], [x1, g.intercept_per_m + g.slope_per_m2 * (x1 + o) * 1e-3]];
   const ratio = seriesChart([
     { name: 'A₂/A₁²（各点）', small, points: rows.map(r => [r.distance_mm, r.ratio_per_m, `${where(r)}：A₂/A₁² ${num(r.ratio_per_m)} 1/m${inFit(a, r) ? '' : '（未参与拟合）'}`]) },
-    { name: `直线拟合（${num(x0)}–${num(x1)} mm）`, points: [[x0, fit.intercept_per_m + fit.slope_per_m2 * x0 * 1e-3], [x1, fit.intercept_per_m + fit.slope_per_m2 * x1 * 1e-3]], markers: false, dash: true, colour: INK }],
+    ...(c ? [{ name: '扣除衰减后', small, points: rows.filter(r => Number.isFinite(r.ratio_corrected_per_m)).map(r => [r.distance_mm, r.ratio_corrected_per_m, `${where(r)}：扣除衰减后 ${num(r.ratio_corrected_per_m)} 1/m`]) }] : []),
+    { name: `直线拟合（${num(x0)}–${num(x1)} mm）`, points: line(fit, 0), markers: false, dash: true, colour: INK },
+    ...(c ? [{ name: '扣除衰减后的直线拟合', points: line(c, shift), markers: false, dash: true, colour: MUTED }] : [])],
     '沿程距离 (mm)', 'A₂/A₁² (1/m)', width);
   const first = seriesChart([{ name: 'A₁', small, points: rows.map(r => [r.distance_mm, r.a1_m * 1e9, `${where(r)}：A₁ ${num(r.a1_m * 1e9)} nm`]) }], '沿程距离 (mm)', 'A₁ 完整响应 (nm)', half);
   const parts = [['a2_nonlinear_m', 'A₂ 非线性增量'], ['a2_geometric_m', 'A₂ 几何'], ['a2_material_m', 'A₂ 材料'], ['a2_m', 'A₂ 完整响应']].filter(([key]) => rows.some(r => Number.isFinite(r[key])));
   const second = seriesChart(parts.map(([key, name]) => ({ name, small, points: rows.filter(r => Number.isFinite(r[key])).map(r => [r.distance_mm, r[key] * 1e12, `${where(r)}：${name} ${num(r[key] * 1e12)} pm`]) })), '沿程距离 (mm)', '2f 幅值 (pm)', half);
   return { ratio, first, second };
+}
+
+/** The attenuation along the line: measured from A₁, given by the model's damping, and the slope with it taken out. */
+function attenuationRow(t) {
+  if (!t || (t.a1_np_m === undefined && !(Math.abs(t.a1_measured_np_m) > 1e-9))) return '';
+  const shown = t.a1_measured_np_m === null ? '—' : `${num(t.a1_measured_np_m, 4)} Np/m（ln A₁ 对距离的直线拟合，R² ${t.a1_measured_r_squared === null ? '—' : t.a1_measured_r_squared.toFixed(4)}）`;
+  if (t.a1_np_m === undefined) return `<tr><th>沿程衰减</th><td>A₁ 实测 ${shown}<br><span class="muted">模型没有材料阻尼：这是波束扩散、多模态叠加或吸收层的效果。</span></td></tr>`;
+  const model = `模型的阻尼：f 处 ${num(t.a1_np_m, 4)} Np/m${t.mode_f ? `（${escapeHtml(t.mode_f)}）` : ''}，2f 处 ${num(t.a2_np_m, 4)} Np/m${t.mode_2f ? `（${escapeHtml(t.mode_2f)}）` : ''}，由衰减率除以${t.group_velocity_source === 'theory' ? '理论' : '实测'}群速度得到${t.a1_measured_np_m === null || !(t.a1_np_m > 0) ? '' : `；A₁ 实测与它相差 ${pct(t.a1_measured_np_m / t.a1_np_m - 1)}`}`;
+  const fixed = t.corrected ? `<br><b>扣除衰减后 A₂/A₁² 的斜率 ${num(t.corrected.slope_per_m2)} m⁻²</b>；截距 ${num(t.corrected.intercept_per_m)} m⁻¹；R² ${t.corrected.r_squared === null ? '—' : t.corrected.r_squared.toFixed(4)}
+    <br><span class="muted">各点乘以 mX/(1 − e^{−mX})，m = a₂ − 2a₁ = ${num(t.m_np_m, 4)} Np/m，X 为从主激励算起的传播距离（第一个点 X = 沿程距离 + ${num(t.source_offset_mm, 4)} mm）。这是相位匹配时没有衰减的材料会给出的斜率。</span>` : '';
+  return `<tr><th>沿程衰减</th><td>A₁ 实测 ${shown}<br>${model}${fixed}</td></tr>`;
 }
 
 function waveRow(label, w) {
@@ -103,12 +128,15 @@ export function accumulationMarkup(a, width = 900) {
   const summary = `<table class="wb-table nl-summary">
     <tr><th>A₂/A₁² 的斜率</th><td><b>${num(f.ratio.slope_per_m2)} m⁻²</b>（每毫米 ${num(f.ratio.slope_per_m2 * 1e-3)} m⁻¹）；截距 ${num(f.ratio.intercept_per_m)} m⁻¹；R² ${f.ratio.r_squared === null ? '—' : f.ratio.r_squared.toFixed(4)}；
       拟合 ${num(f.range_mm[0])}–${num(f.range_mm[1])} mm 内的 ${f.points} 个点；A₂ 取${basis}</td></tr>
+    ${attenuationRow(f.attenuation)}
     <tr><th>A₂ 的斜率</th><td>${num(f.a2.slope_m_per_m * 1e9)} pm/mm；R² ${f.a2.r_squared === null ? '—' : f.a2.r_squared.toFixed(4)}；拟合范围内 A₁ 变化 ${(100 * f.a1_variation).toFixed(1)}%</td></tr>
     ${waveRow('f 处的波数', f.f)}${waveRow('2f 处的相位斜率', f['2f'])}
     <tr><th>相位匹配（理论）</th><td>${pair ? `${escapeHtml(pair.primary)} → ${escapeHtml(pair.secondary)}：相速度失配 ${pct(pair.mismatch, 3)}，Δk = k(2f) − 2k(f) = ${num(pair.delta_k_rad_mm, 3)} rad/mm${pair.coherence_length_mm === null ? '（匹配）' : `，π/|Δk| = ${num(pair.coherence_length_mm, 3)} mm`}
       <br><span class="muted">按实测到的一次模态 ${escapeHtml(pair.primary)} 查理论；二次谐波在 π/|Δk| 处最大，之后回落。全部模态对见“频散与 f–k 谱”。</span>` : '没有认出一次模态（非平板，或实测波数不在任何理论模态上）'}</td></tr>
     <tr><th>群速度</th><td>${a.group.velocity_m_s ? `${num(a.group.velocity_m_s, 5)} m/s（包络到达时刻对距离的直线拟合，R² ${a.group.r_squared === null ? '—' : a.group.r_squared.toFixed(4)}）` : '没有量出沿这条线向前传播的波包'}
       ${mode ? `<br><span class="muted">理论 ${escapeHtml(mode.mode)}：${num(mode.group_velocity_m_s, 5)} m/s${a.group.velocity_m_s ? `；实测相差 ${pct(a.group.velocity_m_s / mode.group_velocity_m_s - 1)}` : ''}</span>` : ''}</td></tr>
+    ${a.receiver && a.receiver.type !== 'point' ? `<tr><th>接收方式</th><td>${a.receiver.type === 'wedge' ? `斜楔换能器：沿线长 ${num(a.receiver.length_mm)} mm（${a.receiver.points} 个点），迹线速度 ${num(a.receiver.trace_velocity_m_s, 5)} m/s；各点按到中心的距离对齐后取平均`
+      : `压电片：长 ${num(a.receiver.length_mm)} mm，取两端位移之差（平均应变 × 长度）`}<br><span class="muted">表中的“点”是换能器中心的位置；A₁、A₂ 是换能器读到的量，不是某一点的位移。只算了换能器沿线的长度，垂直于线的方向按一个点处理。</span></td></tr>` : ''}
     <tr><th>时间窗</th><td>${w.mode === 'fixed' ? `各点同一时间窗 ${num(w.start_us)}–${num(w.end_us)} μs` : `跟随波包：长 ${num(w.length_us)} μs，第一个点以 ${num(w.centre_first_us)} μs 为中心，按 ${num(w.speed_m_s, 5)} m/s（${w.speed_source === 'measured' ? '实测群速度' : '手动填写'}）随距离后移`}</td></tr></table>`;
   const notes = a.notes.length ? `<ul class="nl-notes">${a.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '';
   const extra = [['a2_nonlinear_m', 'A₂ 非线性 / pm'], ['a2_geometric_m', 'A₂ 几何 / pm'], ['a2_material_m', 'A₂ 材料 / pm']].filter(([key]) => a.rows.some(r => Number.isFinite(r[key])));
@@ -125,14 +153,68 @@ export function accumulationMarkup(a, width = 900) {
 export function accumulationCsv(a) {
   const f = a.fit, blank = v => (v === null || v === undefined ? '' : v);
   const lines = ['# schema,' + a.schema, '# job_id,' + a.job_id, '# frequency_mhz,' + a.frequency_mhz, '# receiving_direction,' + a.direction.join(','), '# line_direction,' + a.line_direction.join(','),
-    '# a2_taken_from,' + a.a2_basis, '# window,' + Object.entries(a.window).map(([k, v]) => `${k}=${v}`).join(';'), '# group_velocity_m_s,' + blank(a.group.velocity_m_s),
+    '# a2_taken_from,' + a.a2_basis, '# window,' + Object.entries(a.window).map(([k, v]) => `${k}=${v}`).join(';'), '# receiver,' + Object.entries(a.receiver || { type: 'point' }).map(([k, v]) => `${k}=${v}`).join(';'), '# group_velocity_m_s,' + blank(a.group.velocity_m_s),
     '# fit_range_mm,' + f.range_mm.join(','), '# fit_points,' + f.points, '# ratio_slope_per_m2,' + f.ratio.slope_per_m2, '# ratio_intercept_per_m,' + f.ratio.intercept_per_m, '# ratio_r_squared,' + blank(f.ratio.r_squared),
     '# a2_slope_m_per_m,' + f.a2.slope_m_per_m, '# wavenumber_f_rad_mm,' + (f.f.reliable ? f.f.wavenumber_rad_mm : ''), '# wavenumber_2f_rad_mm,' + (f['2f'].reliable ? f['2f'].wavenumber_rad_mm : ''),
     '# theory_mode_f,' + (f.f.theory?.matched ? f.f.theory.mode : ''), '# theory_mode_2f,' + (f['2f'].theory?.matched ? f['2f'].theory.mode : ''),
     '# theory_pair,' + (f.pair ? `${f.pair.primary}-${f.pair.secondary}` : ''), '# theory_delta_k_rad_mm,' + blank(f.pair?.delta_k_rad_mm), '# theory_coherence_length_mm,' + blank(f.pair?.coherence_length_mm),
-    'point,x_mm,y_mm,z_mm,distance_mm,window_start_us,window_end_us,in_fit,a1_m,a2_complete_m,a2_nonlinear_m,a2_geometric_m,a2_material_m,a2_over_a1_squared_per_m,phase_f_deg,phase_2f_deg,arrival_us'];
+    '# a1_attenuation_measured_np_m,' + blank(f.attenuation?.a1_measured_np_m), '# attenuation_model_f_np_m,' + blank(f.attenuation?.a1_np_m), '# attenuation_model_2f_np_m,' + blank(f.attenuation?.a2_np_m),
+    '# corrected_ratio_slope_per_m2,' + blank(f.attenuation?.corrected?.slope_per_m2), '# corrected_ratio_intercept_per_m,' + blank(f.attenuation?.corrected?.intercept_per_m), '# source_offset_mm,' + blank(f.attenuation?.source_offset_mm),
+    'point,x_mm,y_mm,z_mm,distance_mm,window_start_us,window_end_us,in_fit,a1_m,a2_complete_m,a2_nonlinear_m,a2_geometric_m,a2_material_m,a2_over_a1_squared_per_m,phase_f_deg,phase_2f_deg,arrival_us,a2_over_a1_squared_without_attenuation_per_m'];
   for (const r of a.rows) lines.push([r.name || r.index, ...r.point_mm, r.distance_mm, ...r.window_us, inFit(a, r) ? 1 : 0,
-    ...['a1_m', 'a2_m', 'a2_nonlinear_m', 'a2_geometric_m', 'a2_material_m', 'ratio_per_m', 'phase1_deg', 'phase2_deg'].map(k => (r.usable ? blank(r[k]) : '')), r.arrival_us].join(','));
+    ...['a1_m', 'a2_m', 'a2_nonlinear_m', 'a2_geometric_m', 'a2_material_m', 'ratio_per_m', 'phase1_deg', 'phase2_deg'].map(k => (r.usable ? blank(r[k]) : '')), r.arrival_us, blank(r.ratio_corrected_per_m)].join(','));
+  return lines.join('\n');
+}
+
+// ---------- wave mixing ----------
+/** The distinct carrier frequencies (MHz) a model is driven at: every source's frequency and every component of a multi-tone signal. */
+export function carriersOf(scene) {
+  const found = new Set();
+  for (const s of [scene.source, ...(scene.sources || [])].filter(Boolean)) {
+    if (s.signal?.type === 'multi_tone') s.signal.components.filter(c => c.weight > 0).forEach(c => found.add(+c.frequency_mhz.toPrecision(9))); else found.add(+s.frequency_mhz.toPrecision(9));
+  }
+  return [...found].sort((a, b) => a - b);
+}
+
+/** The request of the mixing analysis: the line, the window and the fit range of the accumulation form, and the two frequencies. */
+export function mixingBody(form) {
+  const body = accumulationBody({ ...form, receiver: 'point' }), [fa, fb] = numbers([form.mixA, form.mixB], '两个混频频率');
+  if (!(fa > 0 && fb > 0) || Math.abs(fa - fb) < 1e-9) throw new Error('混频分析需要两个不同的正频率（MHz）。');
+  return { ...body, frequencies_mhz: [fa, fb] };
+}
+
+const MIX = [['sum', '和频 f_a + f_b'], ['difference', '差频 f_b − f_a']];
+
+export function mixingMarkup(m, width = 900) {
+  const rows = m.rows.filter(r => r.usable), f = m.frequencies_mhz, fit = m.fit, [x0, x1] = fit.range_mm, where = r => `${r.name ? r.name + ' · ' : ''}${num(r.distance_mm)} mm`, small = rows.length > 40;
+  const half = width >= 860 ? Math.floor((width - 18) / 2) : width, line = g => [[x0, g.intercept_per_m + g.slope_per_m2 * x0 * 1e-3], [x1, g.intercept_per_m + g.slope_per_m2 * x1 * 1e-3]];
+  const ratio = seriesChart([...MIX.map(([key, name]) => ({ name: `${name}：A/(A_a·A_b)`, small, points: rows.map(r => [r.distance_mm, r[key + '_ratio_per_m'], `${where(r)}：${name} ${num(r[key + '_ratio_per_m'])} 1/m`]) })),
+    ...MIX.map(([key, name], i) => ({ name: `${name}的直线拟合`, points: line(fit[key]), markers: false, dash: true, colour: i ? MUTED : INK }))], '沿程距离 (mm)', 'A±/(A_a·A_b) (1/m)', width);
+  const primary = seriesChart([['a', `A_a（${num(f.a)} MHz）`], ['b', `A_b（${num(f.b)} MHz）`]].map(([key, name]) => ({ name, small, points: rows.map(r => [r.distance_mm, r[key + '_m'] * 1e9, `${where(r)}：${name} ${num(r[key + '_m'] * 1e9)} nm`]) })), '沿程距离 (mm)', '基频幅值 (nm)', half);
+  const mixed = seriesChart([['sum', `和频 ${num(f.sum)} MHz`], ['difference', `差频 ${num(f.difference)} MHz`], ['2a', `2f_a ${num(f['2a'])} MHz`], ['2b', `2f_b ${num(f['2b'])} MHz`]].map(([key, name]) => ({ name, small,
+    points: rows.map(r => [r.distance_mm, r[key + '_m'] * 1e12, `${where(r)}：${name} ${num(r[key + '_m'] * 1e12)} pm`]) })), '沿程距离 (mm)', '混频与二次谐波幅值 (pm)', half);
+  const match = key => (fit.matching?.[key] || []).map(r => `${escapeHtml(r.mode)}：Δk = ${num(r.delta_k_rad_mm, 3)} rad/mm（${pct(r.mismatch, 3)}）${r.coherence_length_mm === null ? '，匹配' : `，π/|Δk| = ${num(r.coherence_length_mm, 3)} mm`}`).join('；');
+  const summary = `<table class="wb-table nl-summary">
+    ${MIX.map(([key, name]) => `<tr><th>${name}（${num(f[key])} MHz）</th><td><b>A/(A_a·A_b) 的斜率 ${num(fit[key].slope_per_m2)} m⁻²</b>；截距 ${num(fit[key].intercept_per_m)} m⁻¹；R² ${fit[key].r_squared === null ? '—' : fit[key].r_squared.toFixed(4)}
+      ${fit.matching ? `<br><span class="muted">理论：受迫波数 k_a ${key === 'sum' ? '+' : '−'} k_b 取 ${num(fit.matching[key + '_forced_rad_mm'], 5)} rad/mm（${escapeHtml(fit.matching.primary.join('、'))}）；${num(f[key])} MHz 处最接近的模态 — ${match(key) || '没有传播模态'}</span>` : ''}</td></tr>`).join('')}
+    ${waveRow(`${num(f.a)} MHz 处的波数`, fit.waves.a)}${waveRow(`${num(f.b)} MHz 处的波数`, fit.waves.b)}${waveRow('和频的相位斜率', fit.waves.sum)}${waveRow('差频的相位斜率', fit.waves.difference)}
+    <tr><th>拟合与取值</th><td>拟合 ${num(x0)}–${num(x1)} mm 内的 ${fit.points} 个点；A_a、A_b 取完整响应，和频、差频取${m.mixed_basis === 'nonlinear' ? '非线性增量（完整 − 线性）' : '完整响应'}；
+      ${m.window.mode === 'fixed' ? `各点同一时间窗 ${num(m.window.start_us)}–${num(m.window.end_us)} μs` : `时间窗长 ${num(m.window.length_us)} μs，按 ${num(m.window.speed_m_s, 5)} m/s 跟随波包`}</td></tr></table>`;
+  const notes = m.notes.length ? `<ul class="nl-notes">${m.notes.map(n => `<li>${escapeHtml(n)}</li>`).join('')}</ul>` : '';
+  const table = `<div class="table-scroll nl-rows"><table><thead><tr><th>点</th><th>沿程 / mm</th><th>A_a / nm</th><th>A_b / nm</th><th>和频 / pm</th><th>差频 / pm</th><th>2f_a / pm</th><th>2f_b / pm</th><th>和频比 / m⁻¹</th><th>差频比 / m⁻¹</th></tr></thead><tbody>
+    ${m.rows.map(r => `<tr><td>${escapeHtml(r.name || String(r.index))}</td><td>${num(r.distance_mm, 5)}</td>${r.usable ? `<td>${num(r.a_m * 1e9, 5)}</td><td>${num(r.b_m * 1e9, 5)}</td><td>${num(r.sum_m * 1e12, 5)}</td><td>${num(r.difference_m * 1e12, 5)}</td>
+      <td>${num(r['2a_m'] * 1e12, 5)}</td><td>${num(r['2b_m'] * 1e12, 5)}</td><td>${num(r.sum_ratio_per_m, 5)}</td><td>${num(r.difference_ratio_per_m, 5)}</td>` : `<td colspan="8">${escapeHtml(r.reason || '不可用')}</td>`}</tr>`).join('')}</tbody></table></div>`;
+  return `${summary}${notes}<h3 class="scan-h">混频比随沿程距离的变化</h3>${ratio}
+    <div class="nl-pair"><div><h3 class="scan-h">两个基频的幅值</h3>${primary}</div><div><h3 class="scan-h">和频、差频与二次谐波</h3>${mixed}</div></div><p class="section-note">${escapeHtml(m.note)}</p>${table}`;
+}
+
+export function mixingCsv(m) {
+  const f = m.frequencies_mhz, fit = m.fit, blank = v => (v === null || v === undefined ? '' : v), keys = ['a', 'b', 'sum', 'difference', '2a', '2b'];
+  const lines = ['# schema,' + m.schema, '# job_id,' + m.job_id, ...keys.map(k => `# frequency_${k}_mhz,${f[k]}`), '# mixed_components_taken_from,' + m.mixed_basis, '# window,' + Object.entries(m.window).map(([k, v]) => `${k}=${v}`).join(';'),
+    '# fit_range_mm,' + fit.range_mm.join(','), ...['sum', 'difference'].flatMap(k => [`# ${k}_ratio_slope_per_m2,${fit[k].slope_per_m2}`, `# ${k}_ratio_intercept_per_m,${fit[k].intercept_per_m}`, `# ${k}_ratio_r_squared,${blank(fit[k].r_squared)}`]),
+    ['point', 'x_mm', 'y_mm', 'z_mm', 'distance_mm', 'window_start_us', 'window_end_us', ...keys.map(k => `amplitude_${k}_m`), ...keys.map(k => `phase_${k}_deg`), 'sum_over_product_per_m', 'difference_over_product_per_m'].join(',')];
+  for (const r of m.rows) lines.push([r.name || r.index, ...r.point_mm, r.distance_mm, ...r.window_us, ...keys.map(k => (r.usable ? blank(r[k + '_m']) : '')), ...keys.map(k => (r.usable ? blank(r[k + '_phase_deg']) : '')),
+    r.usable ? blank(r.sum_ratio_per_m) : '', r.usable ? blank(r.difference_ratio_per_m) : ''].join(','));
   return lines.join('\n');
 }
 
@@ -186,8 +268,8 @@ export function dispersionChart(d, quantity = 'cp', measured = [], width = 900) 
 /** The modes at f and 2f and the phase-matching pairs as tables. */
 export function dispersionTables(d, pairs = 8) {
   const surface = m => { const [a, b, c] = m.surface; return `${a.toFixed(2)} : ${b.toFixed(2)} : ${c.toFixed(2)}`; };
-  const modes = key => `<table class="wb-table matrix"><thead><tr><th>模态</th><th>相速度 m/s</th><th>群速度 m/s</th><th>波长 mm</th><th>k rad/mm</th><th title="上表面位移的相对大小：沿传播方向 : 面内横向 : 厚度方向">表面位移 x : y : z</th></tr></thead><tbody>
-    ${d.modes[key].map(m => `<tr><td><i class="nl-swatch" style="background:${FAMILY_COLOURS[m.family] || MUTED}"></i>${escapeHtml(m.name)}${m.backward ? '（后向）' : ''}</td><td>${num(m.phase_velocity_m_s, 5)}</td><td>${num(m.group_velocity_m_s, 5)}</td><td>${num(m.wavelength_mm)}</td><td>${num(m.wavenumber_rad_mm)}</td><td>${surface(m)}</td></tr>`).join('')}</tbody></table>`;
+  const modes = key => `<table class="wb-table matrix"><thead><tr><th>模态</th><th>相速度 m/s</th><th>群速度 m/s</th><th>波长 mm</th><th>k rad/mm</th><th title="上表面位移的相对大小：沿传播方向 : 面内横向 : 厚度方向">表面位移 x : y : z</th>${d.damping ? '<th title="模型的材料阻尼使这个模态沿传播方向每米衰减的奈培数：衰减率 γ 除以群速度">衰减 Np/m</th>' : ''}</tr></thead><tbody>
+    ${d.modes[key].map(m => `<tr><td><i class="nl-swatch" style="background:${FAMILY_COLOURS[m.family] || MUTED}"></i>${escapeHtml(m.name)}${m.backward ? '（后向）' : ''}</td><td>${num(m.phase_velocity_m_s, 5)}</td><td>${num(m.group_velocity_m_s, 5)}</td><td>${num(m.wavelength_mm)}</td><td>${num(m.wavenumber_rad_mm)}</td><td>${surface(m)}</td>${d.damping ? `<td>${m.attenuation_np_m === null || m.attenuation_np_m === undefined ? '—' : num(m.attenuation_np_m, 3)}</td>` : ''}</tr>`).join('')}</tbody></table>`;
   const rows = d.pairs.slice(0, pairs).map(p => `<tr class="${Math.abs(p.mismatch) < .01 ? 'nl-match' : ''}"><td>${escapeHtml(p.primary)} → ${escapeHtml(p.secondary)}</td><td>${pct(p.mismatch, 3)}</td><td>${num(p.delta_k_rad_mm, 3)}</td>
     <td>${p.coherence_length_mm === null ? '匹配' : num(p.coherence_length_mm, 3)}</td><td>${num(p.group_velocity_primary_m_s, 5)}</td><td>${num(p.group_velocity_secondary_m_s, 5)}</td></tr>`).join('');
   return `<h3 class="scan-h">f = ${num(d.frequency_mhz)} MHz 处的模态</h3>${modes('f')}<h3 class="scan-h">2f = ${num(2 * d.frequency_mhz)} MHz 处的模态</h3>${modes('2f')}
@@ -289,11 +371,11 @@ export function convergenceTable(t) {
 }
 
 // ---------- the panel ----------
-const TABS = [['accumulation', '沿程累积（A₂/A₁²）'], ['dispersion', '频散与 f–k 谱'], ['convergence', '收敛检查']];
+const TABS = [['accumulation', '沿程累积（A₂/A₁²）'], ['dispersion', '频散与 f–k 谱'], ['mixing', '混频（f_a ± f_b）'], ['convergence', '收敛检查']];
 
 export function nonlinearMarkup(result) {
   const compact = result.recording?.record_mode === 'compact', receivers = result.scene.receivers, laws = (result.controls || []).map(c => c.law);
-  const parts = ['full', ...(laws.includes('linear') ? ['linear', 'nonlinear'] : []), ...(laws.length === 3 ? ['geometric', 'material'] : [])];
+  const parts = ['full', ...(laws.includes('linear') ? ['linear', 'nonlinear'] : []), ...(laws.length === 3 ? ['geometric', 'material'] : [])], carriers = carriersOf(result.scene);
   const vector = (id, label) => ['X', 'Y', 'Z'].map((axis, j) => `<label class="field"><span>${label} ${axis}</span><input id="${id}-${j}" type="number" step="any"></label>`).join('');
   return `<section class="panel" id="nl-panel"><div class="panel-heading"><h2>非线性导波分析</h2><span class="muted small-text">读取已保存的记录，不重新求解</span></div><div class="panel-body">
     <div class="nl-tabs" role="tablist">${TABS.map(([key, label]) => `<button type="button" role="tab" class="nl-tab" data-nl-tab="${key}">${label}</button>`).join('')}</div>
@@ -310,11 +392,21 @@ export function nonlinearMarkup(result) {
         <label class="field" data-nl-follow><span>时间窗长度 / μs（留空为激励时长的 1.5 倍）</span><input id="nl-length" type="number" step="any" placeholder="自动"></label>
         <label class="field" data-nl-fixed hidden><span>时间窗起点 / μs</span><input id="nl-window-start" type="number" step="any"></label>
         <label class="field" data-nl-fixed hidden><span>时间窗终点 / μs</span><input id="nl-window-end" type="number" step="any"></label>
+        <label class="field"><span>接收方式</span><select id="nl-receiver"><option value="point">点（激光测点）</option><option value="wedge">斜楔换能器</option><option value="patch">压电片</option></select></label>
+        <label class="field" data-nl-aperture hidden><span>接收换能器沿线的长度 / mm</span><input id="nl-receiver-length" type="number" step="any" min="0" placeholder="例如 12"></label>
+        <label class="field" data-nl-wedge hidden><span>接收斜楔的迹线速度 / m·s⁻¹</span><input id="nl-receiver-speed" type="number" step="any" placeholder="要接收的模态的相速度"></label>
         <label class="field"><span>拟合范围起点 / mm（留空用全部点）</span><input id="nl-fit-from" type="number" step="any" placeholder="全部"></label>
         <label class="field"><span>拟合范围终点 / mm</span><input id="nl-fit-to" type="number" step="any" placeholder="全部"></label></div>
       <div class="solid-path-actions"><button class="button primary small" id="nl-run">计算 A₁、A₂ 和 A₂/A₁² 拟合</button><button class="button secondary small" id="nl-csv" disabled>下载 CSV</button></div>
       <p id="nl-message" class="section-note" role="status">沿一条线提取基频和二次谐波，拟合 A₂/A₁² 随传播距离的增长，并由相位斜率得到 f、2f 处的波数。</p>
       <div id="nl-accumulation"></div>
+    </div>
+    <div data-nl-page="mixing" hidden>
+      <div class="form-grid"><label class="field"><span>频率 f_a / MHz</span><input id="nl-mix-a" type="number" step="any" min="0" value="${carriers.length === 2 ? carriers[0] : ''}"></label>
+        <label class="field"><span>频率 f_b / MHz</span><input id="nl-mix-b" type="number" step="any" min="0" value="${carriers.length === 2 ? carriers[1] : ''}"></label></div>
+      <div class="solid-path-actions"><button class="button primary small" id="nl-mix-run">计算和频、差频分量</button><button class="button secondary small" id="nl-mix-csv" disabled>下载 CSV</button></div>
+      <p id="nl-mix-message" class="section-note" role="status">${carriers.length === 2 ? `模型的两个载频是 ${carriers.join('、')} MHz。` : `模型有 ${carriers.length} 个载频（${carriers.join('、')} MHz）：混频需要两个不同频率的激励（两个激励源，或一个多频信号），也可以手动填两个频率。`}点列、接收方向、时间窗和拟合范围沿用“沿程累积”页的设置（接收方式按点）。</p>
+      <div id="nl-mixing"></div>
     </div>
     <div data-nl-page="dispersion" hidden>
       <div class="form-grid"><label class="field"><span>纵轴</span><select id="nl-quantity">${Object.entries(DISPERSION_QUANTITIES).map(([key, [name, unit]]) => `<option value="${key}">${name} (${unit})</option>`).join('')}</select></label>
@@ -334,13 +426,13 @@ export function nonlinearMarkup(result) {
   </div></section>`;
 }
 
-const FORM_IDS = ['nl-mode', 'nl-count', 'nl-window', 'nl-speed', 'nl-length', 'nl-window-start', 'nl-window-end', 'nl-fit-from', 'nl-fit-to', 'nl-quantity', 'nl-angle', 'nl-theory-fmax', 'nl-part', 'nl-range-start', 'nl-range-end', 'nl-fk-fmax',
+const FORM_IDS = ['nl-mode', 'nl-count', 'nl-window', 'nl-speed', 'nl-length', 'nl-window-start', 'nl-window-end', 'nl-fit-from', 'nl-fit-to', 'nl-quantity', 'nl-angle', 'nl-theory-fmax', 'nl-part', 'nl-range-start', 'nl-range-end', 'nl-fk-fmax', 'nl-receiver', 'nl-receiver-length', 'nl-receiver-speed', 'nl-mix-a', 'nl-mix-b',
   ...['nl-start', 'nl-end', 'nl-direction'].flatMap(id => [0, 1, 2].map(j => `${id}-${j}`))];
 
 /** Bind the panel. `ctx`: {job, result, api(url, body), busy(), openScan(id), refresh()}; `saved`: an earlier snapshot(). */
 export function mountNonlinear(container, ctx, saved = null) {
   const $ = id => container.querySelector('#' + id), result = ctx.result, base = '/api/jobs/' + ctx.job, receivers = result.scene.receivers, compact = result.recording?.record_mode === 'compact';
-  let disposed = false, tab = saved?.tab || 'accumulation', accumulation = saved?.accumulation || null, theory = saved?.theory || null, fk = saved?.fk || null, reader = null, timer = 0, stamp = 0;
+  let disposed = false, tab = saved?.tab || 'accumulation', accumulation = saved?.accumulation || null, mixing = saved?.mixing || null, theory = saved?.theory || null, fk = saved?.fk || null, reader = null, timer = 0, stamp = 0;
   let convergence = { plan: null, error: '', check: null, table: null, levels: saved?.levels || 1 };
   const listeners = [], listen = (element, event, callback) => { if (!element) return; element.addEventListener(event, callback); listeners.push(() => element.removeEventListener(event, callback)); };
   const widthOf = element => Math.max(360, Math.round(element.getBoundingClientRect().width) || 900);
@@ -354,11 +446,13 @@ export function mountNonlinear(container, ctx, saved = null) {
   if (saved?.inputs) for (const id of FORM_IDS) if (saved.inputs[id] !== undefined && $(id)) $(id).value = saved.inputs[id];
   const form = () => ({ mode: $('nl-mode').value, count: $('nl-count').value, start: [0, 1, 2].map(j => $('nl-start-' + j).value), end: [0, 1, 2].map(j => $('nl-end-' + j).value), direction: [0, 1, 2].map(j => $('nl-direction-' + j).value),
     window: $('nl-window').value, speed: $('nl-speed').value, length: $('nl-length').value, windowStart: $('nl-window-start').value, windowEnd: $('nl-window-end').value, fitFrom: $('nl-fit-from').value, fitTo: $('nl-fit-to').value,
+    receiver: $('nl-receiver').value, receiverLength: $('nl-receiver-length').value, receiverSpeed: $('nl-receiver-speed').value, mixA: $('nl-mix-a').value, mixB: $('nl-mix-b').value,
     part: $('nl-part').value, rangeStart: $('nl-range-start').value, rangeEnd: $('nl-range-end').value, fmax: $('nl-fk-fmax').value });
   function layout() {
     const line = $('nl-mode').value === 'line'; $('nl-segment').hidden = !line; $('nl-count-field').hidden = !line;
     const fixed = $('nl-window').value === 'fixed';
     container.querySelectorAll('[data-nl-fixed]').forEach(el => { el.hidden = !fixed; }); container.querySelectorAll('[data-nl-follow]').forEach(el => { el.hidden = fixed; });
+    const receiver = $('nl-receiver').value; container.querySelectorAll('[data-nl-aperture]').forEach(el => { el.hidden = receiver === 'point'; }); container.querySelectorAll('[data-nl-wedge]').forEach(el => { el.hidden = receiver !== 'wedge'; });
     container.querySelectorAll('[data-nl-tab]').forEach(b => { b.classList.toggle('active', b.dataset.nlTab === tab); b.setAttribute('aria-selected', b.dataset.nlTab === tab); });
     container.querySelectorAll('[data-nl-page]').forEach(page => { page.hidden = page.dataset.nlPage !== tab; });
     $('nl-line').hidden = tab === 'convergence';
@@ -377,6 +471,19 @@ export function mountNonlinear(container, ctx, saved = null) {
       say('nl-message', `已分析 ${next.rows.length} 个点（${next.points_mode === 'receivers' ? '接收点' : '线段采样'}），接收方向 [${next.direction.map(v => v.toFixed(3)).join(', ')}]，f = ${num(next.frequency_mhz)} MHz。改动设置后请重新计算。`);
       if (theory) showTheory();
     } catch (error) { if (!disposed && token === stamp) say('nl-message', error.message, true); } finally { if (!disposed) $('nl-run').disabled = false; }
+  }
+
+  // ----- wave mixing -----
+  function showMixing() {
+    if (!mixing) { $('nl-mixing').replaceChildren(); $('nl-mix-csv').disabled = true; return; }
+    $('nl-mixing').innerHTML = mixingMarkup(mixing, widthOf($('nl-mixing'))); $('nl-mix-csv').disabled = false;
+  }
+  async function runMixing() {
+    const token = ++stamp; $('nl-mix-run').disabled = true; say('nl-mix-message', '正在读取记录并计算…');
+    try {
+      const next = await ctx.api(base + '/mixing', mixingBody(form())); if (disposed || token !== stamp) return;
+      mixing = next; showMixing(); say('nl-mix-message', `已分析 ${next.rows.length} 个点：f_a = ${num(next.frequencies_mhz.a)} MHz，f_b = ${num(next.frequencies_mhz.b)} MHz。改动设置后请重新计算。`);
+    } catch (error) { if (!disposed && token === stamp) say('nl-mix-message', error.message, true); } finally { if (!disposed) $('nl-mix-run').disabled = false; }
   }
 
   // ----- dispersion -----
@@ -447,12 +554,18 @@ export function mountNonlinear(container, ctx, saved = null) {
   function open(next) {
     tab = next; layout();
     if (tab === 'accumulation') showAccumulation();
+    if (tab === 'mixing') showMixing();
     if (tab === 'dispersion') { if (theory) showTheory(); else loadTheory(); showFk(); }
     if (tab === 'convergence') { showConvergence(); loadConvergence(); }
   }
   container.querySelectorAll('[data-nl-tab]').forEach(b => listen(b, 'click', () => open(b.dataset.nlTab)));
-  listen($('nl-mode'), 'change', layout); listen($('nl-window'), 'change', layout);
-  listen($('nl-run'), 'click', runAccumulation); listen($('nl-fk-run'), 'click', runFk);
+  listen($('nl-mode'), 'change', layout); listen($('nl-window'), 'change', layout); listen($('nl-receiver'), 'change', layout);
+  listen($('nl-run'), 'click', runAccumulation); listen($('nl-fk-run'), 'click', runFk); listen($('nl-mix-run'), 'click', runMixing);
+  listen($('nl-mix-csv'), 'click', () => {
+    if (!mixing) return;
+    const link = document.createElement('a'), url = URL.createObjectURL(new Blob(['\ufeff' + mixingCsv(mixing)], { type: 'text/csv;charset=utf-8' }));
+    link.href = url; link.download = ctx.job + '-mixing.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
   listen($('nl-quantity'), 'change', showTheory); listen($('nl-angle'), 'change', loadTheory); listen($('nl-theory-fmax'), 'change', loadTheory);
   listen($('nl-fk-curves'), 'change', showFk);
   listen($('nl-fk-canvas'), 'mousemove', ev => {
@@ -465,9 +578,9 @@ export function mountNonlinear(container, ctx, saved = null) {
     link.href = url; link.download = ctx.job + '-accumulation.csv'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   let previous = null;
-  const resize = new ResizeObserver(entries => { const width = Math.round(entries[0].contentRect.width); if (disposed || width === previous) return; previous = width; if (tab === 'accumulation') showAccumulation(); if (tab === 'dispersion') { showTheory(); showFk(); } });
+  const resize = new ResizeObserver(entries => { const width = Math.round(entries[0].contentRect.width); if (disposed || width === previous) return; previous = width; if (tab === 'accumulation') showAccumulation(); if (tab === 'mixing') showMixing(); if (tab === 'dispersion') { showTheory(); showFk(); } });
   resize.observe($('nl-panel'));
   open(tab);
-  return { snapshot: () => ({ tab, accumulation, theory: theory?.error ? null : theory, fk, levels: convergence.levels, inputs: Object.fromEntries(FORM_IDS.filter(id => $(id)).map(id => [id, $(id).value])) }),
+  return { snapshot: () => ({ tab, accumulation, mixing, theory: theory?.error ? null : theory, fk, levels: convergence.levels, inputs: Object.fromEntries(FORM_IDS.filter(id => $(id)).map(id => [id, $(id).value])) }),
     cleanup: () => { disposed = true; stamp++; clearTimeout(timer); resize.disconnect(); listeners.forEach(remove => remove()); } };
 }

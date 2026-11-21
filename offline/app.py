@@ -1,4 +1,5 @@
 """Local browser application with bounded APIs and managed inference processes."""
+
 import argparse
 import io
 import json
@@ -35,8 +36,9 @@ def replace(temp, path):
         try:
             return temp.replace(path)
         except PermissionError:
-            if attempt == 39: raise
-            time.sleep(.05)
+            if attempt == 39:
+                raise
+            time.sleep(0.05)
 
 
 def save(path, value):
@@ -61,13 +63,16 @@ class Application:
             status = json.loads(p.read_text(encoding='utf-8'))
             if status['phase'] not in ('completed', 'failed', 'paused'):
                 saved = (p.parent / 'record/recording.json').exists()
-                status.update(phase='paused' if saved else 'failed', message='上次退出时任务未完成；已保存的长记录可继续计算。' if saved else '上次退出时任务未完成，可重新提交。')
+                status.update(
+                    phase='paused' if saved else 'failed',
+                    message='上次退出时任务未完成；已保存的长记录可继续计算。' if saved else '上次退出时任务未完成，可重新提交。',
+                )
                 save(p, status)
         for p in (ROOT / 'examples').glob('*/status.json'):
             target = self.jobs / p.parent.name
             if not target.exists():
                 shutil.copytree(p.parent, target)
-        self.scans = Scans(self)   # parameter scans: queues of ordinary jobs (offline/scan.py)
+        self.scans = Scans(self)  # parameter scans: queues of ordinary jobs (offline/scan.py)
 
     def busy(self):
         return self.process is not None and self.process.poll() is None
@@ -82,18 +87,20 @@ class Application:
 
     def status(self, job):
         path = self.path(job) / 'status.json'
-        for attempt in range(40):   # Windows: the worker may be replacing the file at this instant
+        for attempt in range(40):  # Windows: the worker may be replacing the file at this instant
             try:
                 return json.loads(path.read_text(encoding='utf-8'))
             except PermissionError:
-                if attempt == 39: raise
-                time.sleep(.05)
+                if attempt == 39:
+                    raise
+                time.sleep(0.05)
 
     def settle(self):
         """Give a worker that has already published its final status time to exit (closing files, unloading), so a job
         started right after one finished is not refused as "already running"."""
         process, job = self.process, self.current
-        if process is None or job is None or process.poll() is not None: return
+        if process is None or job is None or process.poll() is not None:
+            return
         try:
             phase = self.status(job).get('phase')
         except (OSError, ValueError):
@@ -108,7 +115,7 @@ class Application:
         """Start a computation. `scan`: {'id', 'index', 'count'} when it is a combination of a parameter scan (kept in its status)."""
         request = validate_request(value)
         self.settle()
-        if scan is None and self.scans.active():   # between two combinations of a scan nothing runs, but the queue is taken
+        if scan is None and self.scans.active():  # between two combinations of a scan nothing runs, but the queue is taken
             raise Busy('参数扫描正在进行：请先暂停扫描，或等它完成。')
         with self.lock:
             if self.closed or self.busy():
@@ -117,21 +124,36 @@ class Application:
             directory = self.jobs / job
             directory.mkdir()
             save(directory / 'request.json', request)
-            save(directory / 'status.json', {'job_id': job, 'name': request['scene']['name'], 'phase': 'starting',
-                 'started_at_utc': datetime.now(timezone.utc).isoformat(), 'controls_completed': 0, 'elapsed_s': 0, **({'scan': scan} if scan else {})})
+            save(
+                directory / 'status.json',
+                {
+                    'job_id': job,
+                    'name': request['scene']['name'],
+                    'phase': 'starting',
+                    'started_at_utc': datetime.now(timezone.utc).isoformat(),
+                    'controls_completed': 0,
+                    'elapsed_s': 0,
+                    **({'scan': scan} if scan else {}),
+                },
+            )
             self.launch(job)
             return {'job_id': job}
 
     def launch(self, job):
         directory = self.path(job)
         (directory / 'pause.request').unlink(missing_ok=True)
-        env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', PYTHONUTF8='1',
-                   NUMBA_CACHE_DIR=str(self.data / 'cache'))
+        env = dict(os.environ, OPENBLAS_NUM_THREADS='1', OMP_NUM_THREADS='1', PYTHONUTF8='1', NUMBA_CACHE_DIR=str(self.data / 'cache'))
         self.current = job
         try:
             with (directory / 'worker.log').open('ab') as log:
-                self.process = subprocess.Popen([sys.executable, '-X', 'utf8', '-m', 'offline.worker', '--job-dir', str(directory)],
-                    cwd=REPOSITORY, env=env, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+                self.process = subprocess.Popen(
+                    [sys.executable, '-X', 'utf8', '-m', 'offline.worker', '--job-dir', str(directory)],
+                    cwd=REPOSITORY,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                )
         except OSError:
             self.fail(job, '无法启动计算进程。请检查软件包是否完整。')
             raise
@@ -147,26 +169,29 @@ class Application:
             if action == 'pause':
                 if self.current != job or not self.process or self.process.poll() is not None:
                     raise ValueError('此任务未在运行。')
-                if not self.status(job).get('resumable', json.loads((directory/'request.json').read_text(encoding='utf-8'))['scene']['acquisition']['duration_us'] >= 5000):
+                if not self.status(job).get(
+                    'resumable',
+                    json.loads((directory / 'request.json').read_text(encoding='utf-8'))['scene']['acquisition']['duration_us'] >= 5000,
+                ):
                     raise ValueError('历史短记录不支持检查点暂停。')
-                (directory/'pause.request').touch()
-                return {'job_id':job,'message':'当前分块保存后暂停。'}
+                (directory / 'pause.request').touch()
+                return {'job_id': job, 'message': '当前分块保存后暂停。'}
             if self.closed or (self.process and self.process.poll() is None):
                 raise ValueError('已有任务正在运行。')
             status = self.status(job)
-            if status['phase'] not in ('paused','failed') or not (directory/'record/recording.json').exists():
+            if status['phase'] not in ('paused', 'failed') or not (directory / 'record/recording.json').exists():
                 raise ValueError('此任务没有可继续的检查点。')
-            status.update(phase='starting',message='正在校验记录并继续计算。')
-            save(directory/'status.json',status)
+            status.update(phase='starting', message='正在校验记录并继续计算。')
+            save(directory / 'status.json', status)
             self.launch(job)
-        if status.get('scan'):   # a combination of a paused scan continued from its own record: the scan runs again
+        if status.get('scan'):  # a combination of a paused scan continued from its own record: the scan runs again
             self.scans.job_resumed(status['scan'])
-        return {'job_id':job}
+        return {'job_id': job}
 
     def fail(self, job, message):
         status = self.status(job)
         if status['phase'] not in ('completed', 'failed', 'paused'):
-            phase = 'paused' if (self.path(job)/'record/recording.json').exists() else 'failed'
+            phase = 'paused' if (self.path(job) / 'record/recording.json').exists() else 'failed'
             status.update(phase=phase, message=message)
             save(self.path(job) / 'status.json', status)
 
@@ -180,15 +205,15 @@ class Application:
         if self.process is process:
             self.fail(job, '计算进程退出，未生成完整结果。请查看任务目录中的 worker.log。')
         try:
-            self.scans.advance()   # the next combination of a running parameter scan
-        except Exception as error:   # the queue must not die with a thread: the scan stays where it is and can be continued
+            self.scans.advance()  # the next combination of a running parameter scan
+        except Exception as error:  # the queue must not die with a thread: the scan stays where it is and can be continued
             print(f'参数扫描未能启动下一个组合：{error}', file=sys.stderr, flush=True)
 
     def close(self):
         with self.lock:
             self.closed = True
             if self.process and self.process.poll() is None:
-                (self.path(self.current)/'pause.request').touch()
+                (self.path(self.current) / 'pause.request').touch()
                 self.process.terminate()
                 try:
                     self.process.wait(timeout=5)
@@ -211,7 +236,10 @@ def handler(application):
             self.send_header('Content-Length', str(len(data)))
             self.send_header('Cache-Control', 'no-store')
             self.send_header('X-Content-Type-Options', 'nosniff')
-            self.send_header('Content-Security-Policy', "default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; object-src 'none'; frame-ancestors 'none'")
+            self.send_header(
+                'Content-Security-Policy',
+                "default-src 'self'; connect-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; object-src 'none'; frame-ancestors 'none'",
+            )
             if attachment:
                 self.send_header('Content-Disposition', 'attachment; filename="' + attachment + '"')
             self.end_headers()
@@ -230,11 +258,14 @@ def handler(application):
                 self.local_request()
                 url = urlsplit(self.path)
                 if url.path == '/api/info':
-                    return self.reply(200, {'model': application.info, 'app': APP, 'token': application.token, 'data_directory': str(application.data)})
+                    return self.reply(
+                        200, {'model': application.info, 'app': APP, 'token': application.token, 'data_directory': str(application.data)}
+                    )
                 if url.path == '/api/templates':
                     return self.reply(200, templates())
                 if url.path == '/api/materials':
                     from physics.materials import presets
+
                     return self.reply(200, presets())
                 if url.path == '/api/jobs':
                     rows = [application.status(p.name) for p in application.jobs.iterdir() if re.fullmatch(r'local-[a-f0-9]{32}', p.name)]
@@ -246,7 +277,8 @@ def handler(application):
                     scan, kind = match.groups()
                     if not kind:
                         return self.reply(200, application.scans.detail(scan))
-                    query = parse_qs(url.query); window = None
+                    query = parse_qs(url.query)
+                    window = None
                     if 'start_us' in query or 'end_us' in query:
                         window = [float(query['start_us'][0]), float(query['end_us'][0])]
                     if kind == 'summary':
@@ -267,32 +299,41 @@ def handler(application):
                     if kind == 'dispersion':
                         # Theoretical guided waves of the model's plate (offline/guided.py): needs the request only, not the result.
                         from .nonlinear import dispersion
-                        query = parse_qs(url.query); number = lambda name, default: float(query[name][0]) if name in query else default
-                        return self.reply(200, dispersion(directory, number('angle_deg', 0.), number('frequency_max_mhz', None)))
+
+                        query = parse_qs(url.query)
+                        number = lambda name, default: float(query[name][0]) if name in query else default
+                        return self.reply(200, dispersion(directory, number('angle_deg', 0.0), number('frequency_max_mhz', None)))
                     if kind == 'checks':
                         return self.reply(200, application.scans.checks_of(job))
                     if status['phase'] != 'completed':
                         return self.reply(409, {'error': '任务尚未完成。'})
                     if kind == 'export':
-                        names = ['request.json','status.json','exports.json'] + [p+ext for p in json.loads((directory/'exports.json').read_text(encoding='utf-8')) if p in ALL_PARTS for ext in ('.json','.bin.gz')]
-                        if (directory/'record/recording.json').exists():
-                            m = manifest(directory/'record')
-                            names += ['record/recording.json','record/mesh.npz'] + (['record/'+m['display']['file']] if 'display' in m else [])
-                            names += ['record/'+row['file'] for row in m['chunks']]
-                            names += ['record/'+m['checkpoint_file']]
+                        names = ['request.json', 'status.json', 'exports.json'] + [
+                            p + ext
+                            for p in json.loads((directory / 'exports.json').read_text(encoding='utf-8'))
+                            if p in ALL_PARTS
+                            for ext in ('.json', '.bin.gz')
+                        ]
+                        if (directory / 'record/recording.json').exists():
+                            m = manifest(directory / 'record')
+                            names += ['record/recording.json', 'record/mesh.npz'] + (
+                                ['record/' + m['display']['file']] if 'display' in m else []
+                            )
+                            names += ['record/' + row['file'] for row in m['chunks']]
+                            names += ['record/' + m['checkpoint_file']]
                         self.send_response(200)
-                        self.send_header('Content-Type','application/zip')
-                        self.send_header('Content-Disposition','attachment; filename="'+job+'.zip"')
-                        self.send_header('Cache-Control','no-store')
+                        self.send_header('Content-Type', 'application/zip')
+                        self.send_header('Content-Disposition', 'attachment; filename="' + job + '.zip"')
+                        self.send_header('Cache-Control', 'no-store')
                         self.end_headers()
                         # ZIP64 streaming avoids a second multi-GB copy and a
                         # whole-archive allocation in the local web process.
-                        with zipfile.ZipFile(self.wfile,'w',zipfile.ZIP_STORED,allowZip64=True) as archive:
+                        with zipfile.ZipFile(self.wfile, 'w', zipfile.ZIP_STORED, allowZip64=True) as archive:
                             for name in names:
-                                path=(directory/name).resolve()
+                                path = (directory / name).resolve()
                                 if not path.is_relative_to(directory.resolve()):
                                     raise ValueError('记录路径无效。')
-                                archive.write(path,name)
+                                archive.write(path, name)
                         return
                     part = parse_qs(url.query).get('part', ['full'])[0]
                     if part not in ALL_PARTS:
@@ -308,7 +349,9 @@ def handler(application):
                 path = (ROOT / 'web' / relative).resolve()
                 if not path.is_relative_to((ROOT / 'web').resolve()) or not path.is_file():
                     raise FileNotFoundError()
-                mime = {'.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html'}.get(path.suffix, mimetypes.guess_type(path.name)[0] or 'application/octet-stream')
+                mime = {'.js': 'text/javascript', '.css': 'text/css', '.html': 'text/html'}.get(
+                    path.suffix, mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
+                )
                 return self.reply(200, path.read_bytes(), mime)
             except (ValueError, KeyError, TypeError) as error:
                 self.reply(422, {'error': str(error)})
@@ -324,9 +367,16 @@ def handler(application):
         def do_POST(self):
             try:
                 self.local_request()
-                match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume|accumulation|fk|converge|converge-plan)',self.path)
+                match = re.fullmatch(
+                    r'/api/jobs/(local-[a-f0-9]{32})/(traces|pause|resume|accumulation|fk|mixing|converge|converge-plan)', self.path
+                )
                 scan = re.fullmatch(r'/api/scans/(' + SCAN_ID + r')/(pause|resume|retry)', self.path)
-                if self.path not in ('/api/jobs', '/api/preview', '/api/shutdown', '/api/interpret', '/api/defect', '/api/scans', '/api/scans/plan') and not match and not scan:
+                if (
+                    self.path
+                    not in ('/api/jobs', '/api/preview', '/api/shutdown', '/api/interpret', '/api/defect', '/api/scans', '/api/scans/plan')
+                    and not match
+                    and not scan
+                ):
                     raise FileNotFoundError()
                 if not secrets.compare_digest(self.headers.get('X-WorkAI-Token', ''), application.token):
                     raise PermissionError('请刷新应用页面后重试。')
@@ -337,19 +387,20 @@ def handler(application):
                     raise ValueError('场景超过 64 KiB 或为空。')
                 body = json.loads(self.rfile.read(size))
                 if match:
-                    job,action = match.groups()
+                    job, action = match.groups()
                     if action == 'traces':
                         if application.status(job)['phase'] != 'completed':
                             raise ValueError('任务尚未完成。')
-                        if not isinstance(body,dict) or set(body) != {'part','points'} or body['part'] not in ALL_PARTS:
+                        if not isinstance(body, dict) or set(body) != {'part', 'points'} or body['part'] not in ALL_PARTS:
                             raise ValueError('提取参数无效。')
                         with application.trace_lock:
-                            return self.reply(200,traces(application.path(job)/'record',body['part'],body['points']))
-                    if action in ('accumulation', 'fk'):
+                            return self.reply(200, traces(application.path(job) / 'record', body['part'], body['points']))
+                    if action in ('accumulation', 'fk', 'mixing'):
                         # Nonlinear guided-wave post-processing on the finished record (offline/nonlinear.py).
                         if application.status(job)['phase'] != 'completed':
                             raise ValueError('任务尚未完成。')
                         from . import nonlinear
+
                         with application.trace_lock:
                             return self.reply(200, getattr(nonlinear, action)(application.path(job), body))
                     if action in ('converge', 'converge-plan'):
@@ -360,7 +411,7 @@ def handler(application):
                         if action == 'converge-plan':
                             return self.reply(200, application.scans.converge_plan(job, levels))
                         return self.reply(202, application.scans.converge(job, levels))
-                    return self.reply(202,application.control(job,action))
+                    return self.reply(202, application.control(job, action))
                 if scan:
                     return self.reply(202, application.scans.control(*scan.groups()))
                 if self.path == '/api/scans/plan':
@@ -374,6 +425,7 @@ def handler(application):
                     if not isinstance(body, dict) or set(body) != {'text', 'scene'}:
                         raise ValueError('需要 text 与 scene。')
                     from .nlp import interpret
+
                     return self.reply(200, interpret(body['text'], body['scene']))
                 if self.path == '/api/defect':
                     # One-click defect: a default of the requested type placed clear of the existing ones (physics/defects.py).
@@ -381,7 +433,12 @@ def handler(application):
                         raise ValueError('需要 type 与 scene。')
                     from physics.defects import TYPES, default_defect, validate_defect
                     from .nlp import describe
-                    if body['type'] not in TYPES or not isinstance(body['scene'], dict) or (body['scene'].get('geometry') or {}).get('kind') != 'plate':
+
+                    if (
+                        body['type'] not in TYPES
+                        or not isinstance(body['scene'], dict)
+                        or (body['scene'].get('geometry') or {}).get('kind') != 'plate'
+                    ):
                         raise ValueError('缺陷只能加在平板上；类型需为裂纹、分层、接触界面、缺口或孔。')
                     existing = list(body['scene'].get('defects') or [])
                     defect = default_defect(body['type'], body['scene'], existing)
@@ -401,6 +458,7 @@ def handler(application):
                 self.reply(404, {'error': '接口不存在。'})
             except OSError:
                 self.reply(500, {'error': '不能写入数据目录或启动进程。'})
+
     return Handler
 
 
@@ -419,13 +477,16 @@ def main():
     try:
         if os.name == 'nt':
             import msvcrt
+
             lockfile.seek(0)
             if not lockfile.read(1):
-                lockfile.write(b'0'); lockfile.flush()
+                lockfile.write(b'0')
+                lockfile.flush()
             lockfile.seek(0)
             msvcrt.locking(lockfile.fileno(), msvcrt.LK_NBLCK, 1)
         else:
             import fcntl
+
             fcntl.flock(lockfile.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
         raise SystemExit('此数据目录已有 WorkAI 实例运行，请使用已打开的窗口。')
@@ -435,8 +496,10 @@ def main():
     print(f'WorkAI Offline — {url}\n数据目录：{app.data}\n按 Ctrl+C 退出；退出将停止进行中的计算。', flush=True)
     if not args.no_browser:
         webbrowser.open(url)
+
     def stop(*_):
         raise KeyboardInterrupt()
+
     signal.signal(signal.SIGTERM, stop)
     try:
         server.serve_forever()

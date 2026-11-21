@@ -106,9 +106,11 @@ def prepare_excitation(mesh,scene):
     from physics import scene as scene_v2
     from physics.boundaries import build_constraints,build_damping
     if not scene_v2.is_v2(scene):return None
+    require(not scene.get('damping'),'四面体求解器不支持材料阻尼。')
     require(not scene_v2.is_plane_strain(scene),'该场景声明为二维平面应变，请使用 spectral2d 求解器。')
     loads=[];rows=[];selected=np.zeros(len(mesh['surface']),dtype=bool)
     for src in scene_v2.sources(scene):
+        require((src.get('profile') or {}).get('type') not in ('wedge','patch'),'四面体求解器不支持斜楔和压电片激励。')
         force,mask=nodal_load(mesh,src);loads.append((force,src));selected|=mask
         rows.append({'name':src.get('name','primary'),'face':src['face'],'loaded_area_mm2':float(mesh['area'][mask].sum()*1e6),'triangles':int(mask.sum())})
     constrained,constraint_rows=build_constraints(mesh['points'],scene['boundary']['fixed_face'],scene_v2.boundaries(scene))

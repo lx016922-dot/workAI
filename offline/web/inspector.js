@@ -1,7 +1,7 @@
 // Property inspector: one form per selected model-tree item, bound to the scene by dotted paths.
 import {
   FACES, FACE_LABELS, KIND_LABELS, SIGNAL_LABELS, WINDOW_LABELS, PROFILE_LABELS, BOUNDARY_LABELS, RAMP_LABELS,
-  getPath, setPath, sourceAt, setSignalType, setProfileType, setSourceFace, inwardNormal, parseSamples, extent,
+  getPath, setPath, sourceAt, setSignalType, setProfileType, setSourceFace, inwardNormal, parseSamples, extent, PATCH_SHAPES, traceVelocity,
   DEFECT_LABELS, CRACK_FROM, defectName,
 } from './scene-model.js';
 
@@ -72,7 +72,19 @@ function signalForm(src, p) {
 
 function profileForm(src, p) {
   const prof = src.profile || { type: 'uniform' }, q = `${p}.profile`;
-  let body = sel('空间分布', `${q}.type`, prof.type, PROFILE_LABELS, { action: 'profile-type' }) + num('作用区半径（0 = 整个面）', `${p}.radius_mm`, src.radius_mm, { unit: 'mm', min: 0 });
+  const transducer = prof.type === 'wedge' || prof.type === 'patch', axes = Object.fromEntries(['x', 'y', 'z'].filter(a => a !== src.face[0]).map(a => [a, a.toUpperCase()]));
+  let body = sel('空间分布', `${q}.type`, prof.type, PROFILE_LABELS, { action: 'profile-type' }) + (transducer ? '' : num('作用区半径（0 = 整个面）', `${p}.radius_mm`, src.radius_mm, { unit: 'mm', min: 0 }));
+  if (prof.type === 'wedge') body += sel('行进方向', `${q}.along`, prof.along, axes) + check('朝负方向行进', `${q}.reverse`, prof.reverse) +
+    num('底面长度', `${q}.length_mm`, prof.length_mm, { unit: 'mm', min: .01 }) + num('底面宽度（0 = 整个面宽）', `${q}.width_mm`, prof.width_mm, { unit: 'mm', min: 0 }) +
+    num('表面迹线速度', `${q}.trace_velocity_m_s`, prof.trace_velocity_m_s, { unit: 'm/s', min: 100, hint: '等于要激发的模态的相速度' }) + sel('幅值分布', `${q}.apodization`, prof.apodization, { uniform: '均匀', hann: 'Hann（两端渐降）' }) +
+    `<div class="wb-field wide"><details class="wb-help"><summary>由楔块声速和入射角计算迹线速度</summary><div class="wb-grid"><label class="wb-field"><span>楔块纵波声速 <em>m/s</em></span><input type="number" step="any" id="wedge-speed" value="2720"></label>
+      <label class="wb-field"><span>入射角（从法向量起）<em>°</em></span><input type="number" step="any" id="wedge-angle" value="30"></label>
+      <div class="wb-field wide"><button type="button" class="wb-button small" data-action="wedge-trace">写入迹线速度</button><small>迹线速度 = 楔块声速 / sin(入射角)（Snell 定律）。有机玻璃约 2720 m/s。</small></div></div></details></div>
+    <div class="wb-field wide"><p class="wb-note">斜楔把压力波斜着送到表面，表面上的牵引是一列以迹线速度行进的波，它选出相速度等于迹线速度的导波模态。“牵引方向”一般取面的内法向（压力）。载荷从“作用中心”前后各半个底面长度；起始延迟指行波进入底面的时刻。</p></div>`;
+  if (prof.type === 'patch') body += sel('形状', `${q}.shape`, prof.shape, PATCH_SHAPES, { action: 'profile-shape' }) + num(prof.shape === 'disc' ? '直径' : '长度', `${q}.length_mm`, prof.length_mm, { unit: 'mm', min: .01 }) +
+    (prof.shape === 'disc' ? `<input type="hidden" data-path="${q}.width_mm" value="${prof.width_mm}">` : num(prof.shape === 'strip' ? '宽度（0 = 整个面宽）' : '宽度', `${q}.width_mm`, prof.width_mm, { unit: 'mm', min: 0 })) +
+    num('边缘传力区宽度', `${q}.edge_mm`, prof.edge_mm, { unit: 'mm', min: .001, hint: '至少盖住一排网格节点' }) +
+    `<div class="wb-field wide"><p class="wb-note">粘贴的压电片伸缩时，通过边缘处的面内剪力带动板（pin-force 模型）：片伸长时牵引指向片外。“牵引方向”是片的长度方向（在面内）；“幅值”是边缘传力区里的剪切牵引，线力 = 幅值 × 传力区宽度。没有建压电体和胶层，电压到牵引的换算需要标定。</p></div>`;
   if (prof.type === 'gaussian') body += num('高斯宽度 σ', `${q}.sigma_mm`, prof.sigma_mm, { unit: 'mm', min: .01 });
   if (prof.type === 'comb') body += num('齿间距', `${q}.pitch_mm`, prof.pitch_mm, { unit: 'mm' }) + num('齿数', `${q}.teeth`, prof.teeth, { min: 1, max: 64, step: 1 }) +
     num('齿宽', `${q}.tooth_width_mm`, prof.tooth_width_mm, { unit: 'mm' }) + sel('排列方向', `${q}.along`, prof.along, { x: 'X', y: 'Y', z: 'Z' }) + check('相邻齿反相', `${q}.alternating_sign`, prof.alternating_sign);
@@ -248,6 +260,10 @@ export function bindInspector(root, scene, state, onChange) {
         else if (el.dataset.action === 'profile-type') setProfileType(sourceAt(scene, sourceIndex()), el.value);
         else if (el.dataset.action === 'source-face') setSourceFace(scene, sourceAt(scene, sourceIndex()), el.value);
         else if (el.dataset.action === 'boundary-type') { const b = scene.boundaries[sourceIndex()]; const face = b.face; Object.keys(b).forEach(k => delete b[k]); Object.assign(b, el.value === 'absorbing' ? { type: 'absorbing', face, length_mm: Math.min(8, extent(scene.geometry).size['xyz'.indexOf(face[0])] / 4), ramp: 'cubic', attenuation_db: 60 } : { type: el.value, face }); }
+        else if (el.dataset.action === 'profile-shape') {   // a rectangle needs a width; a disc has none
+          setPath(scene, path, el.value); const pr = sourceAt(scene, sourceIndex()).profile;
+          if (pr.shape === 'rectangle' && !(pr.width_mm >= 2 * pr.edge_mm)) pr.width_mm = pr.length_mm; if (pr.shape === 'disc') pr.width_mm = 0;
+        }
         else if (el.dataset.action === 'defect-shape') { setPath(scene, path, el.value); reshapeDefect(scene.defects[sourceIndex()], scene); }
         else if (el.dataset.action === 'geometry-kind') { scene.geometry.kind = el.value; if (el.value === 'pipe') for (const s of [scene.source, ...(scene.sources || [])]) if (s.face[0] !== 'x') setSourceFace(scene, s, 'xmin'); }
         else setPath(scene, path, el.value);
@@ -267,6 +283,7 @@ export function bindInspector(root, scene, state, onChange) {
       if (action === 'remove') return onChange({ remove: el.dataset.id });
       const src = sourceAt(scene, sourceIndex());
       if (action === 'source-normal') src.direction = inwardNormal(src.face);
+      if (action === 'wedge-trace') src.profile.trace_velocity_m_s = traceVelocity(Number(root.querySelector('#wedge-speed').value), Number(root.querySelector('#wedge-angle').value));
       if (action === 'component-add') src.signal.components.push({ frequency_mhz: +(src.frequency_mhz * (1 + .5 * src.signal.components.length)).toFixed(4), weight: .5, phase_deg: 0 });
       if (action === 'component-remove') src.signal.components.splice(Number(el.dataset.index), 1);
       onChange('structure');

@@ -362,3 +362,9 @@ tr.nl-match td { background: var(--accent-soft); }
 .nl-verdict { margin: 8px 0; padding: 7px 10px; border-radius: 3px; font-size: 12.5px; border: 1px solid var(--line); }
 .nl-verdict.ok { background: #e9f6ef; border-color: #b9dfc9; }
 .nl-verdict.warn { background: var(--warn-soft, #fff6e0); border-color: #ecd9a6; }
+
+/* Saving a chart: a small bar that appears on the chart under the pointer (offline/web/export.js). */
+.figure-tools { position: absolute; z-index: 80; display: flex; gap: 2px; padding: 2px; background: rgba(255, 255, 255, .94); border: 1px solid var(--line, #d6e0e4); border-radius: 3px; box-shadow: 0 2px 8px rgba(20, 40, 55, .15); }
+.figure-tools[hidden] { display: none; }
+.figure-tools button { border: 0; background: transparent; color: var(--accent-dark, #1c5fa8); font-size: 11px; padding: 2px 6px; border-radius: 2px; cursor: pointer; }
+.figure-tools button:hover { background: #e8f1fa; }

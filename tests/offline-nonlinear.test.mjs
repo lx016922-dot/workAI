@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FAMILY_COLOURS, ticksFor, lineBody, accumulationBody, fkBody, lineAngle, accumulationCharts, accumulationMarkup, accumulationCsv, dispersionChart, dispersionTables, fkGrid, fkPeak,
+import { carriersOf, mixingBody, mixingMarkup, mixingCsv, FAMILY_COLOURS, ticksFor, lineBody, accumulationBody, fkBody, lineAngle, accumulationCharts, accumulationMarkup, accumulationCsv, dispersionChart, dispersionTables, fkGrid, fkPeak,
   convergenceMarkup, convergenceTable, nonlinearMarkup } from '../offline/web/nonlinear.js';
 import { SCAN_SERIES, seriesChart } from '../offline/web/scan.js';
 
@@ -141,4 +141,61 @@ test('the shared chart draws a fit as a dashed line without markers and many poi
   const svg = seriesChart([{ name: '数据', small: true, points: Array.from({ length: 50 }, (_, i) => [i, i * i]) }, { name: '拟合', points: [[0, 0], [49, 2401]], markers: false, dash: true, colour: '#173147' }], 'x', 'y');
   assert.equal((svg.match(/r="2.2"/g) || []).length, 50); assert.equal((svg.match(/r="4.5"/g) || []).length, 0); assert.ok(svg.includes('stroke="#173147"') && svg.includes('background:#173147') && svg.includes('stroke-dasharray'));
   assert.ok(seriesChart([{ name: 'a', points: [[0, 0], [1, 2]] }], 'x', 'y').includes('>0</text>'));   // zero is written as 0
+});
+
+test('accumulation with damping: the attenuation of the modes and the slope with it taken out', () => {
+  const plain = accumulation(); assert.ok(!/沿程衰减/.test(accumulationMarkup(plain)));   // no damping, flat A1: nothing to say
+  const beam = accumulation(); beam.fit.attenuation = { a1_measured_np_m: 2.4, a1_measured_r_squared: .98 };
+  assert.match(accumulationMarkup(beam), /沿程衰减[\s\S]*A₁ 实测 2\.4 Np\/m[\s\S]*模型没有材料阻尼/);
+  const a = accumulation(); a.rows.forEach(r => { if (r.usable) r.ratio_corrected_per_m = r.ratio_per_m * 1.2; });
+  a.fit.attenuation = { a1_measured_np_m: 5.02, a1_measured_r_squared: 1, decay_per_s: { f: 27000, '2f': 80000 }, group_velocity_source: 'theory', a1_np_m: 5, a2_np_m: 14.8, m_np_m: 4.8, mode_f: 'S0', mode_2f: 'S0',
+    source_offset_mm: 10, corrected: { slope_per_m2: 4.1e6, intercept_per_m: -12, r_squared: .9999 } };
+  const text = accumulationMarkup(a);
+  assert.match(text, /模型的阻尼：f 处 5 Np\/m（S0），2f 处 14\.8 Np\/m（S0），由衰减率除以理论群速度得到；A₁ 实测与它相差 \+?0\.4/);
+  assert.match(text, /扣除衰减后 A₂\/A₁² 的斜率 [^ ]+ m⁻²/); assert.match(text, /m = a₂ − 2a₁ = 4\.8 Np\/m/); assert.match(text, /沿程距离 \+ 10 mm/);
+  const chart = accumulationCharts(a).ratio; assert.match(chart, /扣除衰减后的直线拟合/); assert.equal((chart.match(/stroke-dasharray/g) || []).length, 2);
+  const csv = accumulationCsv(a).split('\n'); assert.ok(csv.includes('# corrected_ratio_slope_per_m2,4100000')); assert.ok(csv.includes('# attenuation_model_2f_np_m,14.8'));
+  const header = csv.find(l => l.startsWith('point,')).split(','), first = csv[csv.findIndex(l => l.startsWith('point,')) + 1].split(',');
+  assert.equal(header.at(-1), 'a2_over_a1_squared_without_attenuation_per_m'); assert.equal(first.length, header.length);
+  assert.ok(Math.abs(Number(first.at(-1)) / Number(first[header.indexOf('a2_over_a1_squared_per_m')]) - 1.2) < 1e-12);
+});
+
+test('a receiver of finite size: the request, and what the result says about it', () => {
+  assert.equal(accumulationBody(form()).receiver, undefined); assert.equal(accumulationBody(form({ receiver: 'point' })).receiver, undefined);
+  assert.deepEqual(accumulationBody(form({ receiver: 'wedge', receiverLength: '12', receiverSpeed: '5400' })).receiver, { type: 'wedge', length_mm: 12, trace_velocity_m_s: 5400 });
+  assert.deepEqual(accumulationBody(form({ receiver: 'patch', receiverLength: '7', receiverSpeed: '' })).receiver, { type: 'patch', length_mm: 7 });
+  assert.throws(() => accumulationBody(form({ receiver: 'wedge', receiverLength: '12', receiverSpeed: '' })), /迹线速度/);
+  assert.throws(() => accumulationBody(form({ receiver: 'patch', receiverLength: '0' })), /正数/);
+  assert.throws(() => accumulationBody(form({ mode: 'receivers', receiver: 'patch', receiverLength: '7' })), /等距/);
+  const wedge = accumulationMarkup(accumulation({ receiver: { type: 'wedge', length_mm: 12, points: 25, trace_velocity_m_s: 5400, apodization: 'uniform' } }));
+  assert.match(wedge, /接收方式[\s\S]*斜楔换能器：沿线长 12 mm（25 个点），迹线速度 5400 m\/s/);
+  assert.match(accumulationMarkup(accumulation({ receiver: { type: 'patch', length_mm: 7, points: 15 } })), /压电片：长 7 mm，取两端位移之差/);
+  assert.ok(!/接收方式/.test(accumulationMarkup(accumulation({ receiver: { type: 'point' } }))));
+  assert.ok(accumulationCsv(accumulation({ receiver: { type: 'patch', length_mm: 7, points: 15 } })).split('\n').includes('# receiver,type=patch;length_mm=7;points=15'));
+});
+
+test('wave mixing: the carriers of a model, the request, the result and its CSV', () => {
+  const tone = f => ({ frequency_mhz: f, signal: { type: 'tone_burst', window: 'hann' } });
+  assert.deepEqual(carriersOf({ source: tone(.5), sources: [tone(.4), tone(.5)] }), [.4, .5]);
+  assert.deepEqual(carriersOf({ source: { frequency_mhz: .5, signal: { type: 'multi_tone', components: [{ frequency_mhz: .5, weight: 1 }, { frequency_mhz: .3, weight: .5 }, { frequency_mhz: .7, weight: 0 }] } } }), [.3, .5]);
+  const body = mixingBody(form({ mixA: '0.5', mixB: '0.4', receiver: 'wedge', receiverLength: '', receiverSpeed: '' }));
+  assert.deepEqual(body.frequencies_mhz, [.5, .4]); assert.equal(body.receiver, undefined); assert.equal(body.points.mode, 'line'); assert.equal(body.window.mode, 'follow');
+  assert.throws(() => mixingBody(form({ mixA: '0.5', mixB: '0.5' })), /两个不同/); assert.throws(() => mixingBody(form({ mixA: '', mixB: '0.5' })), /混频频率/);
+  const k = { a: .393, b: .4915 }, w = (key, forced) => ({ ...wave(k[key] ?? forced, 'L', 1e-4), ...(forced ? { forced: { wavenumber_rad_mm: forced, difference: 2e-4 } } : {}) });
+  const m = { schema: 'workai.nonlinear.mixing.v1', job_id: 'local-' + 'c'.repeat(32), frequencies_mhz: { a: .4, b: .5, sum: .9, difference: .1, '2a': .8, '2b': 1 }, carriers_mhz: [.4, .5], direction: [1, 0, 0], line_direction: [1, 0, 0],
+    points_mode: 'receivers', controls: ['linear', 'stvk', 'murnaghan'], mixed_basis: 'nonlinear', window: { mode: 'follow', speed_m_s: 6391, speed_source: 'measured', length_us: 60, centre_first_us: 23 }, group: { velocity_m_s: 6391, r_squared: 1 },
+    rows: [0, 10, 20, 30].map((d, i) => ({ index: i + 1, name: `x${20 + d}`, point_mm: [20 + d, .4, .4], distance_mm: d, window_us: [-7 + d / 6.391, 53 + d / 6.391], usable: i < 3,
+      ...(i < 3 ? { a_m: 6e-8, b_m: 5e-8, sum_m: 1.5e-11 * (i + 2), difference_m: 1.4e-11 * (i + 2), '2a_m': 9e-12 * (i + 2), '2b_m': 1e-11 * (i + 2), a_phase_deg: 10, b_phase_deg: 20, sum_phase_deg: 30, difference_phase_deg: 40, '2a_phase_deg': 5, '2b_phase_deg': 6,
+        sum_ratio_per_m: 5000 * (i + 2), difference_ratio_per_m: 4700 * (i + 2) } : { reason: '时间窗超出记录的末尾' }) })),
+    fit: { range_mm: [0, 20], points: 3, sum: { slope_per_m2: 5e5, intercept_per_m: 1e4, r_squared: .99998 }, difference: { slope_per_m2: 4.7e5, intercept_per_m: 9400, r_squared: .9991 },
+      waves: { a: w('a'), b: w('b'), sum: w(null, .8845), difference: w(null, .0985) },
+      matching: { primary: ['S0', 'S0'], sum: [{ mode: 'S0', wavenumber_rad_mm: .8851, delta_k_rad_mm: 6e-4, mismatch: 7e-4, coherence_length_mm: 5236, group_velocity_m_s: 5300 }], sum_forced_rad_mm: .8845, difference: [], difference_forced_rad_mm: .0985 } },
+    notes: ['1 个点的时间窗超出记录的末尾，未参与分析。'], note: 'A±/(A_a·A_b) 是相对混频参数。' };
+  const text = mixingMarkup(m);
+  assert.match(text, /和频 f_a \+ f_b（0\.9 MHz）[\s\S]*A\/\(A_a·A_b\) 的斜率 5\.000e\+5 m⁻²[\s\S]*R² 1\.0000/); assert.match(text, /差频 f_b − f_a（0\.1 MHz）/);
+  assert.match(text, /受迫波数 k_a \+ k_b 取 0\.8845 rad\/mm（S0、S0）[\s\S]*S0：Δk = 6\.00e-4 rad\/mm/); assert.match(text, /没有传播模态/);
+  assert.match(text, /和频、差频取非线性增量/); assert.match(text, /时间窗超出记录的末尾/); assert.equal((text.match(/<svg/g) || []).length, 3);
+  const csv = mixingCsv(m).split('\n'); assert.ok(csv.includes('# frequency_sum_mhz,0.9')); assert.ok(csv.includes('# sum_ratio_slope_per_m2,500000'));
+  const header = csv.find(l => l.startsWith('point,')).split(','), rows = csv.slice(csv.findIndex(l => l.startsWith('point,')) + 1);
+  assert.equal(rows.length, 4); assert.ok(rows.every(r => r.split(',').length === header.length)); assert.equal(rows[0].split(',')[header.indexOf('sum_over_product_per_m')], '10000'); assert.equal(rows[3].split(',')[header.indexOf('amplitude_a_m')], '');
 });
