@@ -109,6 +109,7 @@ ruff format --check    # 只检查
 - 一行一条语句，行宽 140。
 - 注释和文档字符串写“为什么”和“这个量是什么”，不重复代码。
 - 给用户看的报错用中文，说明原因和怎么办；代码里的注释用英文。
+- 统一格式的那次提交只改排版（每个文件的语法树前后相同），记在 `.git-blame-ignore-revs` 里：`git config blame.ignoreRevsFile .git-blame-ignore-revs` 之后，`git blame` 会跳过它。
 - 锁定的文件、`graphwave/`、`solid/` 和 `research/` 不参与格式化。它们保持原样：前者不能动，后者是历史记录。
 - numba 编译的函数里只用标量循环和简单的数组运算；不要在调用的参数里写条件表达式（numba 不支持）。
 
