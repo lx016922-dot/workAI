@@ -92,6 +92,20 @@ def fig_s1s2(r):
     fig.tight_layout(); fig.savefig(OUT / 'fig5-s1s2-synchronous-pair.png'); plt.close(fig)
 
 
+def fig_beam(r):
+    """Section 11: the beam of finite width against the diffraction of a slit, as ratios to the plane-strain twin."""
+    fig, ax = plt.subplots(1, 2, figsize=(9, 3.1)); far = r['far_mm']
+    for row, col in zip(r['instants'], (BLUE, ORANGE)):
+        x = np.array(row['x_mm']); label = f"{row['time_us']:.0f} μs"
+        for a, key, soft in ((ax[0], 'fundamental', 'software'), (ax[1], 'second_harmonic_ratio', 'software_abs')):
+            a.plot(x[::2], np.array(row[key][soft])[::2], 'o', ms=3, color=col, label=f'软件，{label}')
+    row = r['instants'][0]; x = np.array(row['x_mm'])
+    ax[0].plot(x, row['fundamental']['theory'], '-', color=INK, lw=1, label='狭缝衍射（单一频率）'); ax[1].plot(x, row['second_harmonic_ratio']['theory_abs'], '-', color=INK, lw=1, label='狭缝衍射（单一频率）')
+    for a, name, title in ((ax[0], r'$D_1 = |u_1|_{3D}/|u_1|_{2D}$', '基频：三维 / 平面应变'), (ax[1], r'$D_2 = (u_2/u_1^2)_{3D}/(u_2/u_1^2)_{2D}$', '二次谐波比值：三维 / 平面应变')):
+        a.axvline(far, color='gray', lw=.8, ls=':'); a.set(xlabel='轴线上到加载端的距离 x (mm)', ylabel=name, title=title); a.legend(fontsize=6)
+    fig.tight_layout(); fig.savefig(OUT / 'fig6-beam.png'); plt.close(fig)
+
+
 if __name__ == '__main__':
     for f in ('Noto Sans CJK SC', 'WenQuanYi Zen Hei', 'SimHei'):
         if any(f in x.name for x in matplotlib.font_manager.fontManager.ttflist): plt.rcParams['font.family'] = f; break
@@ -102,4 +116,6 @@ if __name__ == '__main__':
     if s: fig_shg(s)
     s1s2 = load('results-s1s2.json')
     if s1s2 and 'N3-e3' in s1s2: fig_s1s2(s1s2)
+    beam = load('results-beam.json')
+    if beam: fig_beam(beam)
     print(sorted(p.name for p in OUT.glob('*.png')))
