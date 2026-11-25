@@ -21,6 +21,9 @@ reflections arrive. The comparison that tests the defects is therefore the one w
 one with the specified scene is kept to show the difference. The delivery of 2026-11-18 (D4, D7, D7 mesh2) records the
 cause in its metadata: the saved models apply the body load with zero components, the damping expression sits in an
 inactive field.
+
+The delivery of 2026-11-25 adds the finer mesh of the closed crack (D4 mesh2) and an archive of all ten runs whose
+metadata now state that the absorbing layers were not applied; the traces of the earlier runs are unchanged.
 """
 import csv
 import json
@@ -156,6 +159,8 @@ def variant(folder):
             _, fine, _, fine_meta, _ = comsol(case + '_mesh2')
             row['comsol_mesh2'] = {'elements': fine_meta['elements'], 'dofs': fine_meta['dofs'], 'solve_time_s': fine_meta['runs']['linear']['solve_time_s'],
                                    'base': pair(pairs, names, fine, c, c0s if defect else None, c0s, dt), 'software': pair(pairs, names, fine, s, c0s if defect else None, s0s, dt)}
+            if fine_meta.get('contact'):   # the harmonics of contact against the finer COMSOL mesh: the software, and COMSOL's base mesh (in the place of `software`)
+                row['comsol_mesh2'].update(contact=fine_meta['contact'], harmonics=harmonics(pairs, names, fine, s, dt), harmonics_base=harmonics(pairs, names, fine, c, dt))
         except StopIteration:
             pass
         finer = sorted(Path(str(folder)).parent.glob(folder.name + '-h*'))
@@ -194,12 +199,15 @@ def markdown(cases):
             if 'comsol_mesh2' in fine: extra.append(f'| {case}：COMSOL mesh2 对 软件 h {h} mm | ' + ' | '.join(cells(fine['comsol_mesh2'])) + ' |')
     closed = []
     for case, row in cases.items():
-        if 'harmonics' in row:
+        tables = [('软件 对 COMSOL 基准网格', row.get('harmonics')), ('软件 对 COMSOL mesh2', row.get('comsol_mesh2', {}).get('harmonics')), ('COMSOL 基准网格 对 COMSOL mesh2', row.get('comsol_mesh2', {}).get('harmonics_base'))]
+        for label, found in tables:
+            if not found: continue
             for k in (2, 3):
-                values = [v[f'{k}f_over_f'] for v in row['harmonics'].values()]
-                ratios = [v['software'] / v['comsol'] - 1 for v in values]
-                closed.append(f'| {case} | {k}f / f | {min(v["comsol"] for v in values):.4f}–{max(v["comsol"] for v in values):.4f} | {min(ratios):+.1%} 到 {max(ratios):+.1%} |')
-    tail = ['', '闭合缺陷的谐波（各接收点、各分量）：', '', '| 工况 | 谐波 | COMSOL 的范围 | 软件 / COMSOL − 1 |', '|---|---|---|---|'] + closed if closed else []
+                values = [v[f'{k}f_over_f'] for v in found.values()]
+                ratios = [v['software'] / v['comsol'] - 1 for v in values]; strong = [r for r, v in zip(ratios, values) if v['comsol'] >= .01]
+                closed.append(f'| {case}：{label} | {k}f / f | {min(v["comsol"] for v in values):.4f}–{max(v["comsol"] for v in values):.4f} | {min(ratios):+.1%} 到 {max(ratios):+.1%} | '
+                              + (f'{len(strong)} 个：{min(strong):+.1%} 到 {max(strong):+.1%}' if strong else '无') + ' |')
+    tail = ['', '闭合缺陷的谐波（各接收点、各分量；每行以后者为准）：', '', '| 对比 | 谐波 | 后者的范围 | 前者 / 后者 − 1 | 其中谐波比 ≥ 0.01 的分量 |', '|---|---|---|---|---|'] + closed if closed else []
     return '\n'.join(lines + (['', '网格收敛（每行以后者为准）：', ''] + HEADER + extra if extra else []) + tail)
 
 
@@ -250,9 +258,37 @@ def report():
     for name, folder in VARIANTS.items():
         if (folder / f'{INTACT}.npz').exists():
             out['variants'][name] = variant(folder); print(f'\n## {name}（各接收点、各分量中的最大值）\n'); print(markdown(out['variants'][name]))
-    homogeneity(out)
+    homogeneity(out); closed_bands(out)
     (RESULTS / 'comparison.json').write_text(json.dumps(out, ensure_ascii=False, indent=1) + '\n', encoding='utf-8')
     figures()
+
+
+BANDS = {'below_3.5f': (0., 3.5 * F_MHZ), '3.5f_to_2mhz': (3.5 * F_MHZ, 2.), 'above_2mhz': (2., 1e9)}
+
+
+def closed_bands(out, case='D4-closed-crack-1MPa'):
+    """Where the closed crack's remaining difference lies: the difference of two solutions in three bands, each as a fraction of the
+    whole reference trace (worst component). Up to 3.5 f are the fundamental and the harmonics the comparison is about; above 2 MHz
+    is what the clapping contact makes beyond the band either mesh was designed for."""
+    refined = folder_of(True, 1.0)
+    if not all((folder / f'{case}.npz').exists() for folder in (FREE, refined)): return
+    try:
+        t, base, _, _, _ = comsol(case); _, fine, _, _, _ = comsol(case + '_mesh2')
+    except StopIteration:
+        return
+    pairs = components(comsol(INTACT)[1]); dt = t[1] - t[0]; frequency = np.fft.rfftfreq(len(t), dt); auto = software(case, FREE)[1]; h1 = software(case, refined)[1]
+    def part(difference, lo, hi):
+        spectrum = np.fft.rfft(difference); spectrum[(frequency < lo) | (frequency > hi)] = 0; return np.fft.irfft(spectrum, len(difference))
+    def row(a, b):
+        return {'all': float(max(np.linalg.norm(a[:, r, k] - b[:, r, k]) / np.linalg.norm(b[:, r, k]) for r, k in pairs)),
+                **{name: float(max(np.linalg.norm(part(a[:, r, k] - b[:, r, k], lo, hi)) / np.linalg.norm(b[:, r, k]) for r, k in pairs)) for name, (lo, hi) in BANDS.items()}}
+    share = lambda a: float(max(np.linalg.norm(part(a[:, r, k], 3.5 * F_MHZ, 1e9)) / np.linalg.norm(a[:, r, k]) for r, k in pairs))
+    rows = {'software_vs_comsol_mesh2': row(auto, fine), 'software_h1_vs_comsol_mesh2': row(h1, fine), 'comsol_base_vs_comsol_mesh2': row(base, fine), 'software_vs_software_h1': row(auto, h1)}
+    out['closed_crack_bands'] = {'case': case, 'bands_mhz': {k: [lo, min(hi, float(frequency[-1]))] for k, (lo, hi) in BANDS.items()}, 'rows': rows,
+                                 'share_above_3.5f': {'comsol_mesh2': share(fine), 'software': share(auto)}}
+    print(f'\n{case}：差别所在的频带（最差分量，相对整段参考波形）\n\n| 对比 | 全频带 | 3.5 f 以下 | 3.5 f – 2 MHz | 2 MHz 以上 |\n|---|---|---|---|---|')
+    for name, r in rows.items(): print(f'| {name} | ' + ' | '.join(f'{r[k]:.2%}' for k in ('all', *BANDS)) + ' |')
+    print(f"3.5 f 以上的成分占整段波形（最差分量）：COMSOL mesh2 {share(fine):.1%}，软件 {share(auto):.1%}")
 
 
 def homogeneity(out, low='D4-closed-crack-1MPa', high='D5-closed-crack-2MPa'):
