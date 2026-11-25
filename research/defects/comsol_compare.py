@@ -134,6 +134,18 @@ def harmonics(pairs, names, reference, other, dt):
     return {f'{names[r]}_u{AXES[a]}': {f'{k}f_over_f': {'comsol': ratio(reference[:, r, a], k), 'software': ratio(other[:, r, a], k)} for k in (2, 3)} for r, a in pairs}
 
 
+BANDS_MHZ = (.81, 2.)   # the automatic mesh's band (2 × the −30 dB edge of the 0.3 MHz burst), and a wider one
+
+
+def band_limited(other, reference, pairs, dt, top):
+    """Largest relative L2 difference over the compared components after removing content above `top` MHz (raised-cosine roll-off over its last 10 %)."""
+    def low(x):
+        spec = np.fft.rfft(x, axis=0); freqs = np.fft.rfftfreq(len(x), dt); gain = np.clip((top - freqs) / (.1 * top), 0., 1.); gain = .5 - .5 * np.cos(np.pi * gain)
+        return np.fft.irfft(spec * gain[:, None, None], len(x), axis=0)
+    a, b = low(other), low(reference)
+    return float(max(np.linalg.norm(a[:, r, k] - b[:, r, k]) / np.linalg.norm(b[:, r, k]) for r, k in pairs))
+
+
 def amplitude(case):
     raw = json.loads((CASES / f'{case}.json').read_text(encoding='utf-8'))['scene']
     return float(raw['source']['amplitude_mpa'])
@@ -156,6 +168,12 @@ def variant(folder):
             _, fine, _, fine_meta, _ = comsol(case + '_mesh2')
             row['comsol_mesh2'] = {'elements': fine_meta['elements'], 'dofs': fine_meta['dofs'], 'solve_time_s': fine_meta['runs']['linear']['solve_time_s'],
                                    'base': pair(pairs, names, fine, c, c0s if defect else None, c0s, dt), 'software': pair(pairs, names, fine, s, c0s if defect else None, s0s, dt)}
+            if 'harmonics' in row:
+                # Closed defects: the clapping also radiates far above the band the meshes are sized for, so the waveform
+                # difference is also given band-limited, and the harmonics are compared with the finer COMSOL mesh.
+                row['comsol_mesh2']['band_limited_waveform'] = {f'{top:g}': {'base': band_limited(c, fine, pairs, dt, top), 'software': band_limited(s, fine, pairs, dt, top)}
+                                                                for top in BANDS_MHZ}
+                row['comsol_mesh2']['harmonics'] = {'software': harmonics(pairs, names, fine, s, dt), 'base': harmonics(pairs, names, fine, c, dt)}
         except StopIteration:
             pass
         finer = sorted(Path(str(folder)).parent.glob(folder.name + '-h*'))
@@ -199,6 +217,13 @@ def markdown(cases):
                 values = [v[f'{k}f_over_f'] for v in row['harmonics'].values()]
                 ratios = [v['software'] / v['comsol'] - 1 for v in values]
                 closed.append(f'| {case} | {k}f / f | {min(v["comsol"] for v in values):.4f}–{max(v["comsol"] for v in values):.4f} | {min(ratios):+.1%} 到 {max(ratios):+.1%} |')
+    for case, row in cases.items():
+        fine = row.get('comsol_mesh2', {})
+        if 'harmonics' in fine:
+            for label, key in (('软件', 'software'), ('COMSOL 基准网格', 'base')):
+                ratios = [v['2f_over_f']['software'] / v['2f_over_f']['comsol'] - 1 for v in fine['harmonics'][key].values()]
+                bands = '，'.join(f"≤ {top} MHz 波形差 {fine['band_limited_waveform'][top][key]:.2%}" for top in fine['band_limited_waveform'])
+                closed.append(f'| {case} | {label} 对 COMSOL mesh2：2f / f | | {min(ratios):+.1%} 到 {max(ratios):+.1%}（{bands}） |')
     tail = ['', '闭合缺陷的谐波（各接收点、各分量）：', '', '| 工况 | 谐波 | COMSOL 的范围 | 软件 / COMSOL − 1 |', '|---|---|---|---|'] + closed if closed else []
     return '\n'.join(lines + (['', '网格收敛（每行以后者为准）：', ''] + HEADER + extra if extra else []) + tail)
 
