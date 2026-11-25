@@ -9,15 +9,40 @@ export function controlsNote(r){
   if(laws.length===2)return '完整与线性两个冻结网络分支使用相同网格与激励；非线性增量 = 完整 − 线性（几何与材料增量之和）。要把它分成几何增量和材料增量，请在“求解器配置”中选择“全部”。';
   return '三个冻结网络分支使用相同网格与激励；材料增量 = 完整材料 − StVK，几何增量 = StVK − 线性。';
 }
+/** Defects that act as one-sided contact: closed cracks and delaminations, contact interfaces (physics/defects.py is_contact). */
+export const contactDefects=scene=>(scene?.defects||[]).filter(d=>d.type==='contact'||(['crack','delamination'].includes(d.type)&&d.closed===true));
+/** Where the harmonics of contact are: the contact acts in every control, so they are in each control's response and cancel in the differences. */
+export function contactNote(r){
+  if(!contactDefects(r.scene).length)return '';
+  return ['geometric','material','nonlinear'].includes(r.response_part)
+    ?'这个模型有接触（闭合裂纹、闭合分层或接触界面）。接触在每一组控制里都起作用，它产生的谐波在“完整位移”和“线性位移”里；现在显示的增量是两组控制之差，只含材料和几何非线性，<b>不含接触谐波</b>。要看接触非线性，请把“响应”改为完整位移。'
+    :'这个模型有接触（闭合裂纹、闭合分层或接触界面）。接触在每一组控制里都起作用，它产生的谐波就在现在显示的响应里；“非线性增量”等几种增量是两组控制之差，不含接触谐波。';
+}
+/** How the displacement field is first shown: a strip (hardly any width: a plane-strain model) from its side with the thickness drawn
+ *  larger, a pipe and a plate at an angle. `stretch` multiplies the drawn z extent, not the displacement. */
+export function initialView(kind,min,max){
+  if(kind==='pipe')return {yaw:1.1,pitch:.45,stretch:1,strip:false};
+  const size=max.map((v,j)=>v-min[j]);
+  if(size[1]<=.05*size[0]&&size[2]>0)return {yaw:0,pitch:0,stretch:Math.max(1,Math.round(size[0]/(10*size[2]))),strip:true};
+  return {yaw:.55,pitch:1.05,stretch:1,strip:false};
+}
+/** The displacement (m) at the end of the colour scale: the largest of the record, of the frame shown, or the value given in nm. */
+export function colorPeak(mode,customNm,recordPeak,framePeak){
+  if(mode==='custom'&&Number.isFinite(customNm)&&customNm>0)return customNm*1e-9;
+  if(mode==='frame'&&framePeak>0)return framePeak;
+  return recordPeak;
+}
+export const COLOR_MODES={record:'整段记录的最大值（固定）',frame:'当前时刻的最大值',custom:'自定义上限'};
 export function solidResultMarkup(r) {
   const d=r.diagnostics;
   const spectral=true, difference=['geometric','material','nonlinear'].includes(r.response_part), compact=r.recording?.record_mode==='compact', shown=r.display;
-  return `<div class="notice">图网络离线预测 · ${esc(r.scene.name)} · ${esc(responseLabels[r.response_part]||'完整位移')}。${controlsNote(r)}新增工况与任意点位的精度需独立核验。</div>
+  return `<div class="notice">图网络离线预测 · ${esc(r.scene.name)} · ${esc(responseLabels[r.response_part]||'完整位移')}。${controlsNote(r)}新增工况与任意点位的精度需独立核验。</div>${contactNote(r)?`<div class="notice warn" id="solid-contact-note">${contactNote(r)}</div>`:''}
   <div class="solid-layout"><section class="panel"><div class="panel-heading"><h2>三维位移场动画</h2><span class="pill">本机计算</span></div><div class="panel-body">
   <canvas id="solid-canvas" class="solid-canvas" aria-label="三维铝结构位移场动画"></canvas>
+  <div class="solid-views" role="group" aria-label="视角"><button type="button" class="button secondary small" data-solid-view="iso">等轴</button><button type="button" class="button secondary small" data-solid-view="side">侧视 XZ</button><button type="button" class="button secondary small" data-solid-view="top">俯视 XY</button><label class="solid-check" title="把板厚方向画得更大，位移不变；长而薄的模型默认打开"><input type="checkbox" id="solid-thin"> 放大薄方向</label></div>
   <div class="solid-animation"><button class="button secondary small" id="solid-play">播放</button><input id="solid-frame" aria-label="动画时间帧" type="range" min="0" max="${r.times_us.length-1}" value="0"><span id="solid-time"></span></div>
-  <div class="form-grid"><label class="field"><span>着色分量</span><select id="solid-component"><option value="magnitude">位移模长</option><option value="0">X 位移</option><option value="1">Y 位移</option><option value="2">Z 位移</option><option value="direction">接收方向投影</option></select></label><label class="field"><span>形变显示倍率（可设 0）</span><input id="solid-scale" type="number" min="0" max="10000000" step="100"></label></div>
-  <p id="solid-color-note" class="section-note"></p><p class="section-note">${r.recording?`${compact?'精简记录':'完整记录'} ${(r.recording.duration_us/1000).toFixed(3)} ms / ${r.recording.frame_count} 个采样点；动画抽帧显示，分析和 CSV 使用${compact?'接收点的完整采样波形':'完整记录'}。`:"历史短记录；要分析 5 ms，请使用新配置重新计算。"}拖动旋转，滚轮缩放。颜色为真实位移；形变按显示倍率放大。橙色边线表示加载区域。${shown?`动画用显示网格：${shown.triangles.toLocaleString()} 个表面三角形 / ${shown.nodes.toLocaleString()} 个节点（计算网格 ${shown.computation_nodes.toLocaleString()} 个节点${shown.cell_mm?`，表面节点按 ${shown.cell_mm.toFixed(2)} mm 合并`:shown.stride>1?`，每个单元面每 ${shown.stride} 个节点取一个`:'，表面节点全部显示'}），float32；显示网格不影响计算和接收点波形。`:'显示全部表面三角形，包括孔和管的内表面。'}</p>
+  <div class="form-grid"><label class="field"><span>着色分量</span><select id="solid-component"><option value="magnitude">位移模长</option><option value="0">X 位移</option><option value="1">Y 位移</option><option value="2">Z 位移</option><option value="direction">接收方向投影</option></select></label><label class="field"><span>形变显示倍率（可设 0）</span><input id="solid-scale" type="number" min="0" max="10000000" step="100"></label><label class="field"><span>色标范围</span><select id="solid-color-mode">${Object.entries(COLOR_MODES).map(([k,v])=>`<option value="${k}">${v}</option>`).join('')}</select></label><label class="field"><span>色标上限 / nm（选“自定义上限”时）</span><input id="solid-color-max" type="number" min="0" step="any" disabled></label></div>
+  <p id="solid-color-note" class="section-note"></p><p class="section-note">${r.recording?`${compact?'精简记录':'完整记录'} ${(r.recording.duration_us/1000).toFixed(3)} ms / ${r.recording.frame_count} 个采样点；动画抽帧显示，分析和 CSV 使用${compact?'接收点的完整采样波形':'完整记录'}。`:"历史短记录；要分析 5 ms，请使用新配置重新计算。"}拖动旋转，Shift+拖动平移，滚轮缩放。颜色为真实位移；形变按显示倍率放大。橙色边线表示加载区域。${shown?`动画用显示网格：${shown.triangles.toLocaleString()} 个表面三角形 / ${shown.nodes.toLocaleString()} 个节点（计算网格 ${shown.computation_nodes.toLocaleString()} 个节点${shown.cell_mm?`，表面节点按 ${shown.cell_mm.toFixed(2)} mm 合并`:shown.stride>1?`，每个单元面每 ${shown.stride} 个节点取一个`:'，表面节点全部显示'}），float32；显示网格不影响计算和接收点波形。`:'显示全部表面三角形，包括孔和管的内表面。'}</p>
   </div></section><section class="panel"><div class="panel-heading"><h2>任意点位与方向</h2></div><div class="panel-body">
   <label class="field"><span>预设接收点</span><select id="solid-receiver">${r.scene.receivers.map((p,i)=>`<option value="${i}">${esc(p.name)}</option>`).join('')}</select></label>
   <div class="form-grid solid-vectors">${['x','y','z'].map((a,i)=>`<label class="field"><span>${a.toUpperCase()} / mm</span><input id="solid-point-${i}" type="number" step="any"></label>`).join('')}${['x','y','z'].map((a,i)=>`<label class="field"><span>方向 ${a}</span><input id="solid-direction-${i}" type="number" step="any"></label>`).join('')}</div>
@@ -45,33 +70,47 @@ export function chart(x,y,labelX,labelY,color='#148778',width=900) {
 export function mountSolidResult(container,result,field,extractSeries=pointSeries,viewState=null) {
   const $=s=>container.querySelector(s),canvas=$('#solid-canvas'),ctx=canvas.getContext('2d'),nodes=result.nodes_mm,n=nodes.length;
   const loadedFaces=new Set(result.loaded_faces||[]);
-  let frame=viewState?.frame??Math.floor(result.times_us.length*.45),playing=false,timer,last=0,yaw=result.scene.geometry.kind==='pipe'?1.1:.55,pitch=result.scene.geometry.kind==='pipe'?.45:1.05,zoom=1,drag=null,probe=null,analysis=null,direction=[1,0,0],disposed=false,extraction=0;
+  let frame=viewState?.frame??Math.floor(result.times_us.length*.45),playing=false,timer,last=0,yaw=0,pitch=0,zoom=1,panX=0,panY=0,stretch=1,drag=null,probe=null,analysis=null,direction=[1,0,0],disposed=false,extraction=0;
   const edges=new Map(),edgeKey=(a,b)=>a<b?`${a},${b}`:`${b},${a}`;
   for(const face of result.surface){const a=nodes[face[0]],b=nodes[face[1]].map((v,j)=>v-a[j]),c=nodes[face[2]].map((v,j)=>v-a[j]),normal=[b[1]*c[2]-b[2]*c[1],b[2]*c[0]-b[0]*c[2],b[0]*c[1]-b[1]*c[0]],length=Math.hypot(...normal);
     for(let j=0;j<3;j++){const key=edgeKey(face[j],face[(j+1)%3]);if(!edges.has(key))edges.set(key,[]);edges.get(key).push(normal.map(v=>v/length));}}
   const features=new Set([...edges].filter(([,normals])=>normals.length!==2||Math.abs(normals[0].reduce((s,v,j)=>s+v*normals[1][j],0))<Math.cos(Math.PI/6)).map(([key])=>key));
   const min=[0,1,2].map(j=>Math.min(...nodes.map(p=>p[j]))),max=[0,1,2].map(j=>Math.max(...nodes.map(p=>p[j]))),center=min.map((v,j)=>(v+max[j])/2),span=Math.hypot(...min.map((v,j)=>max[j]-v));
   let peak=0;for(let i=0;i<field.length;i+=3)peak=Math.max(peak,Math.hypot(field[i],field[i+1],field[i+2]));
+  const first=initialView(result.scene.geometry.kind,min,max),kept=viewState?.view;
+  ({yaw,pitch}=kept??first);zoom=kept?.zoom??1;panX=kept?.panX??0;panY=kept?.panY??0;$('#solid-thin').checked=kept?kept.thin:first.stretch>1;
+  const drawn=()=>$('#solid-thin').checked?Math.max(first.stretch,Math.round((max[0]-min[0])/(10*(max[2]-min[2]||1))),1):1;
   $('#solid-scale').value=Math.min(1e7,Math.round(span*.05/(peak*1000||1)));
   $('#solid-frame').value=frame;
-  const project=p=>{const [x,y,z]=p.map((v,j)=>v-center[j]),a=Math.cos(yaw)*x-Math.sin(yaw)*y,b=Math.sin(yaw)*x+Math.cos(yaw)*y;return [a,Math.cos(pitch)*z-Math.sin(pitch)*b,Math.sin(pitch)*z+Math.cos(pitch)*b];};
+  // the drawn position of a point moved by `move` (mm): the thickness is stretched, the displacement is not
+  const project=(p,move=[0,0,0])=>{const x=p[0]-center[0]+move[0],y=p[1]-center[1]+move[1],z=(p[2]-center[2])*stretch+move[2],a=Math.cos(yaw)*x-Math.sin(yaw)*y,b=Math.sin(yaw)*x+Math.cos(yaw)*y;return [a,Math.cos(pitch)*z-Math.sin(pitch)*b,Math.sin(pitch)*z+Math.cos(pitch)*b];};
   function draw() {
     if(disposed)return;
     const box=canvas.getBoundingClientRect(),ratio=Math.min(devicePixelRatio||1,2),w=Math.max(240,box.width),h=Math.max(300,box.height);canvas.width=w*ratio;canvas.height=h*ratio;ctx.scale(ratio,ratio);
     ctx.fillStyle='#f3f7f8';ctx.fillRect(0,0,w,h);
-    const scale=.8*Math.min(w,h)/span*zoom,multiplier=Math.max(0,Math.min(1e7,Number($('#solid-scale').value)||0)),component=$('#solid-component').value,offset=frame*n*3;
+    stretch=drawn();const cx=w/2+panX,cy=h/2+panY;
+    // fit the body as it is seen from here: the box of its eight corners on the screen
+    let wide=0,high=0;for(let k=0;k<8;k++){const q=project([k&1?max[0]:min[0],k&2?max[1]:min[1],k&4?max[2]:min[2]]);wide=Math.max(wide,Math.abs(q[0]));high=Math.max(high,Math.abs(q[1]));}
+    const scale=.86*Math.min(w/(2*wide||span),h/(2*high||span))*zoom,multiplier=Math.max(0,Math.min(1e7,Number($('#solid-scale').value)||0)),component=$('#solid-component').value,offset=frame*n*3;
     const projected=[],values=[];
-    for(let i=0;i<n;i++){const u=[field[offset+i*3],field[offset+i*3+1],field[offset+i*3+2]],p=project(nodes[i].map((v,j)=>v+u[j]*1000*multiplier));projected.push([w/2+p[0]*scale,h/2-p[1]*scale,p[2]]);
-      values.push(component==='magnitude'?Math.hypot(...u):component==='direction'?u.reduce((a,v,j)=>a+v*direction[j],0):u[Number(component)]);}
+    let framePeak=0;
+    for(let i=0;i<n;i++){const u=[field[offset+i*3],field[offset+i*3+1],field[offset+i*3+2]],p=project(nodes[i],u.map(v=>v*1000*multiplier));projected.push([cx+p[0]*scale,cy-p[1]*scale,p[2]]);
+      const value=component==='magnitude'?Math.hypot(...u):component==='direction'?u.reduce((a,v,j)=>a+v*direction[j],0):u[Number(component)];values.push(value);framePeak=Math.max(framePeak,Math.abs(value));}
+    const mode=$('#solid-color-mode').value,top=colorPeak(mode,Number($('#solid-color-max').value),peak,framePeak);$('#solid-color-max').disabled=mode!=='custom';
     const triangles=result.surface.map((face,index)=>({face,index,depth:face.reduce((s,i)=>s+projected[i][2],0)})).sort((a,b)=>a.depth-b.depth);
-    for(const {face,index} of triangles){const value=face.reduce((s,i)=>s+values[i],0)/3,q=Math.max(-1,Math.min(1,value/(peak||1))),m=component==='magnitude'?(q*2-1):q;
+    for(const {face,index} of triangles){const value=face.reduce((s,i)=>s+values[i],0)/3,q=Math.max(-1,Math.min(1,value/(top||1))),m=component==='magnitude'?(q*2-1):q;
       const rgb=m>=0?[245,Math.round(238-155*m),Math.round(225-170*m)]:[Math.round(235+160*m),Math.round(240+70*m),246];
       ctx.beginPath();face.forEach((id,j)=>{const p=projected[id];if(j===0)ctx.moveTo(p[0],p[1]);else ctx.lineTo(p[0],p[1]);});ctx.closePath();ctx.fillStyle=`rgb(${rgb.join(',')})`;ctx.fill();ctx.strokeStyle=loadedFaces.has(index)?'#cc874a':'#314d6026';ctx.lineWidth=loadedFaces.has(index)?.8:.35;ctx.stroke();
       for(let j=0;j<3;j++)if(features.has(edgeKey(face[j],face[(j+1)%3]))){const a=projected[face[j]],b=projected[face[(j+1)%3]];ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.strokeStyle=loadedFaces.has(index)?'#b47734':'#41647e';ctx.lineWidth=.8;ctx.stroke();}}
-    if(probe){const location=probe.location,point=result.display||!location.ids?.length?location.point_mm:location.ids.reduce((sum,id,k)=>sum.map((v,j)=>v+location.weights[k]*(nodes[id][j]+field[offset+id*3+j]*1000*multiplier)),[0,0,0]),p=project(point);
-      ctx.beginPath();ctx.arc(w/2+p[0]*scale,h/2-p[1]*scale,5,0,2*Math.PI);ctx.fillStyle='#103d52';ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=2;ctx.stroke();}
+    if(probe){const location=probe.location,moved=!result.display&&location.ids?.length,point=moved?location.ids.reduce((sum,id,k)=>sum.map((v,j)=>v+location.weights[k]*nodes[id][j]),[0,0,0]):location.point_mm,
+      move=moved?location.ids.reduce((sum,id,k)=>sum.map((v,j)=>v+location.weights[k]*field[offset+id*3+j]*1000*multiplier),[0,0,0]):[0,0,0],p=project(point,move);
+      ctx.beginPath();ctx.arc(cx+p[0]*scale,cy-p[1]*scale,5,0,2*Math.PI);ctx.fillStyle='#103d52';ctx.fill();ctx.strokeStyle='white';ctx.lineWidth=2;ctx.stroke();}
     ctx.fillStyle='#537482';ctx.font='12px sans-serif';ctx.fillText(`X / Y / Z · mm     t = ${result.times_us[frame].toFixed(2)} μs`,15,24);
-    $('#solid-time').textContent=result.times_us[frame].toFixed(2)+' μs';$('#solid-color-note').textContent=`固定色标：${component==='magnitude'?'0':'−'+(peak*1e9).toFixed(3)} 至 ${(peak*1e9).toFixed(3)} nm；形变显示 ${multiplier} 倍。`;
+    // the axes as they are drawn: which way x, y and z point in this view
+    const origin=[34,h-34];ctx.font='11px sans-serif';
+    [['X','#c0392b',[1,0,0]],['Y','#2f855a',[0,1,0]],['Z','#2b6cb0',[0,0,1]]].forEach(([name,colour,axis])=>{const a=Math.cos(yaw)*axis[0]-Math.sin(yaw)*axis[1],b=Math.sin(yaw)*axis[0]+Math.cos(yaw)*axis[1],y=Math.cos(pitch)*axis[2]-Math.sin(pitch)*b;
+      if(Math.hypot(a,y)<.15)return;ctx.beginPath();ctx.moveTo(origin[0],origin[1]);ctx.lineTo(origin[0]+a*22,origin[1]-y*22);ctx.strokeStyle=colour;ctx.lineWidth=1.6;ctx.stroke();ctx.fillStyle=colour;ctx.fillText(name,origin[0]+a*30-3,origin[1]-y*30+4);});
+    $('#solid-time').textContent=result.times_us[frame].toFixed(2)+' μs';$('#solid-color-note').textContent=`色标（${COLOR_MODES[mode]}）：${component==='magnitude'?'0':'−'+(top*1e9).toPrecision(4)} 至 ${(top*1e9).toPrecision(4)} nm；形变显示 ${multiplier} 倍${stretch>1?`；板厚方向放大 ${stretch} 倍显示（位移不放大）`:''}。`;
   }
   async function extract() {
     const token=++extraction;probe=null;analysis=null;$('#solid-csv').disabled=true;$('#solid-probe-message').textContent='正在读取完整采样记录…';
@@ -96,7 +135,9 @@ export function mountSolidResult(container,result,field,extractSeries=pointSerie
   function animate(time){if(disposed)return;if(playing&&time-last>66){frame=(frame+1)%result.times_us.length;$('#solid-frame').value=frame;draw();last=time;}timer=requestAnimationFrame(animate);}
   $('#solid-play').onclick=()=>{playing=!playing;$('#solid-play').textContent=playing?'暂停':'播放';};
   $('#solid-frame').oninput=()=>{frame=Number($('#solid-frame').value);draw();};
-  $('#solid-component').onchange=draw;$('#solid-scale').onchange=draw;$('#solid-receiver').onchange=preset;$('#solid-extract').onclick=extract;$('#solid-frequency-limit').onchange=extract;
+  $('#solid-component').onchange=draw;$('#solid-scale').onchange=draw;$('#solid-color-mode').onchange=draw;$('#solid-color-max').onchange=draw;$('#solid-color-max').oninput=draw;$('#solid-thin').onchange=draw;
+  const VIEWS={iso:()=>first.strip ? [.55,1.05] : [first.yaw,first.pitch],side:()=>[0,0],top:()=>[0,Math.PI/2]};
+  container.querySelectorAll('[data-solid-view]').forEach(b=>b.onclick=()=>{[yaw,pitch]=VIEWS[b.dataset.solidView]();zoom=1;panX=0;panY=0;draw();});$('#solid-receiver').onchange=preset;$('#solid-extract').onclick=extract;$('#solid-frequency-limit').onchange=extract;
   $('#solid-window-start').onchange=extract;$('#solid-window-end').onchange=extract;
   $('#solid-csv').onclick=()=>{if(!probe||!analysis)return;const spectrum=analysis.spectrum,lines=['# job_id,'+result.job_id,'# response_part,'+(result.response_part??'full'),'# point_mm,'+probe.location.point_mm.join(','),'# normalized_direction,'+probe.direction.join(','),'# analysis_window_us,'+analysis.start_us+','+analysis.end_us,'# spectrum,Hann weighted mean removed single-sided amplitude',...analysis.harmonics.map(h=>'# harmonic,'+[h.order,h.frequency_mhz,h.available?h.real_m:'',h.available?h.imaginary_m:'',h.available?h.amplitude_m:'',h.phase_deg??''].join(',')),'# harmonic_columns,order,frequency_mhz,real_m,imaginary_m,amplitude_m,phase_deg','time_us,u_x_m,u_y_m,u_z_m,projected_displacement_m'];
     lines.splice(2,0,'# signal_kind,'+(result.scene.signal?.kind??'hann'),...analysis.bands.map(b=>'# band_windowed_rms,'+[b.order,b.start_mhz,b.end_mhz,b.windowed_rms_m].join(',')));
@@ -104,8 +145,8 @@ export function mountSolidResult(container,result,field,extractSeries=pointSerie
     lines.push('','frequency_mhz,single_sided_amplitude_m');spectrum.frequency_mhz.forEach((f,i)=>lines.push([f,spectrum.amplitude_m[i]].join(',')));
     const a=document.createElement('a'),url=URL.createObjectURL(new Blob([lines.join('\n')],{type:'text/csv;charset=utf-8'}));a.href=url;a.download=result.job_id+'-'+(result.response_part??'full')+'-point-spectrum.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
   canvas.onpointerdown=e=>{drag=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId);};canvas.onpointerup=()=>drag=null;
-  canvas.onpointermove=e=>{if(drag){yaw+=(e.clientX-drag[0])*.01;pitch+=(e.clientY-drag[1])*.01;drag=[e.clientX,e.clientY];draw();}};
-  canvas.onwheel=e=>{e.preventDefault();zoom=Math.max(.3,Math.min(5,zoom*Math.exp(-e.deltaY*.001)));draw();};
+  canvas.onpointermove=e=>{if(!drag)return;const dx=e.clientX-drag[0],dy=e.clientY-drag[1];if(e.shiftKey){panX+=dx;panY+=dy;}else{yaw+=dx*.01;pitch+=dy*.01;}drag=[e.clientX,e.clientY];draw();};
+  canvas.onwheel=e=>{e.preventDefault();zoom=Math.max(.3,Math.min(40,zoom*Math.exp(-e.deltaY*.001)));draw();};
   const resize=new ResizeObserver(draw);resize.observe(canvas);
   if(viewState){
     for(const [key,value] of Object.entries(viewState.inputs??{})){const element=$('#'+key);if(element)element.value=value;}
@@ -113,6 +154,6 @@ export function mountSolidResult(container,result,field,extractSeries=pointSerie
   }else preset();
   timer=requestAnimationFrame(animate);
   const cleanup=()=>{disposed=true;cancelAnimationFrame(timer);resize.disconnect();};
-  cleanup.snapshot=()=>({frame,inputs:Object.fromEntries(['solid-receiver','solid-point-0','solid-point-1','solid-point-2','solid-direction-0','solid-direction-1','solid-direction-2','solid-window-start','solid-window-end','solid-frequency-limit','solid-component'].map(id=>[id,$('#'+id).value]))});
+  cleanup.snapshot=()=>({frame,view:{yaw,pitch,zoom,panX,panY,thin:$('#solid-thin').checked},inputs:Object.fromEntries(['solid-color-mode','solid-color-max','solid-receiver','solid-point-0','solid-point-1','solid-point-2','solid-direction-0','solid-direction-1','solid-direction-2','solid-window-start','solid-window-end','solid-frequency-limit','solid-component'].map(id=>[id,$('#'+id).value]))});
   return cleanup;
 }

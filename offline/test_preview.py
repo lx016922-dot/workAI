@@ -87,6 +87,18 @@ class Preview(unittest.TestCase):
         for body in (None, {}, {'scene': 3}, {'scene': {'schema': 'x'}, 'degree': 4}):
             self.assertFalse(preview(body)['ok'])
 
+    def test_range_errors_name_the_field_as_the_form_does(self):
+        from .preview import friendly
+
+        self.assertEqual(friendly('frequency_mhz 必须在 0.001–10 范围内。'), '载频（MHz） 必须在 0.001–10 范围内。')
+        self.assertEqual(friendly('计算时长需要覆盖完整激励脉冲。'), '计算时长需要覆盖完整激励脉冲。')
+        self.assertEqual(friendly('unknown_field 必须在 0–1 范围内。'), 'unknown_field 必须在 0–1 范围内。')
+        scene = templates()['plate']
+        scene['source']['frequency_mhz'] = 30.0
+        report = preview({'scene': scene, 'degree': 4})
+        self.assertFalse(report['ok'])
+        self.assertEqual(report['errors'], ['载频（MHz） 必须在 0.001–10 范围内。'])
+
     def test_original_scope_for_version_1_templates(self):
         plate = templates()['plate']
         self.assertEqual(preview({'scene': plate, 'degree': 4})['scope'], [])
