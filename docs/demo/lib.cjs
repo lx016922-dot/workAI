@@ -44,13 +44,20 @@ exports.open = async function open(out, address = 'http://127.0.0.1:8765/') {
     section: title => page.locator('#results section').filter({ has: page.locator('h2', { hasText: title }) }).first(),
     /** Move the animation of the displacement field to a fraction of the record. */
     frame: async fraction => { await page.locator('#solid-frame').evaluate((n, f) => { n.value = Math.round(f * Number(n.max)); n.dispatchEvent(new Event('input', { bubbles: true })); }, fraction); await wait(900); },
-    /** Turn the displacement field by dragging (0.01 rad a pixel: the view starts at yaw 0.55, pitch 1.05) and zoom it with the wheel. */
+    /** Turn the displacement field by dragging (0.01 rad a pixel) and zoom it with the wheel. */
     view: async (dx, dy, zoom = 1) => {
       const canvas = page.locator('#solid-canvas'); await canvas.scrollIntoViewIfNeeded(); const b = await canvas.boundingBox(), x = b.x + b.width / 2, y = b.y + b.height / 2;
       await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x + dx, y + dy, { steps: 8 }); await page.mouse.up();
       if (zoom !== 1) await canvas.evaluate((n, d) => n.dispatchEvent(new WheelEvent('wheel', { deltaY: d, cancelable: true })), -1000 * Math.log(zoom)); await wait(600);
     },
-    side: async (zoom = 5, scale = 0) => { await api.view(-55, -105, zoom); if (scale) { await page.locator('#solid-scale').fill(String(scale)); await page.locator('#solid-scale').dispatchEvent('change'); await page.locator('#solid-scale').dispatchEvent('input'); await wait(500); } },
+    /** The side view (侧视 XZ) of the displacement field; a strip is shown this way from the start. `zoom` by the wheel, `scale` the deformation factor. */
+    side: async (zoom = 1, scale = 0) => {
+      await page.locator('[data-solid-view="side"]').click(); await wait(300);
+      if (zoom !== 1) await page.locator('#solid-canvas').evaluate((n, d) => n.dispatchEvent(new WheelEvent('wheel', { deltaY: d, cancelable: true })), -1000 * Math.log(zoom));
+      if (scale) { await page.locator('#solid-scale').fill(String(scale)); await page.locator('#solid-scale').dispatchEvent('change'); }
+      await wait(500);
+    },
+    top: async () => { await page.locator('[data-solid-view="top"]').click(); await wait(400); },
     /** The parts of the analysis panel as separate pictures. */
     fkShot: id => api.clip(id, '#nl-panel', page.locator('#nl-panel h3', { hasText: 'f–k 谱' }), '#nl-fk-notes'),
     theoryShot: id => api.clip(id, '#nl-panel', '#nl-theory-message', '#nl-theory'),

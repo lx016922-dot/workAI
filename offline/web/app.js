@@ -522,7 +522,8 @@ async function command(id) {
   const [verb, arg] = id.split(':');
   try {
     switch (verb) {
-      case 'template': { const t = state.templates[arg]; if (t) { loadScene(structuredClone(t.scene)); setTab('model'); log.add('info', `从模板新建：${t.label}`); } break; }
+      // a new model starts from the default solver settings and without a scan: what the last model chose (the fast engine, say) may not fit it
+      case 'template': { const t = state.templates[arg]; if (t) { takeEngine({}); state.scan = { axes: [] }; loadScene(structuredClone(t.scene)); setTab('model'); log.add('info', `从模板新建：${t.label}`); } break; }
       case 'new': ribbon.showTab('home'); document.querySelector('[data-cmd="new"]')?.click(); break;
       case 'open': $('#import-scene').click(); break;
       case 'save': download(`${(state.scene.name || 'workai-model').replace(/[\\/:*?"<>|]/g, '_')}.json`, documentBody()); log.add('info', '已保存模型文件。'); break;

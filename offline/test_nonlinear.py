@@ -45,6 +45,19 @@ def s0_plate():
 
 
 class Checks(unittest.TestCase):
+    def test_contact_is_said_to_be_missing_from_the_increment(self):
+        closed = {'defects': [{'type': 'crack', 'x_mm': 10.0, 'depth_mm': 0.5, 'closed': True}]}
+        self.assertIn('不含接触产生的谐波', nonlinear.contact_note(closed, 'nonlinear'))
+        self.assertIsNone(nonlinear.contact_note(closed, 'full'))  # the complete response contains them
+        for scene in (
+            {},
+            {'defects': []},
+            {'defects': [{'type': 'crack', 'x_mm': 10.0, 'depth_mm': 0.5, 'closed': False}, {'type': 'hole'}]},
+        ):
+            self.assertIsNone(nonlinear.contact_note(scene, 'nonlinear'))
+        for defect in ({'type': 'contact', 'orientation': 'vertical'}, {'type': 'delamination', 'closed': True}):
+            self.assertIsNotNone(nonlinear.contact_note({'defects': [defect]}, 'nonlinear'))
+
     def test_a_convergence_check_raises_the_degree_first_then_refines(self):
         request = {'scene': s0_plate(), 'mesh': 'auto', 'mesh_report': {'degree': 4, 'h_mm': 2.303}, 'controls': 'full_linear'}
         scan = convergence_definition(request, 'S0 板', 'local-' + '0' * 32, 2)

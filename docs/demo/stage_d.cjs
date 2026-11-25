@@ -12,7 +12,7 @@ const { open } = require('./lib.cjs');
     await page.locator('#nl-part').selectOption(part); await page.locator('#nl-fk-run').click(); await wait(400); await page.waitForFunction(() => !document.querySelector('#nl-fk')?.hidden && !/正在/.test(document.querySelector('#nl-fk-message')?.textContent || ''), null, { timeout: 240000 }); await wait(2500);
   };
   if (want('wedge')) {
-    await w.openJob('2 mm 板 · 斜楔换能器激发 A0'); await w.side(5, 12000); await w.frame(.3); await shot('d01-wedge-field', w.section('三维位移场动画'));
+    await w.openJob('2 mm 板 · 斜楔换能器激发 A0'); await w.side(); await w.frame(.3); await shot('d01-wedge-field', w.section('三维位移场动画'));
     await line([140, .5, 2], [200, .5, 2], [0, 0, 1]); await fk('linear'); await w.theoryShot('d02-wedge-theory'); await w.fkShot('d02-wedge-fk');
     await line([100, .5, 2], [40, .5, 2], [0, 0, 1]); await fk('linear'); await w.fkShot('d03-wedge-fk-back');
   }
@@ -24,7 +24,7 @@ const { open } = require('./lib.cjs');
     await page.locator('#nl-mix-run').click(); await page.waitForFunction(() => document.querySelector('#nl-mixing svg, #nl-mixing table'), null, { timeout: 240000 }); await wait(1000); await w.clip('d05-mixing', '#nl-panel', '#nl-panel h2', page.locator('#nl-mixing svg').last());
   }
   if (want('crack')) {
-    await w.openJob('2 mm 板 · S0 遇到表面裂纹'); await w.side(5, 12000); await w.frame(.42); await shot('d06-crack-field', w.section('三维位移场动画'));
+    await w.openJob('2 mm 板 · S0 遇到表面裂纹'); await w.side(); await w.frame(.42); await shot('d06-crack-field', w.section('三维位移场动画'));
     await line([20, .5, 2], [92, .5, 2], [1, 0, 0]); await fk('linear'); await w.fkShot('d07-crack-fk');
     const increment = async (name, id) => {   // the complete response behind the crack: waveform and spectrum (the contact acts in every control, so its harmonics are here and not in complete − linear)
       await w.openJob(name);
@@ -34,7 +34,7 @@ const { open } = require('./lib.cjs');
     await increment('2 mm 板 · S0 遇到闭合裂纹', 'd08-closed-crack'); await increment('2 mm 板 · S0 遇到表面裂纹', 'd08-open-crack');
   }
   if (want('disc')) {
-    await w.openJob('三维板 · 压电圆片（四分之一模型）'); await w.frame(.3); await shot('d09-disc-field', w.section('三维位移场动画')); await w.view(-55, 52, 1.25); await page.locator('#solid-component').selectOption('2'); await w.frame(.4); await shot('d09-disc-top', w.section('三维位移场动画'));
+    await w.openJob('三维板 · 压电圆片（四分之一模型）'); await w.frame(.3); await shot('d09-disc-field', w.section('三维位移场动画')); await w.top(); await page.locator('#solid-component').selectOption('2'); await page.locator('#solid-color-mode').selectOption('frame'); await w.frame(.4); await shot('d09-disc-top', w.section('三维位移场动画'));
     await shot('d10-disc-wave', w.section('方向位移波形'));
   }
   await w.close();

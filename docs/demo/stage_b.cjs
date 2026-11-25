@@ -8,7 +8,7 @@ const fs = require('fs');
   const compute = async () => { await w.ribbon('home'); await w.cmd('run'); };
   if (want('run')) {
     await w.template('gaussian'); await compute(); await page.waitForFunction(() => (document.querySelector('#result-head progress')?.value || 0) >= 25, null, { timeout: 600000, polling: 500 }); await shot('b01-running'); await finished(); await wait(4000); await shot('b02-finished');
-    await w.tall(); await w.side(2.4); await w.frame(.5); await w.clip('b03-field', '#results', '#result-head', w.section('三维位移场动画'));
+    await w.tall(); await w.side(); await w.frame(.5); await w.clip('b03-field', '#results', '#result-head', w.section('三维位移场动画'));
     await page.locator('#solid-component').selectOption('2'); await w.frame(.5); await shot('b04-field-z', w.section('三维位移场动画'));
     await shot('b05-probe', w.section('任意点位与方向')); await w.clip('b05-waveform', '#results', w.section('方向位移波形'), w.section('单边幅值频谱'));
     await page.locator('#part').selectOption('material'); await page.waitForSelector('#solid-canvas'); await wait(3500); await shot('b06-head', '#result-head'); await w.clip('b06-material-increment', '#results', w.section('方向位移波形'), w.section('单边幅值频谱'));
@@ -48,7 +48,7 @@ const fs = require('fs');
   if (want('cfrp')) {
     await w.template('gaussian'); await w.node('engine'); await w.set('[data-action="engine"]', 'network'); await w.set('[data-action="control-set"]', 'full'); await w.set('[data-action="record-mode"]', 'full');
     await w.node('material'); await w.set('[data-action="material-preset"]', 'cfrp_ud'); await w.previewed(); await w.dock('messages'); await shot('b50-cfrp-setup');
-    await compute(); await finished(); await wait(4000); await w.tall(); await w.side(2.4); await w.frame(.6); await w.clip('b51-cfrp-result', '#results', '#result-head', w.section('三维位移场动画'));
+    await compute(); await finished(); await wait(4000); await w.tall(); await w.side(); await w.frame(.6); await w.clip('b51-cfrp-result', '#results', '#result-head', w.section('三维位移场动画'));
     for (const [prefix, values] of [['nl-start', [20, 1, 1.6]], ['nl-end', [40, 1, 1.6]], ['nl-direction', [0, 0, 1]]]) for (let i = 0; i < 3; i++) { await page.locator(`#${prefix}-${i}`).fill(String(values[i])); await page.locator(`#${prefix}-${i}`).blur(); }
     await w.nlTab('dispersion'); await page.waitForFunction(() => document.querySelector('#nl-theory table'), null, { timeout: 300000 }); await wait(800);
     await page.locator('#nl-part').selectOption('full'); await page.locator('#nl-fk-run').click(); await wait(400); await page.waitForFunction(() => !document.querySelector('#nl-fk')?.hidden && !/正在/.test(document.querySelector('#nl-fk-message')?.textContent || ''), null, { timeout: 240000 }); await wait(2500);

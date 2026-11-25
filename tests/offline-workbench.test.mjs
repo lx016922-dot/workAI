@@ -278,3 +278,33 @@ test('export: file names, sizes and the report document', async () => {
   assert.match(html, /^<!DOCTYPE html>/); assert.match(html, /<title>S0 板 &lt;1&gt;<\/title>/); assert.match(html, /<td>网格节点数<\/td><td>78065<\/td>/); assert.ok(!html.includes('空的'));
   assert.match(html, /<section><h2>位移场<\/h2><p>内容<\/p><\/section>/); assert.ok(!html.includes('没有内容')); assert.match(html, /<footer>WorkAI 1\.4\.0<\/footer>/); assert.match(html, /@media print/);
 });
+
+test('result viewer: the note on contact, the first view of a strip, the colour scale', async () => {
+  const { contactDefects, contactNote, initialView, colorPeak, COLOR_MODES, solidResultMarkup } = await import('../offline/web/solid-viewer.js');
+  // which defects are contact: closed cracks and delaminations, contact interfaces
+  const defects = [{ type: 'crack', closed: true }, { type: 'crack', closed: false }, { type: 'delamination' }, { type: 'delamination', closed: true }, { type: 'contact' }, { type: 'hole' }, { type: 'notch' }];
+  assert.deepEqual(contactDefects({ defects }).map(d => defects.indexOf(d)), [0, 3, 4]); assert.deepEqual(contactDefects({}), []); assert.deepEqual(contactDefects(null), []);
+  const closed = { defects: [defects[0]] }, open = { defects: [defects[1]] };
+  assert.equal(contactNote({ scene: open, response_part: 'nonlinear' }), ''); assert.equal(contactNote({ scene: {}, response_part: 'full' }), '');
+  for (const part of ['nonlinear', 'geometric', 'material']) assert.match(contactNote({ scene: closed, response_part: part }), /不含接触谐波/);
+  for (const part of ['full', 'linear', 'stvk']) { const note = contactNote({ scene: closed, response_part: part }); assert.match(note, /就在现在显示的响应里/); assert.ok(!note.includes('<b>不含接触谐波</b>')); }
+  // the first view: a pipe and a plate at an angle; a strip (a plane-strain model) from its side with its thickness drawn larger
+  assert.deepEqual(initialView('pipe', [0, -3, -3], [10, 3, 3]), { yaw: 1.1, pitch: .45, stretch: 1, strip: false });
+  assert.deepEqual(initialView('plate', [0, 0, 0], [84, 84, 1.6]), { yaw: .55, pitch: 1.05, stretch: 1, strip: false });
+  assert.deepEqual(initialView('plate', [0, 0, 0], [240, 1, 2]), { yaw: 0, pitch: 0, stretch: 12, strip: true });
+  assert.deepEqual(initialView('plate', [0, 0, 0], [48, 2, 1.6]), { yaw: 0, pitch: 0, stretch: 3, strip: true });
+  assert.equal(initialView('plate', [0, 0, 0], [12, .5, 4]).stretch, 1);            // a short thick strip is not stretched
+  assert.equal(initialView('plate', [0, 0, 0], [48, 3, 1.6]).strip, false);        // wider than a twentieth of its length: a plate
+  // the end of the colour scale
+  assert.equal(colorPeak('record', NaN, 8e-8, 1e-8), 8e-8); assert.equal(colorPeak('frame', NaN, 8e-8, 1e-8), 1e-8); assert.equal(colorPeak('frame', NaN, 8e-8, 0), 8e-8);
+  assert.equal(colorPeak('custom', 5, 8e-8, 1e-8), 5e-9); assert.equal(colorPeak('custom', 0, 8e-8, 1e-8), 8e-8); assert.equal(colorPeak('custom', NaN, 8e-8, 1e-8), 8e-8);
+  assert.deepEqual(Object.keys(COLOR_MODES), ['record', 'frame', 'custom']);
+  // the page: the controls are there, and the note only with contact
+  const result = defects => ({ response_part: 'nonlinear', scene: { name: '板', geometry: { kind: 'plate' }, source: { frequency_mhz: .3 }, acquisition: { duration_us: 30, sample_step_us: .05 }, receivers: [{ name: 'r', point_mm: [1, 1, 0], direction: [1, 0, 0] }], defects },
+    controls: [{ law: 'linear' }, { law: 'murnaghan' }], nodes_mm: [[0, 0, 0]], tetra: [], surface: [], times_us: [0, 1], spectral: { node_count: 10, element_count: 1 },
+    diagnostics: { output_dtype: 'float64', internal_step_us: .005, external_work_balance_relative: 1e-5, max_strain: 1e-5, min_J: .99999 } });
+  const page = solidResultMarkup(result([defects[0]]));
+  for (const id of ['solid-color-mode', 'solid-color-max', 'solid-thin', 'solid-contact-note']) assert.ok(page.includes(`id="${id}"`), id);
+  for (const view of ['iso', 'side', 'top']) assert.ok(page.includes(`data-solid-view="${view}"`), view);
+  assert.ok(!solidResultMarkup(result([defects[1]])).includes('solid-contact-note')); assert.ok(!solidResultMarkup(result(undefined)).includes('solid-contact-note'));
+});

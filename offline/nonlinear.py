@@ -44,6 +44,20 @@ def _vector(value, what, unit=False):
     return v
 
 
+def contact_note(scene, basis):
+    """What to know when the model has one-sided contact (closed cracks or delaminations, contact interfaces): the contact
+    acts in every control, so its harmonics are in each response and cancel in complete − linear. None without contact, or
+    when the second harmonic is taken from the complete response (`basis` 'full'), which contains them."""
+    from physics.defects import is_contact
+
+    if basis == 'full' or not any(is_contact(d) for d in scene.get('defects') or []):
+        return None
+    return (
+        '这个模型有接触（闭合裂纹、闭合分层或接触界面）。接触在每一组控制里都起作用：这里的非线性分量取“完整 − 线性”，只含材料和几何非线性，'
+        '不含接触产生的谐波。要看接触谐波，请在上面的“任意点位与方向”里看完整位移的频谱。'
+    )
+
+
 def line_of(body, scene, compact, most):
     """The points of an analysis: (points mm (n × 3), distances mm, unit vector of the line, names or None, notes).
 
@@ -469,6 +483,8 @@ def accumulation(job, body):
             }
     variation = float((a1.max() - a1.min()) / a1.mean())
     attenuation = _attenuation(scene, f, e, points, distance, rows, chosen, x, a1, pair, wave[1], speed_measured, notes)
+    if contact_note(scene, basis):
+        notes.append(contact_note(scene, basis))
     if basis == 'full':
         notes.append(
             '这次计算没有线性控制：A₂ 取自完整响应，2f 处还含有猝发音自身的线性频谱，A₂/A₁² 不能当作非线性的度量。请在“求解器配置”里选“完整 + 线性”或“全部”后重新计算。'
@@ -811,6 +827,8 @@ def mixing(job, body):
         notes.append(
             f'时间窗长 {length:.3g} μs，频率分辨约 {4 / length:.3g} MHz；最接近的两个分量只差 {nearest:.3g} MHz，会互相泄漏。请加长时间窗（需要更长的猝发音），或把两个频率取得更开。'
         )
+    if contact_note(scene, basis):
+        notes.append(contact_note(scene, basis))
     if basis == 'full':
         notes.append(
             '这次计算没有线性控制：和频、差频分量取自完整响应，里面还有两个猝发音自身的线性频谱。请在“求解器配置”里选“完整 + 线性”或“全部”后重新计算。'

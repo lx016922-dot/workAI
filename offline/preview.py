@@ -149,6 +149,22 @@ def _mesh(scene, degree, built=None):
     return out
 
 
+# The version-1 schema (hash-locked) names a number by its field in its range message: "frequency_mhz 必须在 0.001–10 范围内。"
+FIELD_LABELS = {
+    'length_mm': '长度（mm）', 'width_mm': '宽度（mm）', 'thickness_mm': '厚度（mm）', 'outer_radius_mm': '外半径（mm）', 'inner_radius_mm': '内半径（mm）',
+    'hole_radius_mm': '孔半径（mm）', 'hole_x_mm': '孔的 X 位置（mm）', 'hole_y_mm': '孔的 Y 位置（mm）', 'notch_x_mm': '缺口的 X 位置（mm）',
+    'notch_width_mm': '缺口宽度（mm）', 'notch_depth_mm': '缺口深度（mm）', 'radius_mm': '作用区半径（mm）', 'amplitude_mpa': '幅值（MPa）',
+    'frequency_mhz': '载频（MHz）', 'cycles': '周期数', 'delay_us': '延迟（μs）', 'phase_deg': '初相（°）', 'duration_us': '记录时长（μs）',
+    'sample_step_us': '输出采样间隔（μs）', 'h_mm': '单元尺寸（mm）', 'center_mm': '作用中心（mm）', 'point_mm': '接收点位置（mm）',
+}  # fmt: skip
+
+
+def friendly(message):
+    """An error message with a leading field name of the version-1 schema replaced by what the form calls it."""
+    name, gap, rest = message.partition(' ')
+    return f'{FIELD_LABELS[name]}{gap}{rest}' if gap and name in FIELD_LABELS else message
+
+
 def preview(body, data_directory=None):
     """{'ok', 'errors', 'scope', 'signals', 'mesh', 'resolution', 'record'} for an editor scene; errors never raise."""
     out = {
@@ -170,7 +186,7 @@ def preview(body, data_directory=None):
         scene = request['scene']
         out['ok'] = True
     except (ValueError, KeyError, TypeError) as error:
-        out['errors'].append(str(error))
+        out['errors'].append(friendly(str(error)))
         scene = None
     raw = scene or body['scene']
     out['scope'] = scope(raw)
