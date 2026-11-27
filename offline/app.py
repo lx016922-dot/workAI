@@ -287,7 +287,9 @@ def handler(application):
                         with application.trace_lock:
                             return self.reply(200, application.scans.convergence(scan, window))
                     return self.reply(200, application.scans.summary_csv(scan, window), 'text/csv; charset=utf-8', attachment=scan + '.csv')
-                match = re.fullmatch(r'/api/jobs/(local-[a-f0-9]{32})(?:/(result|field|export|request|dispersion|checks))?', url.path)
+                match = re.fullmatch(
+                    r'/api/jobs/(local-[a-f0-9]{32})(?:/(result|field|export|request|dispersion|checks|wavefield))?', url.path
+                )
                 if match:
                     job, kind = match.groups()
                     directory = application.path(job)
@@ -319,6 +321,7 @@ def handler(application):
                             names += ['record/recording.json', 'record/mesh.npz'] + (
                                 ['record/' + m['display']['file']] if 'display' in m else []
                             )
+                            names += ['record/' + m['wavefield']['file']] if 'wavefield' in m else []
                             names += ['record/' + row['file'] for row in m['chunks']]
                             names += ['record/' + m['checkpoint_file']]
                         self.send_response(200)
@@ -338,6 +341,46 @@ def handler(application):
                     part = parse_qs(url.query).get('part', ['full'])[0]
                     if part not in ALL_PARTS:
                         raise ValueError('响应类型无效。')
+                    if kind == 'wavefield':
+                        # The wave-field record of a job (offline/wavefield.py): what it holds, or one response as a .mat / .npz file.
+                        from . import wavefield
+
+                        kept = wavefield.info(directory / 'record') if (directory / 'record/recording.json').exists() else None
+                        if not kept:
+                            return self.reply(404, {'error': '这次计算没有保存波场记录。请在“求解器配置”里打开“波场记录”后重新计算。'})
+                        kind_of_file = parse_qs(url.query).get('format', [None])[0]
+                        if kind_of_file is None:
+                            structured = wavefield.grid(kept['points_mm'])
+                            return self.reply(
+                                200,
+                                {
+                                    **{
+                                        k: kept[k]
+                                        for k in ('region', 'nodes', 'components', 'every', 'frames', 'sample_step_us', 'dtype', 'unit')
+                                        if k in kept
+                                    },
+                                    'responses': wavefield.responses(kept['parts']),
+                                    'grid': [len(structured[0]), len(structured[1])] if structured else None,
+                                },
+                            )
+                        if kind_of_file not in ('npz', 'mat'):
+                            raise ValueError('波场导出格式需为 npz 或 mat。')
+                        target = directory / f'wavefield-export-{secrets.token_hex(8)}.{kind_of_file}'
+                        try:
+                            with application.trace_lock:
+                                wavefield.export(directory / 'record', part, kind_of_file, target)
+                            self.send_response(200)
+                            self.send_header('Content-Type', 'application/octet-stream')
+                            self.send_header('Content-Disposition', f'attachment; filename="{job}-wavefield-{part}.{kind_of_file}"')
+                            self.send_header('Content-Length', str(target.stat().st_size))
+                            self.send_header('Cache-Control', 'no-store')
+                            self.end_headers()
+                            with target.open('rb') as stream:
+                                shutil.copyfileobj(stream, self.wfile, 4 * 1024**2)
+                        finally:
+                            target.unlink(missing_ok=True)
+                            target.with_suffix(target.suffix + '.tmp').unlink(missing_ok=True)
+                        return
                     exports = json.loads((directory / 'exports.json').read_text(encoding='utf-8'))
                     if part not in exports:
                         raise ValueError('这次计算没有算这种响应所需的控制。')

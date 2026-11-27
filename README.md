@@ -60,7 +60,7 @@
 ## 文档索引
 
 - **总览：** [1.5.0 功能演示（PDF，每项功能实际运行一遍）](docs/demo/WorkAI-1.5.0-功能演示.pdf)、[项目历史](docs/history.md)、[网页工作台操作](docs/workbench.md)、[原研究模型恢复](docs/recovered-research.md)、[开发者指南（代码怎么组织、哪些不能动、怎么改）](docs/developer-guide.md)
-- **软件 1.1：** [缺陷（裂纹、分层、接触界面、缺口、孔）、自动网格与文字描述](docs/defects.md)、[大模型：记录方式、显示网格、时间层、可选控制与多核](docs/large-models.md)、[参数扫描：批量计算、失败重算与汇总表](docs/parameter-scan.md)、[非线性导波分析：A₂/A₁² 沿程拟合、频散曲线与 f–k 谱、一键收敛检查](docs/nonlinear-analysis.md)
+- **软件 1.1：** [缺陷（裂纹、分层、接触界面、缺口、孔）、自动网格与文字描述](docs/defects.md)、[大模型：记录方式、显示网格、时间层、可选控制与多核](docs/large-models.md)、[波场记录：保存一个面上每一点的波形](docs/wavefield-record.md)、[参数扫描：批量计算、失败重算与汇总表](docs/parameter-scan.md)、[非线性导波分析：A₂/A₁² 沿程拟合、频散曲线与 f–k 谱、一键收敛检查](docs/nonlinear-analysis.md)
 - **物理与材料：** [自定义应变能材料（CFRP 等）](docs/materials.md)、[铝材料参数与三阶本构](docs/aluminum-material.md)、[非线性导波核对依据](docs/nonlinear-guided-waves.md)、[COMSOL 非线性实现](docs/nonlinear-comsol.md)、[材料阻尼](docs/material-damping.md)、[换能器模型：斜楔和压电片](docs/transducers.md)
 - **数值求解：** [三维超弹性](docs/solid-hyperelastic.md)、[五组对照](docs/solid-harmonics.md)、[直达波与沿程比较](docs/solid-propagation.md)、[高阶参考解](docs/spectral-reference.md)、[激励 v2](docs/solver-excitation-v2.md)、[平面应变与频散](docs/plane-strain-dispersion.md)、[有限宽截面核对](docs/rectangular-waveguide.md)
 - **扫描与数据：** [参数扫描、数据集与收敛复核](docs/sweep-and-datasets.md)，示例规格在 `docs/examples/`

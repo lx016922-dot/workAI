@@ -153,6 +153,18 @@ class DefectMesh(unittest.TestCase):
         _front_cuts([delamination], cuts, size, 0.25)
         self.assertEqual(sorted(cuts[0]), [0.0, 3.75, 4.0, 4.25, 7.75, 8.0, 8.25, 12.0])
         self.assertEqual(sorted(cuts[2]), [0.0, 1.25, 1.5, 1.6])  # 1.75 lies outside the plate; no sliver lines
+        # a layer narrower than twice the refinement distance is thin enough: a plate 2 mm thick with a delamination at mid-depth and
+        # elements of 2.5 mm keeps its two layers of 1 mm (the lines at 0.375 and 1.625 would cut the whole plate into four layers)
+        thin = {'axis': 2, 'position_mm': 1.0, 'ranges_mm': [[4.0, 8.0], [0.0, 2.0], [1.0, 1.0]]}
+        cuts = [{0.0: 'f', 4.0: 'd', 8.0: 'd', 12.0: 'f'}, {0.0: 'f', 2.0: 'f'}, {0.0: 'f', 1.0: 'd', 2.0: 'f'}]
+        _front_cuts([thin], cuts, (12.0, 2.0, 2.0), 0.625)
+        self.assertEqual(sorted(cuts[2]), [0.0, 1.0, 2.0])
+        self.assertEqual(
+            sorted(cuts[0]), [0.0, 3.375, 4.0, 4.625, 7.375, 8.0, 8.625, 12.0]
+        )  # in the plane the fronts are refined as before
+        cuts = [{0.0: 'f', 4.0: 'd', 8.0: 'd', 12.0: 'f'}, {0.0: 'f', 2.0: 'f'}, {0.0: 'f', 1.0: 'd', 2.0: 'f'}]
+        _front_cuts([thin], cuts, (12.0, 2.0, 2.0), 0.5)  # exactly twice: the layer is cut in two halves, as it always was
+        self.assertEqual(sorted(cuts[2]), [0.0, 0.5, 1.0, 1.5, 2.0])
 
     def test_a_defect_mesh_and_its_record_are_the_same_at_a_quarter_of_the_size(self):
         # Elasticity without dissipation has no length of its own: with the same traction, the displacements of the quarter-size

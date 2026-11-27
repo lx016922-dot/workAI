@@ -6,7 +6,7 @@ import { solidPathMarkup, mountSolidPath } from './solid-path-viewer.js';
 import { treeNodes, upgrade, workbenchTemplates, addSource, removeSource, addBoundary, removeBoundary, addReceiver, removeReceiver, sourcesOf, V2, BOUNDARY_LABELS, FACES, KIND_LABELS,
   DEFECT_LABELS, DEFECT_ICONS, addDefect, removeDefect, defectName } from './scene-model.js';
 import { drawScene, pick } from './model-view.js';
-import { inspectorMarkup, bindInspector, escapeHtml, COARSE_MODELS, DEFAULT_COARSE_MODEL, RECORD_MODES, TIME_LAYERS, CONTROL_SETS } from './inspector.js';
+import { inspectorMarkup, bindInspector, escapeHtml, COARSE_MODELS, DEFAULT_COARSE_MODEL, RECORD_MODES, TIME_LAYERS, CONTROL_SETS, wavefieldOf } from './inspector.js';
 import { signalsMarkup } from './signal-view.js';
 import { materialDerivedMarkup, dampingDerivedMarkup } from './material-form.js';
 import { buildReport, fileName, mountFigureTools, saveBlob } from './export.js';
@@ -22,7 +22,7 @@ const VIEWS = { iso: [-.62, .52], front: [0, 0], top: [0, 1.5699], side: [-Math.
 const DRAFT = 'workai.workbench.draft.v1';
 const ENGINE_LABELS = { network: '物理 AI · 冻结网络', coarse: '物理 AI · 粗网格算子' };
 const host = window.chrome?.webview || null;   // present inside the WorkAI desktop window (WebView2)
-const state = { scene: null, degree: 4, engine: 'network', coarseModel: DEFAULT_COARSE_MODEL, record: 'auto', timeStepping: 'auto', controls: 'all', selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
+const state = { scene: null, degree: 4, engine: 'network', coarseModel: DEFAULT_COARSE_MODEL, record: 'auto', timeStepping: 'auto', controls: 'all', wavefield: null, selection: 'geometry', preview: null, jobs: [], job: '', part: 'full', tab: 'model',
   view: { yaw: VIEWS.iso[0], pitch: VIEWS.iso[1], zoom: 1, exaggerate: true, grid: true, preset: 'iso' }, history: [], templates: {}, token: '', picks: [], submitting: false,
   expanded: new Set(['scene', 'component', 'physics', 'sources', 'boundaries', 'receivers', 'study', 'results']), info: null, phases: {}, lastPreviewKey: '',
   // parameter scans: the definition being edited, the server's check of it, the stored scans and the one shown in the results window
@@ -42,12 +42,13 @@ const fail = error => toast(error?.message || String(error));
 /** The mesh is always chosen by the software (offline/automesh.py): requests carry mesh 'auto', never a size or degree. */
 function requestBody() {
   return { scene: state.scene, mesh: 'auto', ...(state.controls !== 'all' ? { controls: state.controls } : {}), ...(state.record !== 'auto' ? { record: state.record } : {}),
-    ...(state.engine === 'coarse' ? { engine: 'coarse', coarse_model: state.coarseModel } : (state.timeStepping !== 'auto' ? { time_stepping: state.timeStepping } : {})) };
+    ...(state.engine === 'coarse' ? { engine: 'coarse', coarse_model: state.coarseModel } : { ...(state.timeStepping !== 'auto' ? { time_stepping: state.timeStepping } : {}), ...(state.wavefield ? { wavefield: state.wavefield } : {}) }) };
 }
 /** Engine, coarse model, record mode and time layer from a stored request, draft or imported file (unknown values fall back to the defaults). */
 function takeEngine(d) {
   state.engine = d?.engine === 'coarse' ? 'coarse' : 'network'; state.coarseModel = COARSE_MODELS[d?.coarse_model] ? d.coarse_model : DEFAULT_COARSE_MODEL;
   state.record = RECORD_MODES[d?.record] ? d.record : 'auto'; state.timeStepping = TIME_LAYERS[d?.time_stepping] ? d.time_stepping : 'auto'; state.controls = CONTROL_SETS[d?.controls] ? d.controls : 'all';
+  state.wavefield = state.engine === 'coarse' ? null : wavefieldOf(d?.wavefield);
 }
 /** The model as it is saved to a file or kept as the draft: the request, and the scan definition when there is one. */
 function documentBody() { return { ...requestBody(), ...(state.scan.axes.length ? { scan: state.scan } : {}) }; }
@@ -222,7 +223,7 @@ function renderInspector() {
   if (kind === 'job') { renderJobInspector(state.selection.slice(4)); return; }
   if (kind === 'scan') { renderScanForm(); return; }
   if (kind === 'scanrun') { renderScanInspector(state.selection.slice(8)); return; }
-  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, 4, { materials: state.materials, engine: state.engine, coarseModel: state.coarseModel, meshAuto: state.preview?.mesh?.auto, record: state.record, timeStepping: state.timeStepping, controls: state.controls });
+  $('#inspector').innerHTML = inspectorMarkup(state.scene, state.selection, 4, { materials: state.materials, engine: state.engine, coarseModel: state.coarseModel, meshAuto: state.preview?.mesh?.auto, record: state.record, timeStepping: state.timeStepping, controls: state.controls, wavefield: state.wavefield });
   renderMaterialDerived(); renderEngineDerived();
   let before = snapshot();
   bindInspector($('#inspector'), state.scene, state, kind => {
@@ -452,6 +453,7 @@ async function openJob(id, restore = false) {
       ${done ? '' : `<progress max="100" value="${progress.toFixed(1)}"></progress>`}
       <div class="wb-result-tools">${s.phase === 'completed' ? `<label class="wb-field inline"><span>响应</span><select id="part">${parts.map(k => `<option value="${k}" ${k === state.part ? 'selected' : ''}>${responseLabels[k] || k}</option>`).join('')}</select></label>
         <a class="wb-button" href="/api/jobs/${id}/export">${icon('export')}下载全部结果 ZIP</a>` : ''}
+        ${s.phase === 'completed' && s.wavefield ? `<a class="wb-button" href="/api/jobs/${id}/wavefield?part=${state.part}&format=mat" title="${escapeHtml(wavefieldTitle(s.wavefield))}">${icon('export')}波场 .mat</a><a class="wb-button" href="/api/jobs/${id}/wavefield?part=${state.part}&format=npz" title="${escapeHtml(wavefieldTitle(s.wavefield))}">${icon('export')}波场 .npz</a>` : ''}
         ${s.phase === 'completed' ? `<button type="button" class="wb-button" id="report" title="把这一页现在显示的内容（图、表、分析结果）存成一个 HTML 文件，可以打印成 PDF">${icon('export')}导出报告</button>` : ''}
         <button type="button" class="wb-button" id="reuse">${icon('open')}载入该计算的模型</button>
         ${(s.resumable ?? s.duration_us >= 5000) && !done ? `<button type="button" class="wb-button" id="pause-job">${icon('pause')}保存后暂停</button>` : ''}${s.phase === 'paused' ? `<button type="button" class="wb-button primary" id="resume-job">${icon('resume')}继续计算</button>` : ''}</div>`;
@@ -507,6 +509,8 @@ async function run() {
     setTab('result'); setDock('progress'); await openJob(d.job_id);
   } catch (error) { fail(error); } finally { state.submitting = false; await refreshJobs().catch(fail); }
 }
+/** What the wave-field download of a job holds. */
+const wavefieldTitle = w => `当前响应的波场记录：${{ top: '上表面', bottom: '下表面', all: '全部节点' }[w.region] || ''} ${w.nodes.toLocaleString()} 个节点 × ${w.frames.toLocaleString()} 个时刻（间隔 ${+w.sample_step_us.toPrecision(6)} μs），分量 ${w.components.map(a => 'xyz'[a]).join('')}，float32，单位 m。文件里有 time_us、points_mm、u_m[时刻, 节点, 分量]；整面是规则网格时另有 x_mm、y_mm、grid_index。`;
 function selectedJob() { const raw = state.selection.startsWith('job:') ? state.selection.slice(4) : state.job; return state.jobs.find(j => j.job_id === raw); }
 
 // ---------- commands (ribbon, menus, keys) ----------

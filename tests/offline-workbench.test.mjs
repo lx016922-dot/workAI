@@ -308,3 +308,24 @@ test('result viewer: the note on contact, the first view of a strip, the colour 
   for (const view of ['iso', 'side', 'top']) assert.ok(page.includes(`data-solid-view="${view}"`), view);
   assert.ok(!solidResultMarkup(result([defects[1]])).includes('solid-contact-note')); assert.ok(!solidResultMarkup(result(undefined)).includes('solid-contact-note'));
 });
+
+test('wave-field record: the solver form, the stored setting and the message before a computation', async () => {
+  const { inspectorMarkup, wavefieldOf, WAVEFIELD_REGIONS, WAVEFIELD_COMPONENTS } = await import('../offline/web/inspector.js');
+  const { previewMessages } = await import('../offline/web/shell.js');
+  assert.deepEqual(Object.keys(WAVEFIELD_REGIONS), ['none', 'top', 'bottom', 'all']); assert.deepEqual(Object.keys(WAVEFIELD_COMPONENTS), ['z', 'xyz']);
+  // a stored setting: unknown values fall back, "none" and nothing are no record
+  assert.equal(wavefieldOf(null), null); assert.equal(wavefieldOf({ region: 'none' }), null); assert.equal(wavefieldOf({ region: 'side' }), null);
+  assert.deepEqual(wavefieldOf({ region: 'top' }), { region: 'top', components: 'z', every: 1 });
+  assert.deepEqual(wavefieldOf({ region: 'all', components: 'xyz', every: 4 }), { region: 'all', components: 'xyz', every: 4 });
+  assert.deepEqual(wavefieldOf({ region: 'bottom', components: 'q', every: 0 }), { region: 'bottom', components: 'z', every: 1 });
+  const s = upgrade(v1); s.acquisition.sample_step_us = .2;
+  const off = inspectorMarkup(s, 'engine', 4, { engine: 'network' });
+  assert.match(off, /data-action="wavefield-region"/); assert.match(off, /value="none" selected/); assert.ok(!off.includes('wavefield-every'));
+  const on = inspectorMarkup(s, 'engine', 4, { engine: 'network', wavefield: { region: 'top', components: 'z', every: 4 } });
+  assert.match(on, /value="top" selected/); assert.match(on, /data-action="wavefield-components"/); assert.match(on, /data-action="wavefield-every"[^>]*value="4"/);
+  assert.match(on, /波场的时间间隔 0\.8 μs，可分辨到 0\.625 MHz/);
+  assert.ok(!inspectorMarkup(s, 'engine', 4, { engine: 'coarse', wavefield: { region: 'top', components: 'z', every: 4 } }).includes('wavefield-region'));   // the fast engine has none
+  const rows = previewMessages({ ok: true, errors: [], estimate: { scheme: 'verlet2', layer_step_us: .005, seconds: 60, memory_bytes: 1e9, wavefield: { text: '波场记录：上表面（z 最大）的 100 个节点' } } });
+  assert.ok(rows.some(r => r.text.startsWith('波场记录：上表面')));
+  assert.ok(!previewMessages({ ok: true, errors: [], estimate: { scheme: 'verlet2', layer_step_us: .005, seconds: 60, memory_bytes: 1e9 } }).some(r => r.text.startsWith('波场记录')));
+});

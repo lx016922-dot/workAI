@@ -167,6 +167,12 @@ def run(directory):
 
             frames = round(scene['acquisition']['duration_us'] / scene['acquisition']['sample_step_us']) + 1
             record = record_mode(request.get('record', 'auto'), frames, len(mesh['points']), len(controls))
+            wave = request.get('wavefield')
+            if wave:  # the wave field of a face lives in the compact record (offline/wavefield.py)
+                from .wavefield import for_rollout
+
+                record = 'compact'
+                wave = for_rollout(wave, mesh)
             problem = memory_problem(len(mesh['points']), record, len(controls))
             if problem:
                 raise ValueError(f'模型太大：{problem}。请增大单元尺寸、缩小模型或使用对称面。')
@@ -251,6 +257,17 @@ def run(directory):
                         if 'layer_threads' in m
                         else {}
                     ),
+                    **(
+                        {
+                            'wavefield': {
+                                k: m['wavefield'][k]
+                                for k in ('region', 'nodes', 'components', 'every', 'frames', 'sample_step_us', 'parts')
+                                if k in m['wavefield']
+                            }
+                        }
+                        if m.get('wavefield')
+                        else {}
+                    ),
                     message=f'已保存 {m["completed_time_us"] / 1000:.3f} / {m["duration_us"] / 1000:g} ms {"精简" if m.get("record_mode") == "compact" else "完整"}记录',
                 )
                 if (directory / 'pause.request').exists() and m['phase'] != 'completed':
@@ -287,6 +304,7 @@ def run(directory):
                     controls=controls,
                     spread=None if fits else False,
                     flush=layer != 'frozen',
+                    wavefield=wave or None,
                 )
                 if directory.parent.name == 'jobs':  # the application's data directory: remember this machine's rate for later estimates
                     from .resources import save_throughput

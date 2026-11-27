@@ -26,6 +26,11 @@ from .mesh import gll, make_mesh as frozen_make_mesh
 AXES = 'xyz'
 CUT_GAP_MM = 0.08  # the thinnest element layer between two grid lines: 0.08 mm, or a tenth of the element size when that is smaller
 FRONT_FRACTION = 0.25  # refinement cut lines at ± this fraction of h around a front inside the material
+# A refinement line is drawn only through an element layer at least this multiple of the refinement distance wide: a line at the
+# distance δ from the front leaves δ and the rest, and in a narrower layer the rest would be finer than the refinement asks. The
+# grid is a tensor grid, so a line across a delamination plane cuts the whole plate into one more layer of elements; through a
+# thin plate that costs nodes and time step everywhere for a layer that is thin enough already (research/defects/thin_plate.py).
+FRONT_SPLIT_MIN = 2.0
 
 
 def has_defects(scene):
@@ -36,7 +41,7 @@ def has_defects(scene):
 # the same construction written with arrays; what a machine can actually run is decided by `offline.resources`.
 FROZEN_NODES, FROZEN_ENTRIES = 100000, 2000000
 LARGE_NODES = 8000000
-DEFECT_NODES = 1000000
+DEFECT_NODES = 4000000  # the machine's memory decides before this does (offline.resources); a million nodes take half a second to mesh
 
 
 def plate_node_count(scene, degree, h_mm):
@@ -170,6 +175,10 @@ def _front_cuts(splits, cuts, size_mm, delta, gap=CUT_GAP_MM):
                 if not 0 < v < size_mm[axis]:
                     continue
                 if min(abs(v - c) for c in cuts[axis]) < max(delta / 2, gap):
+                    continue
+                below = max(c for c in cuts[axis] if c < v)
+                above = min(c for c in cuts[axis] if c > v)
+                if above - below < FRONT_SPLIT_MIN * delta - 1e-9:
                     continue
                 cuts[axis][v] = '缺陷前沿加密'
 

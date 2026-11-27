@@ -136,7 +136,9 @@ export function previewMessages(p) {
     + (p.mesh.auto && !p.engine ? `，单元 ${+p.mesh.auto.h_mm.toFixed(3)} mm（${p.mesh.auto.reason}）${p.mesh.auto.split_nodes ? `；缺陷面分开 ${p.mesh.auto.split_nodes} 个节点${p.mesh.auto.contact_pairs ? `，${p.mesh.auto.contact_pairs} 对接触` : ''}` : ''}` : '') });
   if (p.mesh?.auto?.warning && !p.engine) rows.push({ kind: 'warn', text: p.mesh.auto.warning });
   if (p.record) rows.push({ kind: 'info', text: `记录：${p.record.samples.toLocaleString()} 个采样点，${p.record.mode === 'compact' ? '精简记录（接收点完整波形、抽稀表面动画、4 个完整快照）' : '完整记录'}约 ${fmtBytes(p.record.uncompressed_bytes)}${p.record.free_bytes ? `，磁盘可用 ${fmtBytes(p.record.free_bytes)}` : ''}`,
-    ...(p.record.mode === 'compact' ? { detail: '模型较大，全部节点的完整记录超过 2 GiB，自动改用精简记录：结果窗口只能在接收点提取波形，请先把关心的位置设为接收点。' } : {}) });
+    ...(p.record.mode === 'compact' ? { detail: p.estimate?.wavefield ? '打开了波场记录，记录按精简方式保存：接收点保存全部采样点的完整波形（float64），波场范围内的其他点从波场记录里取（float32、按波场的时间间隔）。'
+      : '模型较大，全部节点的完整记录超过 2 GiB，自动改用精简记录：结果窗口只能在接收点提取波形，请先把关心的位置设为接收点；或在“求解器配置”里打开波场记录，保存整个表面的波形。' } : {}) });
+  if (p.estimate?.wavefield) rows.push({ kind: 'info', text: p.estimate.wavefield.text, detail: '波场记录存在精简记录里；算完后在结果页下载为 .mat 或 .npz，也可以在结果页直接取该范围内任意点的波形。' });
   if (p.estimate) rows.push({ kind: 'info', text: `计算量：${p.estimate.scheme === 'verlet2' ? '二阶单级' : '三级四阶'}时间层，Δt ≈ ${(p.estimate.layer_step_us * 1000).toFixed(2)} ns；预计 ${fmtDuration(p.estimate.seconds)}，内存约 ${fmtBytes(p.estimate.memory_bytes)}`,
     detail: p.estimate.rate_measured ? '耗时按本机上次计算的速度估计。' : '耗时按典型台式机速度估计；本机完成一次计算后改用实测速度。' });
   for (const r of p.resolution || []) {
