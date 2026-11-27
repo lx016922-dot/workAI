@@ -5,7 +5,8 @@ x along the length from the xmin end, y across the width from the ymin side, z t
 bottom face (zmax is the top face). Each type reduces to the three primitives the GLL mesh can represent exactly:
 
 * split surface: an axis-aligned rectangle on which the mesh nodes are duplicated, so the two faces separate
-  (crack, delamination). With ``closed`` (crack, delamination) or type ``contact`` the faces touch at rest and
+  (crack, delamination). A delamination may also be a circle (``shape: 'circle'``): the grid faces whose centres lie
+  in it, on a grid refined there, with the same area as the circle (`spectral3d.feature_mesh`). With ``closed`` (crack, delamination) or type ``contact`` the faces touch at rest and
   carry unilateral normal contact: compression passes, tension opens the interface (a "breathing" defect);
 * void box: elements removed (notch);
 * hole: a circular cylinder through the thickness (axis z) or through the width (axis y, side-drilled), meshed
@@ -23,10 +24,23 @@ LABELS = {'crack': '裂纹', 'delamination': '分层', 'contact': '接触界面'
 MAX_DEFECTS = 12
 GAP_MM = 0.2  # smallest clear distance between two defects
 MIN_LIGAMENT_MM = 0.1  # smallest ligament between a defect and an outer face it does not open onto
+SHAPES = ('rectangle', 'circle')  # of a delamination
+CIRCLE_MIN_MM = 1.0  # smallest diameter of a circular delamination
+# Elements at a front inside the material (a crack tip, the edge of a delamination), as a fraction of the element size h: the
+# refinement lines of `spectral3d.feature_mesh` and the steps of a circular edge. 'standard' is the mesh the defect cases were
+# verified on; 'coarse' is for large models, where the lines cost nodes and time step over the whole plate.
+FRONT_MESH = {'standard': 0.25, 'coarse': 0.5}
+FRONT_MESH_LABELS = {'standard': '标准（h/4）', 'coarse': '较粗（h/2）'}
 FIELDS = {
-    'crack': {'required': ('x_mm', 'depth_mm'), 'optional': ('name', 'from', 'z_mm', 'y_range_mm', 'closed')},
-    'delamination': {'required': ('x_start_mm', 'x_end_mm', 'depth_mm'), 'optional': ('name', 'y_range_mm', 'closed')},
-    'contact': {'required': ('orientation',), 'optional': ('name', 'x_mm', 'depth_mm', 'x_start_mm', 'x_end_mm', 'y_range_mm')},
+    'crack': {'required': ('x_mm', 'depth_mm'), 'optional': ('name', 'from', 'z_mm', 'y_range_mm', 'closed', 'front_mesh')},
+    'delamination': {
+        'required': ('depth_mm',),
+        'optional': ('name', 'shape', 'x_start_mm', 'x_end_mm', 'y_range_mm', 'x_mm', 'y_mm', 'diameter_mm', 'closed', 'front_mesh'),
+    },
+    'contact': {
+        'required': ('orientation',),
+        'optional': ('name', 'x_mm', 'depth_mm', 'x_start_mm', 'x_end_mm', 'y_range_mm', 'front_mesh'),
+    },
     'notch': {'required': ('x_mm', 'width_mm', 'depth_mm'), 'optional': ('name', 'from', 'y_range_mm')},
     'hole': {'required': ('x_mm', 'radius_mm'), 'optional': ('name', 'axis', 'y_mm', 'z_mm')},
 }
@@ -68,7 +82,8 @@ def validate_defect(raw, scene, index):
     name = raw.get('name')
     require(name is None or (isinstance(name, str) and 1 <= len(name) <= 40), f'{label}：名称需为 1–40 个字符。')
     d['name'] = name or label
-    if 'y_range_mm' in spec['optional']:
+    circle = kind == 'delamination' and raw.get('shape', 'rectangle') == 'circle'
+    if 'y_range_mm' in spec['optional'] and not circle:
         d['y_range_mm'] = _range(raw['y_range_mm'], 0, W, f'{label} 的宽度范围') if raw.get('y_range_mm') is not None else [0.0, W]
     if kind == 'crack':
         d['x_mm'] = number(raw['x_mm'], MIN_LIGAMENT_MM, L - MIN_LIGAMENT_MM, f'{label} 的位置 x')
@@ -88,9 +103,27 @@ def validate_defect(raw, scene, index):
             d['depth_mm'] = number(raw['depth_mm'], 0.1, T - MIN_LIGAMENT_MM, f'{label} 的深度')
         d['closed'] = _bool(raw.get('closed', False), f'{label} 的 closed')
     elif kind == 'delamination':
-        d['x_start_mm'] = number(raw['x_start_mm'], MIN_LIGAMENT_MM, L - MIN_LIGAMENT_MM, f'{label} 的起点 x')
-        d['x_end_mm'] = number(raw['x_end_mm'], MIN_LIGAMENT_MM, L - MIN_LIGAMENT_MM, f'{label} 的终点 x')
-        require(d['x_end_mm'] - d['x_start_mm'] >= 0.2, f'{label}：分层长度至少 0.2 mm（终点需大于起点）。')
+        require(raw.get('shape', 'rectangle') in SHAPES, f'{label}：形状需为 rectangle（矩形）或 circle（圆形）。')
+        if circle:
+            used = [k for k in ('x_start_mm', 'x_end_mm', 'y_range_mm') if raw.get(k) is not None]
+            require(not used, f'{label}：圆形分层用 x_mm、y_mm（圆心）和 diameter_mm（直径），不用 {"、".join(used)}。')
+            require('x_mm' in raw and 'diameter_mm' in raw, f'{label}：圆形分层需要圆心 x_mm 和直径 diameter_mm。')
+            d['shape'] = 'circle'
+            d['diameter_mm'] = number(raw['diameter_mm'], CIRCLE_MIN_MM, 1000, f'{label} 的直径')
+            r = d['diameter_mm'] / 2
+            d['x_mm'] = number(raw['x_mm'], 0, L, f'{label} 的圆心 x')
+            d['y_mm'] = number(raw.get('y_mm', W / 2), 0, W, f'{label} 的圆心 y')
+            require(
+                r + MIN_LIGAMENT_MM <= d['x_mm'] <= L - r - MIN_LIGAMENT_MM and r + MIN_LIGAMENT_MM <= d['y_mm'] <= W - r - MIN_LIGAMENT_MM,
+                f'{label}：圆形分层需完整位于板内（距板边至少 {MIN_LIGAMENT_MM} mm）。',
+            )
+        else:
+            used = [k for k in ('x_mm', 'y_mm', 'diameter_mm') if k in raw]
+            require(not used, f'{label}：矩形分层用 x_start_mm、x_end_mm 和 y_range_mm；{"、".join(used)} 属于圆形分层（shape: circle）。')
+            require('x_start_mm' in raw and 'x_end_mm' in raw, f'{label}：缺少 x_start_mm 或 x_end_mm。')
+            d['x_start_mm'] = number(raw['x_start_mm'], MIN_LIGAMENT_MM, L - MIN_LIGAMENT_MM, f'{label} 的起点 x')
+            d['x_end_mm'] = number(raw['x_end_mm'], MIN_LIGAMENT_MM, L - MIN_LIGAMENT_MM, f'{label} 的终点 x')
+            require(d['x_end_mm'] - d['x_start_mm'] >= 0.2, f'{label}：分层长度至少 0.2 mm（终点需大于起点）。')
         d['depth_mm'] = number(raw['depth_mm'], MIN_LIGAMENT_MM, T - MIN_LIGAMENT_MM, f'{label} 距上表面的深度')
         d['closed'] = _bool(raw.get('closed', False), f'{label} 的 closed')
     elif kind == 'contact':
@@ -140,6 +173,11 @@ def validate_defect(raw, scene, index):
                 r + MIN_LIGAMENT_MM <= d['z_mm'] <= T - r - MIN_LIGAMENT_MM,
                 f'{label}：横孔需完整位于板厚内（距上下表面至少 {MIN_LIGAMENT_MM} mm）。',
             )
+    if 'front_mesh' in spec['optional']:
+        choice = raw.get('front_mesh', 'standard')
+        require(choice in FRONT_MESH, f'{label}：前沿网格需为 standard（标准，h/4）或 coarse（较粗，h/2）。')
+        if choice != 'standard':
+            d['front_mesh'] = choice  # the standard mesh is written as it always was
     return d
 
 
@@ -152,6 +190,9 @@ def footprint(d, scene):
             d['z_mm'] + d['depth_mm'] / 2,
         ]
         return [[d['x_mm'], d['x_mm']], list(d['y_range_mm']), z]
+    if is_circle(d):
+        z, r = T - d['depth_mm'], d['diameter_mm'] / 2
+        return [[d['x_mm'] - r, d['x_mm'] + r], [d['y_mm'] - r, d['y_mm'] + r], [z, z]]
     if d['type'] == 'delamination' or (d['type'] == 'contact' and d['orientation'] == 'horizontal'):
         z = T - d['depth_mm']
         return [[d['x_start_mm'], d['x_end_mm']], list(d.get('y_range_mm') or [0.0, W]), [z, z]]
@@ -211,6 +252,10 @@ def summary(defects):
     return [{'type': d['type'], 'name': d['name'], 'contact': is_contact(d)} for d in defects]
 
 
+def is_circle(d):
+    return d['type'] == 'delamination' and d.get('shape') == 'circle'
+
+
 def is_contact(d):
     return d['type'] == 'contact' or (d['type'] in ('crack', 'delamination') and d.get('closed', False))
 
@@ -223,15 +268,18 @@ def primitives(defects, scene):
         box = footprint(d, scene)
         if d['type'] in ('crack', 'delamination', 'contact'):
             axis = 0 if box[0][0] == box[0][1] else 2
-            splits.append(
-                {
-                    'defect': index,
-                    'axis': axis,
-                    'position_mm': box[axis][0],
-                    'ranges_mm': box,
-                    'law': 'contact' if is_contact(d) else 'open',
-                }
-            )
+            split = {
+                'defect': index,
+                'axis': axis,
+                'position_mm': box[axis][0],
+                'ranges_mm': box,
+                'law': 'contact' if is_contact(d) else 'open',
+            }
+            if d.get('front_mesh', 'standard') != 'standard':
+                split['front_fraction'] = FRONT_MESH[d['front_mesh']]
+            if is_circle(d):
+                split['circle_mm'] = {'centre': [d['x_mm'], d['y_mm']], 'radius': d['diameter_mm'] / 2}
+            splits.append(split)
         elif d['type'] == 'notch':
             voids.append({'defect': index, 'box_mm': box})
         else:

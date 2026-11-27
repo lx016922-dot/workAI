@@ -61,6 +61,18 @@ class Requests(unittest.TestCase):
         self.assertEqual((len(gx), len(gy), index.shape), (5, 3, (3, 5)))
         self.assertTrue(np.allclose(points[top][index][:, :, 0] * 1e3, gx[None]))
         self.assertIsNone(wavefield.grid(points * 1e3))
+        both = wavefield.node_ids(points, 'both')
+        self.assertEqual(len(both), 30)
+        self.assertTrue(np.array_equal(both, np.union1d(top, wavefield.node_ids(points, 'bottom'))))
+        faces = wavefield.face_grids(points[both] * 1e3)
+        self.assertEqual(list(faces), ['top', 'bottom'])
+        for name, level in (('top', 2.0), ('bottom', 0.0)):
+            gx, gy, index = faces[name]
+            self.assertEqual(index.shape, (3, 5))
+            self.assertTrue(np.allclose(points[both][index][:, :, 2] * 1e3, level))
+            self.assertTrue(np.allclose(points[both][index][:, :, 0] * 1e3, gx[None]))
+        self.assertEqual(list(wavefield.face_grids(points[top] * 1e3)), [''])
+        self.assertEqual(wavefield.face_grids(points * 1e3), {})  # every node: not a record of faces
         self.assertIsNone(wavefield.grid(np.r_[points[top], points[top][:1]] * 1e3))  # a node split by a defect: not a full grid
 
     def test_the_preview_gives_the_size(self):
@@ -148,6 +160,73 @@ class Recorded(unittest.TestCase):
             mat = loadmat(job / 'field.mat')
             self.assertTrue(np.array_equal(mat['u_m'], linear))
             self.assertEqual(mat['grid_index'].min(), 1)
+
+    def test_both_faces_of_a_plate_with_a_closed_circular_delamination(self):
+        from graphnet.test_defects import plate as wide_plate
+        from . import worker
+        from .recording import manifest
+
+        scene = wide_plate(L=16.0, W=16.0, T=1.6)
+        scene['defects'] = [
+            {'type': 'delamination', 'shape': 'circle', 'x_mm': 8.0, 'y_mm': 8.0, 'diameter_mm': 6.0, 'depth_mm': 0.8, 'closed': True}
+        ]
+        scene['numerics']['h_mm'] = 2.0
+        with tempfile.TemporaryDirectory() as tmp:
+            job = Path(tmp) / ('local-' + 'b' * 32)
+            job.mkdir()
+            request = validate_request(
+                {'scene': scene, 'degree': 4, 'controls': 'full', 'wavefield': {'region': 'both', 'components': 'z', 'every': 4}}
+            )
+            (job / 'request.json').write_text(json.dumps(request), encoding='utf-8')
+            (job / 'status.json').write_text(json.dumps({'job_id': job.name, 'phase': 'starting'}), encoding='utf-8')
+            worker.run(job)
+            status = json.loads((job / 'status.json').read_text(encoding='utf-8'))
+            self.assertEqual(status['phase'], 'completed', status.get('message'))
+            record = job / 'record'
+            entry = wavefield.info(record)
+            self.assertEqual((entry['region'], entry['components'], entry['parts']), ('both', [2], ['full']))
+            z = entry['points_mm'][:, 2]
+            self.assertEqual(sorted(set(np.round(z, 9))), [0.0, 1.6])  # the delamination lies inside: the faces are whole
+            self.assertEqual((z == 0).sum(), (z > 1).sum())
+            times, field = wavefield.read(record, 'full')
+            self.assertEqual(field.shape, (len(times), entry['nodes'], 1))
+            self.assertGreater(np.abs(field).max(), 0)
+            self.assertGreater(len(np.load(record / 'mesh.npz')['contact_a']), 100)  # the stepped circle with its contact pairs
+            self.assertEqual(manifest(record)['wavefield']['region'], 'both')
+            wavefield.export(record, 'full', 'npz', job / 'field.npz')
+            with np.load(job / 'field.npz') as data:
+                self.assertNotIn('grid_index', data.files)
+                self.assertNotIn('x_mm_bottom', data.files)  # the same grid on both faces
+                for name, level in (('top', 1.6), ('bottom', 0.0)):
+                    index = data[f'grid_index_{name}']
+                    self.assertEqual(index.shape, (len(data['y_mm']), len(data['x_mm'])))
+                    self.assertTrue(np.allclose(data['points_mm'][index][:, :, 2], level))
+                    self.assertTrue(np.allclose(data['points_mm'][index][:, :, 0], data['x_mm'][None]))
+                    self.assertEqual(data['u_m'][:, index, 0].shape, (len(times), len(data['y_mm']), len(data['x_mm'])))
+                self.assertEqual(len(np.intersect1d(data['grid_index_top'], data['grid_index_bottom'])), 0)
+            # a field too large for one variable of a MATLAB 5 file goes in blocks of samples
+            from unittest import mock
+            from scipy.io import loadmat
+
+            with mock.patch.object(wavefield, 'MAT_LIMIT', field[0].nbytes * 7 + 3):
+                wavefield.export(record, 'full', 'mat', job / 'blocks.mat')
+            mat = loadmat(job / 'blocks.mat')
+            blocks = int(mat['u_m_blocks'][0, 0])
+            self.assertEqual(blocks, -(-len(times) // 7))
+            self.assertNotIn('u_m', mat)
+            self.assertTrue(np.array_equal(np.concatenate([mat[f'u_m_{k + 1}'] for k in range(blocks)]), field))
+            self.assertEqual(min(mat['grid_index_top'].min(), mat['grid_index_bottom'].min()), 1)  # 1-based in MATLAB
+            self.assertEqual(max(mat['grid_index_top'].max(), mat['grid_index_bottom'].max()), entry['nodes'])
+            with mock.patch.object(wavefield, 'MAT_LIMIT', field[0].nbytes - 1), self.assertRaisesRegex(ValueError, '每个时刻'):
+                wavefield.export(record, 'full', 'mat', job / 'no.mat')
+            # a point of either face answers; one inside the plate does not
+            from .recording import traces
+
+            for level in (0.0, 1.6):
+                got = traces(record, 'full', [[8.1, 7.9, level]])
+                self.assertAlmostEqual(got['points'][0]['location']['point_mm'][2], level)
+            with self.assertRaisesRegex(ValueError, '精简记录'):
+                traces(record, 'full', [[8.1, 7.9, 0.8]])
 
 
 if __name__ == '__main__':

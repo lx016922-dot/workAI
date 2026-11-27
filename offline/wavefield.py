@@ -6,7 +6,7 @@ the complete record of every node of such a model is far too large (a 200 × 200
 control). The wave-field record is the middle: the nodes of one face (or all nodes), the chosen components, every
 n-th sample, float32.
 
-    request['wavefield'] = {'region': 'top' | 'bottom' | 'all', 'components': 'z' | 'xyz', 'every': n}
+    request['wavefield'] = {'region': 'top' | 'bottom' | 'both' | 'all', 'components': 'z' | 'xyz', 'every': n}
 
 `graphnet.rollout` stores it in the chunks of the compact record (`wavefield`, `wavefield_frames`) with the node list
 in `wavefield.npz`; this module chooses the nodes, estimates the size, reads the record back and exports it.
@@ -16,12 +16,13 @@ from pathlib import Path
 
 import numpy as np
 
-REGIONS = {'top': '上表面（z 最大）', 'bottom': '下表面（z = 0）', 'all': '全部节点'}
+REGIONS = {'top': '上表面（z 最大）', 'bottom': '下表面（z = 0）', 'both': '上、下两个表面', 'all': '全部节点'}
 COMPONENTS = {'z': [2], 'xyz': [0, 1, 2]}
 COMPONENT_LABELS = {'z': '只存 Z 位移（离面）', 'xyz': '三个分量'}
 AXES = 'xyz'
 EVERY_MAX = 1000
 FACE_TOLERANCE_MM = 1e-6
+FACE_SNAP_MM = 0.05  # a point this close to a recorded face is taken as a point of it
 MAT_LIMIT = 2 * 1024**3 - 1024  # scipy writes MATLAB 5 files: one variable stays under 2 GiB
 
 
@@ -35,7 +36,7 @@ def validate(value):
     components = value.get('components', 'z')
     every = value.get('every', 1)
     if region not in REGIONS:
-        raise ValueError('波场记录的范围需为 top（上表面）、bottom（下表面）或 all（全部节点）。')
+        raise ValueError('波场记录的范围需为 top（上表面）、bottom（下表面）、both（上、下两个表面）或 all（全部节点）。')
     if components not in COMPONENTS:
         raise ValueError('波场记录的分量需为 z（只存离面位移）或 xyz（三个分量）。')
     if type(every) is not int or not 1 <= every <= EVERY_MAX:
@@ -46,7 +47,7 @@ def validate(value):
 def check_scene(spec, scene):
     """A face of a plate is a face of the model; a pipe has none."""
     if spec and spec['region'] != 'all' and scene['geometry']['kind'] == 'pipe':
-        raise ValueError('圆管没有上、下表面：波场记录的范围请选“全部节点”。')
+        raise ValueError('圆管没有上、下表面：波场记录的范围请选“全部节点”（all）。')
 
 
 def node_ids(points_m, region):
@@ -55,8 +56,8 @@ def node_ids(points_m, region):
     if region == 'all':
         return np.arange(len(points), dtype=np.int64)
     z = points[:, 2] * 1e3
-    level = z.max() if region == 'top' else z.min()
-    return np.flatnonzero(np.abs(z - level) <= FACE_TOLERANCE_MM).astype(np.int64)
+    levels = {'top': [z.max()], 'bottom': [z.min()], 'both': [z.min(), z.max()]}[region]
+    return np.flatnonzero(np.min([np.abs(z - level) for level in levels], axis=0) <= FACE_TOLERANCE_MM).astype(np.int64)
 
 
 def for_rollout(spec, mesh):
@@ -76,11 +77,6 @@ def frames_kept(frames, every):
 def size_bytes(frames, nodes, spec, parts):
     """Bytes of the record on disk: kept samples × nodes × components × 4, for every stored part."""
     return frames_kept(frames, spec['every']) * nodes * len(COMPONENTS[spec['components']]) * 4 * parts
-
-
-def face_nodes_estimate(nodes, points_m=None, region='top'):
-    """Nodes of a region; from the mesh when it is there."""
-    return len(node_ids(points_m, region)) if points_m is not None else nodes
 
 
 def describe(spec, nodes, frames, sample_step_us, parts, size):
@@ -131,6 +127,25 @@ def grid(points_mm):
     return (x, y, index) if (index >= 0).all() else None
 
 
+def face_grids(points_mm):
+    """The grids of a record by face: {'': grid} for one face, {'top': grid, 'bottom': grid} for both faces (indices into all
+    the nodes of the record), {} when a face is not a full grid or the record holds the volume."""
+    points = np.asarray(points_mm)
+    z = points[:, 2]
+    if np.ptp(z) <= FACE_TOLERANCE_MM:
+        whole = grid(points)
+        return {'': whole} if whole else {}
+    out, covered = {}, 0
+    for name, level in (('top', z.max()), ('bottom', z.min())):
+        ids = np.flatnonzero(np.abs(z - level) <= FACE_TOLERANCE_MM)
+        face = grid(points[ids])
+        if face is None:
+            return {}
+        out[name] = (face[0], face[1], ids[face[2]])
+        covered += len(ids)
+    return out if covered == len(points) else {}  # nodes between the faces: the record holds the volume
+
+
 # A record stores the linear response and the increments (formed in float64, so the small increments keep their digits); the
 # other responses are their sums.
 SUMS = {
@@ -177,17 +192,20 @@ def read(record, part, nodes=None):
 
 
 def nearest(entry, point_mm, tolerance_mm=None):
-    """Index of the recorded node nearest to a point and its distance (mm); None when the point is farther than the tolerance
-    (default: the largest spacing between neighbouring nodes of the record along x or y)."""
+    """Index of the recorded node nearest to a point and its distance (mm); None when the point is not on the recorded region:
+    farther from a node than the largest spacing between neighbouring nodes, or off the recorded face (a point inside the plate
+    is not a point of its faces, however thin the plate)."""
     points = entry['points_mm']
-    distance = np.linalg.norm(points - np.asarray(point_mm, dtype=float), axis=1)
+    target = np.asarray(point_mm, dtype=float)
+    distance = np.linalg.norm(points - target, axis=1)
     i = int(np.argmin(distance))
+    levels = [np.unique(np.round(points[:, a], 9)) for a in range(3)]
     if tolerance_mm is None:
-        tolerance_mm = (
-            max((float(np.diff(np.unique(np.round(points[:, a], 9))).max()) if np.ptp(points[:, a]) > 0 else 0.0) for a in (0, 1, 2))
-            or 1e-6
-        )
-    return (i, float(distance[i])) if distance[i] <= tolerance_mm + 1e-9 else None
+        tolerance_mm = max((float(np.diff(v).max()) for v in levels if len(v) > 2), default=1e-6)
+    off_face = max((abs(points[i, a] - target[a]) for a in range(3) if len(levels[a]) <= 2), default=0.0)
+    if distance[i] > tolerance_mm + 1e-9 or off_face > min(FACE_SNAP_MM, tolerance_mm):
+        return None
+    return i, float(distance[i])
 
 
 def traces(record, part, points):
@@ -227,30 +245,48 @@ def export(record, part, kind, target):
 
     Arrays: time_us [frames], points_mm [nodes, 3], u_m [frames, nodes, components] (float32, metres), components (e.g. 'z'),
     and for a full rectangular face x_mm, y_mm and grid_index [ny, nx] (u_m[:, grid_index] is the field on the grid;
-    1-based in the MATLAB file)."""
+    1-based in the MATLAB file). A record of both faces has grid_index_top and grid_index_bottom instead (and x_mm_bottom,
+    y_mm_bottom when the two faces do not have the same grid). A field of 2 GiB or more is written to the MATLAB file as
+    consecutive blocks of samples u_m_1 … u_m_k (u_m_blocks = k): u_m = cat(1, u_m_1, …, u_m_k)."""
     entry = info(record)
     if not entry:
         raise ValueError('这次计算没有保存波场记录。')
     times, values = read(record, part)
     arrays = {'time_us': times, 'points_mm': entry['points_mm'], 'u_m': values, 'components': ''.join(AXES[a] for a in entry['components'])}
-    structured = grid(entry['points_mm'])
-    if structured:
-        arrays.update(x_mm=structured[0], y_mm=structured[1], grid_index=structured[2])
+    indices = {}
+    for name, (x, y, index) in face_grids(entry['points_mm']).items():
+        suffix = f'_{name}' if name else ''
+        if 'x_mm' not in arrays:
+            arrays.update(x_mm=x, y_mm=y)
+        elif (
+            len(x) != len(arrays['x_mm'])
+            or len(y) != len(arrays['y_mm'])
+            or not (np.allclose(x, arrays['x_mm']) and np.allclose(y, arrays['y_mm']))
+        ):
+            arrays.update({f'x_mm{suffix}': x, f'y_mm{suffix}': y})
+        indices[f'grid_index{suffix}'] = index
+    arrays.update(indices)
     target = Path(target)
     tmp = target.with_suffix(target.suffix + '.tmp')
     if kind == 'npz':
         with tmp.open('wb') as stream:
             np.savez(stream, **arrays)
     elif kind == 'mat':
-        if values.nbytes > MAT_LIMIT:
-            raise ValueError(
-                f'这份波场有 {values.nbytes / 1024**3:.1f} GiB，超过 MATLAB 5 文件单个变量 2 GiB 的上限：请下载 NumPy 格式（.npz），'
-                '或重新计算时加大时间抽稀、只存 Z 分量。'
-            )
         from scipy.io import savemat
 
-        if structured:
-            arrays['grid_index'] = structured[2] + 1
+        arrays.update({name: index + 1 for name, index in indices.items()})
+        if values.nbytes > MAT_LIMIT:
+            # one variable of a MATLAB 5 file stays under 2 GiB: the field goes in consecutive blocks of samples, u_m_1 … u_m_k
+            per_sample = values[0].nbytes
+            if per_sample > MAT_LIMIT:
+                raise ValueError(
+                    f'这份波场每个时刻就有 {per_sample / 1024**3:.1f} GiB，超过 MATLAB 5 文件单个变量 2 GiB 的上限：请下载 NumPy 格式（.npz）。'
+                )
+            size = MAT_LIMIT // per_sample
+            del arrays['u_m']
+            starts = list(range(0, len(values), size))
+            arrays.update({f'u_m_{k + 1}': values[start : start + size] for k, start in enumerate(starts)})
+            arrays['u_m_blocks'] = len(starts)
         with tmp.open('wb') as stream:
             savemat(stream, arrays, do_compression=False)
     else:

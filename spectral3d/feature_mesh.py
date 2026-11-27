@@ -7,6 +7,9 @@ construction as the frozen `spectral3d.mesh` notch plate, with more cut lines). 
   the elements on the + side of the plane get the copies, so the two faces move independently. Nodes on a
   front that lies inside the material stay shared (the crack closes at its tip); nodes on an edge that lies
   on an outer face or a symmetry plane are duplicated too (the crack opens there);
+* a circular delamination is a "digital disc": the faces of a square lattice centred on the circle whose centres lie
+  within a radius of it. The lattice lines are grid lines, about the refinement distance of a front apart, and their
+  spacing is the one that gives the disc the area of the circle (`circle_lattice`);
 * a front that lies inside the material (crack tip, delamination edge) gets grid lines at ± h/4 on both sides,
   across the front and across the split plane, so the singular field there sits in small elements;
 * a void box (notch) removes the elements inside it;
@@ -31,6 +34,10 @@ FRONT_FRACTION = 0.25  # refinement cut lines at ± this fraction of h around a 
 # grid is a tensor grid, so a line across a delamination plane cuts the whole plate into one more layer of elements; through a
 # thin plate that costs nodes and time step everywhere for a layer that is thin enough already (research/defects/thin_plate.py).
 FRONT_SPLIT_MIN = 2.0
+# Grid lines through a circular delamination, as a fraction of h: the steps of its edge. The front of a rectangular defect has
+# elements of h/4 on both sides; the same here (research/defects/circular_delamination.py).
+CIRCLE_STEP = 0.25
+CIRCLE_BIAS = 0.2  # the disc is larger than the circle by this fraction of a face (see `circle_lattice`)
 
 
 def has_defects(scene):
@@ -151,36 +158,103 @@ def cut_gap(h_mm):
     return min(CUT_GAP_MM, 0.1 * h_mm)
 
 
-def _front_cuts(splits, cuts, size_mm, delta, gap=CUT_GAP_MM):
+def _front_cuts(splits, cuts, size_mm, delta, gap=CUT_GAP_MM, circle_step=None):
     """Grid lines at ± delta around every split front that lies inside the material (a crack tip, a delamination edge),
     across the front in the split plane and across the plane itself, so the elements touching the front are about
     delta wide. The field there is singular (r^1/2 displacement), and with the defect's own cut lines alone the front
     sits in an element as large as the defect layer; research/defects/plane_strain.py measures the effect against an
     independent finite-element reference. A line closer than delta / 2 to an existing one is left out, so no sliver
-    elements appear."""
-    fronts = []
+    elements appear. A defect with a coarse front mesh (`front_fraction`) has its lines that much farther away."""
+    lines = []  # (axis, position, distance to the front)
     for s in splits:
+        d = delta * s.get('front_fraction', FRONT_FRACTION) / FRONT_FRACTION
+        if 'circle_mm' in s:
+            # the edge of a circular delamination has its own grid lines (`_circle_cuts`): one more step outside the bounding
+            # square, and the lines across the plane
+            step = s['circle_mm'].get('step', circle_step)
+            lines += [(q, v, step) for q in (0, 1) for v in (s['ranges_mm'][q][0] - step, s['ranges_mm'][q][1] + step)]
+            lines += [(s['axis'], s['position_mm'] + side * d, d) for side in (-1, 1)]
+            continue
         for q in range(3):
             if q == s['axis']:
                 continue
-            lo, hi = s['ranges_mm'][q]
-            if lo > 1e-9:
-                fronts.append((q, lo, s))
-            if hi < size_mm[q] - 1e-9:
-                fronts.append((q, hi, s))
-    for q, value, s in fronts:
-        for axis, centre in ((q, value), (s['axis'], s['position_mm'])):
-            for v in (centre - delta, centre + delta):
-                v = round(float(v), 9)
-                if not 0 < v < size_mm[axis]:
-                    continue
-                if min(abs(v - c) for c in cuts[axis]) < max(delta / 2, gap):
-                    continue
-                below = max(c for c in cuts[axis] if c < v)
-                above = min(c for c in cuts[axis] if c > v)
-                if above - below < FRONT_SPLIT_MIN * delta - 1e-9:
-                    continue
-                cuts[axis][v] = '缺陷前沿加密'
+            for value, inside in zip(s['ranges_mm'][q], (s['ranges_mm'][q][0] > 1e-9, s['ranges_mm'][q][1] < size_mm[q] - 1e-9)):
+                if inside:
+                    lines += [
+                        (axis, centre + side * d, d) for axis, centre in ((q, value), (s['axis'], s['position_mm'])) for side in (-1, 1)
+                    ]
+    for axis, v, distance in lines:
+        v = round(float(v), 9)
+        if not 0 < v < size_mm[axis]:
+            continue
+        if min(abs(v - c) for c in cuts[axis]) < max(distance / 2, gap):
+            continue
+        below = max(c for c in cuts[axis] if c < v)
+        above = min(c for c in cuts[axis] if c > v)
+        if above - below < FRONT_SPLIT_MIN * distance - 1e-9:
+            continue
+        cuts[axis][v] = '缺陷前沿加密'
+
+
+def circle_lattice(radius, step, bias=None):
+    """The square lattice of faces that stands for a circular delamination: (face size, faces across, radius² of the selection in
+    face sizes², number of faces).
+
+    The faces are those of a lattice centred on the circle whose centres lie within a distance ρ of it, a "digital disc". For a
+    given ρ the face size a is not free: it is the one that gives the disc its area, N a² = π (radius + bias · a)², so the area
+    never jumps as the grid changes. Of the discs whose faces are no larger than `step` the one with the largest faces is taken.
+
+    `bias`: the stepped edge holds the two faces together a little inside its mean line (the nodes on it stay shared, and the
+    corners of the steps reach into the circle), so the disc is made larger by this fraction of a face (CIRCLE_BIAS, measured in
+    research/defects/circular_delamination.py)."""
+    bias = CIRCLE_BIAS if bias is None else bias
+    best = None
+    first = max(2, math.ceil(2 * radius / step - 1e-9))
+    for n in range(first, first + 4):
+        offsets = np.arange(n) - (n - 1) / 2
+        d2 = np.round(offsets[:, None] ** 2 + offsets[None, :] ** 2, 9)
+        reach = ((n - 1) / 2) ** 2 + (0.25 if n % 2 == 0 else 0.0)  # the nearest face of the outermost row: the disc spans n faces
+        for level in np.unique(d2[d2 >= reach - 1e-9]):
+            count = int((d2 <= level + 1e-9).sum())
+            a = radius * math.sqrt(math.pi) / (math.sqrt(count) - bias * math.sqrt(math.pi))
+            if a <= step * (1 + 1e-9):
+                if best is None or a > best[0]:
+                    best = (a, n, float(level), count)
+                break
+    return best
+
+
+def _circle_lattice(split, step, size_mm, label):
+    """Set the bounding square of a circular split to that of its lattice and note the selection radius."""
+    circle = split['circle_mm']
+    a, n, level, _ = circle_lattice(circle['radius'], step)
+    for axis in (0, 1):
+        lo, hi = circle['centre'][axis] - n * a / 2, circle['centre'][axis] + n * a / 2
+        require(
+            lo >= a - 1e-9 and hi <= size_mm[axis] - a + 1e-9,
+            f'{label} 离板边太近：圆形分层的网格在圆外还需要一个台阶宽（{a:.2f} mm）的空间。',
+        )
+        split['ranges_mm'][axis] = [round(lo, 9), round(hi, 9)]
+    circle.update(step=a, across=n, select=math.sqrt(level + 0.125) * a)
+
+
+def _circle_cuts(split, cuts, label):
+    """Grid lines through a circular delamination: the lines of its lattice."""
+    circle = split['circle_mm']
+    for axis in (0, 1):
+        lo = split['ranges_mm'][axis][0]
+        for k in range(1, circle['across']):
+            cuts[axis].setdefault(round(float(lo + k * circle['step']), 9), label)
+
+
+def _circle_faces(circle, edges_x, edges_y, faces):
+    """The grid faces that make a circular delamination: those whose centres lie within the selection radius of its lattice."""
+    cx, cy = circle['centre']
+    return [
+        (jb, jc)
+        for jb, jc in faces
+        if math.hypot((edges_x[jb] + edges_x[jb + 1]) * 500 - cx, (edges_y[jc] + edges_y[jc + 1]) * 500 - cy) <= circle['select']
+    ]
 
 
 def featured_mesh(scene, degree, h_mm):
@@ -200,6 +274,11 @@ def featured_mesh(scene, degree, h_mm):
     def add(axis, value, label):
         cuts[axis].setdefault(round(float(value), 9), label)
 
+    for s in prims['splits']:
+        if 'circle_mm' in s:
+            _circle_lattice(
+                s, CIRCLE_STEP * s.get('front_fraction', FRONT_FRACTION) / FRONT_FRACTION * h_mm, size_mm, defects[s['defect']]['name']
+            )
     for s in prims['splits'] + prims['voids']:
         label = defects[s['defect']]['name']
         for axis, (a, b) in enumerate(s.get('ranges_mm') or s['box_mm']):
@@ -213,7 +292,10 @@ def featured_mesh(scene, degree, h_mm):
             if axis != hole['axis'] and math.ceil((b - a) / h_mm) < 2:
                 add(axis, (a + b) / 2, label)
     gap = cut_gap(h_mm)
-    _front_cuts(prims['splits'], cuts, size_mm, FRONT_FRACTION * h_mm, gap)
+    for s in prims['splits']:
+        if 'circle_mm' in s:
+            _circle_cuts(s, cuts, defects[s['defect']]['name'])
+    _front_cuts(prims['splits'], cuts, size_mm, FRONT_FRACTION * h_mm, gap, CIRCLE_STEP * h_mm)
     values = []
     for axis in range(3):
         row = sorted(cuts[axis])
@@ -260,37 +342,49 @@ def featured_mesh(scene, degree, h_mm):
             lo, hi = ranges[q][0] * p, ranges[q][1] * p
             return lo < n < hi or (n == lo and opened[q][0]) or (n == hi and opened[q][1])
 
-        area = {}
         b, c = others
-        for jb in range(*ranges[b]):
-            for jc in range(*ranges[c]):
-                face_weight = np.outer(w, w) * (edges[b][jb + 1] - edges[b][jb]) * (edges[c][jc + 1] - edges[c][jc]) / 4
-                for u in range(p + 1):
-                    for v in range(p + 1):
-                        loc = [0, 0, 0]
-                        loc[a] = na
-                        loc[b] = jb * p + u
-                        loc[c] = jc * p + v
-                        node = int(index[tuple(loc)])
-                        area[node] = area.get(node, 0.0) + face_weight[u, v]
+        faces = [(jb, jc) for jb in range(*ranges[b]) for jc in range(*ranges[c])]
+        if 'circle_mm' in s:
+            faces = _circle_faces(s['circle_mm'], edges[b], edges[c], faces)
+            covered = set(faces)
+
+            def touching(q, n):
+                j = n // p
+                return [k for k in ((j - 1, j) if n % p == 0 else (j,)) if 0 <= k < len(edges[q]) - 1]
+
+        area = {}
+        for jb, jc in faces:
+            face_weight = np.outer(w, w) * (edges[b][jb + 1] - edges[b][jb]) * (edges[c][jc + 1] - edges[c][jc]) / 4
+            for u in range(p + 1):
+                for v in range(p + 1):
+                    loc = [0, 0, 0]
+                    loc[a] = na
+                    loc[b] = jb * p + u
+                    loc[c] = jc * p + v
+                    node = int(index[tuple(loc)])
+                    area[node] = area.get(node, 0.0) + face_weight[u, v]
         copies = {}
         for node in sorted(area):
             loc = np.unravel_index(node, index.shape)
-            if duplicable(b, loc[b]) and duplicable(c, loc[c]):
+            if 'circle_mm' in s:
+                # the nodes on the stepped edge stay shared: a node separates when every face around it is part of the defect
+                separate = all((jb, jc) in covered for jb in touching(b, loc[b]) for jc in touching(c, loc[c]))
+            else:
+                separate = duplicable(b, loc[b]) and duplicable(c, loc[c])
+            if separate:
                 copies[node] = len(points)
                 points.append(points[node].copy())
         require(copies, f'{defects[s["defect"]]["name"]} 没有覆盖任何网格面。')
-        for jb in range(*ranges[b]):
-            for jc in range(*ranges[c]):
-                cell = [0, 0, 0]
-                cell[a] = ia
-                cell[b] = jb
-                cell[c] = jc
-                n = cell_lookup.get(tuple(cell))
-                require(n is not None, f'{defects[s["defect"]]["name"]} 与其他缺陷的单元冲突。')
-                e = elements[n]
-                for old, new in copies.items():
-                    e[e == old] = new
+        for jb, jc in faces:
+            cell = [0, 0, 0]
+            cell[a] = ia
+            cell[b] = jb
+            cell[c] = jc
+            n = cell_lookup.get(tuple(cell))
+            require(n is not None, f'{defects[s["defect"]]["name"]} 与其他缺陷的单元冲突。')
+            e = elements[n]
+            for old, new in copies.items():
+                e[e == old] = new
         if s['law'] == 'contact':
             normal = np.zeros(3)
             normal[a] = 1.0

@@ -350,7 +350,7 @@ def handler(application):
                             return self.reply(404, {'error': '这次计算没有保存波场记录。请在“求解器配置”里打开“波场记录”后重新计算。'})
                         kind_of_file = parse_qs(url.query).get('format', [None])[0]
                         if kind_of_file is None:
-                            structured = wavefield.grid(kept['points_mm'])
+                            structured = next(iter(wavefield.face_grids(kept['points_mm']).values()), None)
                             return self.reply(
                                 200,
                                 {

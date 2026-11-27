@@ -263,6 +263,10 @@ function drawDefect(ctx, project, d, size, facing, selected, index, picks) {
     const [y0, y1] = d.y_range_mm || [0, W];
     if (d.closed || d.type === 'contact') ctx.setLineDash([4, 3]);
     plane([[d.x_mm, y0, z[0]], [d.x_mm, y1, z[0]], [d.x_mm, y1, z[1]], [d.x_mm, y0, z[1]]]); ctx.setLineDash([]);
+  } else if (d.type === 'delamination' && d.shape === 'circle') {
+    const z = T - d.depth_mm, n = 48, radius = d.diameter_mm / 2;
+    if (d.closed) ctx.setLineDash([4, 3]);
+    plane(Array.from({ length: n }, (_, k) => [d.x_mm + Math.cos(2 * Math.PI * k / n) * radius, d.y_mm + Math.sin(2 * Math.PI * k / n) * radius, z])); ctx.setLineDash([]);
   } else if (d.type === 'delamination' || d.type === 'contact') {
     const z = T - d.depth_mm, [y0, y1] = d.y_range_mm || [0, W];
     if (d.closed || d.type === 'contact') ctx.setLineDash([4, 3]);

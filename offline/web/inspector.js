@@ -127,7 +127,7 @@ export const RECORD_MODES = { auto: '自动（完整记录不超过 2 GiB 时保
 /** Constitutive controls a computation runs (offline/domain.py CONTROL_SETS) and the responses they give. */
 export const CONTROL_SETS = { all: '全部：线性、StVK、完整（五种响应，可分离几何与材料增量）', full_linear: '完整 + 线性（完整、线性、非线性增量）', full: '仅完整响应' };
 /** Wave-field record (offline/wavefield.py): the displacement of a face or of every node at every n-th sample. */
-export const WAVEFIELD_REGIONS = { none: '不保存', top: '上表面（z 最大）的全部节点', bottom: '下表面（z = 0）的全部节点', all: '全部节点（体内也存）' };
+export const WAVEFIELD_REGIONS = { none: '不保存', top: '上表面（z 最大）的全部节点', bottom: '下表面（z = 0）的全部节点', both: '上、下两个表面的全部节点', all: '全部节点（体内也存）' };
 export const WAVEFIELD_COMPONENTS = { z: '只存 Z 位移（离面，激光测振测到的量）', xyz: '三个分量' };
 export const wavefieldOf = value => value && WAVEFIELD_REGIONS[value.region] && value.region !== 'none'
   ? { region: value.region, components: WAVEFIELD_COMPONENTS[value.components] ? value.components : 'z', every: Number.isInteger(value.every) && value.every >= 1 && value.every <= 1000 ? value.every : 1 } : null;
@@ -169,6 +169,9 @@ function meshForm(scene, auto) {
     (auto.warning ? `<p class="wb-note warn">${escapeHtml(auto.warning)}</p>` : ''), rule);
 }
 
+const FRONT_MESH = { standard: '标准（前沿单元 h/4）', coarse: '较粗（前沿单元 h/2，大模型更快）' };
+const FRONT_NOTE = '前沿网格：缺陷在材料内部的边缘（裂纹尖端、分层边缘）附近应力集中，网格在那里加密。张量网格的加密线贯穿整块板，所以大模型里它决定了节点数和时间步；“较粗”通常快 3 倍左右，缺陷附近的误差略大（核对数字见 docs/defects.md）。';
+const frontMesh = (d, p) => sel('前沿网格', `${p}.front_mesh`, d.front_mesh || 'standard', FRONT_MESH, { action: 'defect-shape' });
 const SPLIT_NOTE = '缺陷面上的节点一分为二，两侧独立运动；位于材料内部的前沿（裂纹尖端）保持连接，位于外表面或对称面上的边缘张开。';
 const CONTACT_NOTE = '闭合：两个面静止时贴合，受压时由罚函数弹簧传递法向力，受拉时张开、不传力，切向无摩擦（“呼吸”裂纹，产生接触非线性的高次谐波）。罚刚度取时间层稳定允许的最大值，受压时的残余反射显示在计算结果的诊断中。';
 function defectForm(scene, index) {
@@ -177,12 +180,15 @@ function defectForm(scene, index) {
   if (d.type === 'crack') {
     body += num('位置 x', `${p}.x_mm`, d.x_mm, { unit: 'mm' }) + sel('起始面', `${p}.from`, d.from || 'top', CRACK_FROM, { action: 'defect-shape' }) +
       num(d.from === 'inside' ? '高度' : '深度', `${p}.depth_mm`, d.depth_mm, { unit: 'mm', min: .1, max: T }) + (d.from === 'inside' ? num('中心高度 z', `${p}.z_mm`, d.z_mm, { unit: 'mm', hint: '从底面算起' }) : '') +
-      check('闭合（接触，呼吸裂纹）', `${p}.closed`, d.closed);
-    note = '竖直裂纹面垂直于 X，贯穿板宽。' + SPLIT_NOTE + (d.closed ? CONTACT_NOTE : '');
+      check('闭合（接触，呼吸裂纹）', `${p}.closed`, d.closed) + frontMesh(d, p);
+    note = '竖直裂纹面垂直于 X，贯穿板宽。' + SPLIT_NOTE + (d.closed ? CONTACT_NOTE : '') + FRONT_NOTE;
   } else if (d.type === 'delamination') {
-    body += num('起点 x', `${p}.x_start_mm`, d.x_start_mm, { unit: 'mm' }) + num('终点 x', `${p}.x_end_mm`, d.x_end_mm, { unit: 'mm' }) +
-      num('距上表面', `${p}.depth_mm`, d.depth_mm, { unit: 'mm', min: .1, max: T }) + check('闭合（接触）', `${p}.closed`, d.closed);
-    note = '水平分层面平行于板面，贯穿板宽。' + SPLIT_NOTE + (d.closed ? CONTACT_NOTE : '');
+    const round = d.shape === 'circle';
+    body += sel('形状', `${p}.shape`, round ? 'circle' : 'rectangle', { rectangle: '矩形（贯穿板宽）', circle: '圆形' }, { action: 'defect-shape' }) +
+      (round ? num('圆心 x', `${p}.x_mm`, d.x_mm, { unit: 'mm' }) + num('圆心 y', `${p}.y_mm`, d.y_mm, { unit: 'mm' }) + num('直径', `${p}.diameter_mm`, d.diameter_mm, { unit: 'mm', min: 1 })
+        : num('起点 x', `${p}.x_start_mm`, d.x_start_mm, { unit: 'mm' }) + num('终点 x', `${p}.x_end_mm`, d.x_end_mm, { unit: 'mm' })) +
+      num('距上表面', `${p}.depth_mm`, d.depth_mm, { unit: 'mm', min: .1, max: T }) + check('闭合（接触）', `${p}.closed`, d.closed) + frontMesh(d, p);
+    note = (round ? '水平分层面平行于板面，圆形。网格是直线网格，圆的边缘由细小的台阶逼近（台阶宽度就是下面的前沿单元），台阶区域的面积按圆校准。' : '水平分层面平行于板面，贯穿板宽。') + SPLIT_NOTE + (d.closed ? CONTACT_NOTE : '') + FRONT_NOTE;
   } else if (d.type === 'contact') {
     body += sel('方向', `${p}.orientation`, d.orientation, { vertical: '竖直截面（整个横截面）', horizontal: '水平层间' }, { action: 'defect-shape' });
     body += d.orientation === 'vertical' ? num('位置 x', `${p}.x_mm`, d.x_mm, { unit: 'mm' })
@@ -202,10 +208,21 @@ function defectForm(scene, index) {
   return section(DEFECT_LABELS[d.type], body + `<div class="wb-field wide"><button type="button" class="wb-button danger small" data-action="remove" data-id="defect:${index}">删除此缺陷</button></div>`, note);
 }
 
-/** Switching a defect's variant (crack origin, contact orientation, hole axis) adds or drops the fields that depend on it. */
+/** Switching a defect's variant (crack origin, delamination shape, contact orientation, hole axis) adds or drops the fields that depend on it. */
 export function reshapeDefect(d, scene) {
   const { length_mm: L, width_mm: W, thickness_mm: T } = scene.geometry, r = v => +(+v).toFixed(4);
   if (d.type === 'crack') { if (d.from === 'inside') { d.z_mm ??= r(T / 2); d.depth_mm = Math.min(d.depth_mm, r(T - .3)); } else delete d.z_mm; }
+  if (d.front_mesh === 'standard') delete d.front_mesh;   // the standard mesh is written as it always was
+  if (d.type === 'delamination') {
+    if (d.shape === 'circle') {
+      const x = d.x_mm ?? ((d.x_start_mm + d.x_end_mm) / 2 || L / 2), size = d.diameter_mm ?? Math.max(1, Math.min(d.x_end_mm - d.x_start_mm || 10, W - .4, L - .4));
+      for (const k of ['x_start_mm', 'x_end_mm', 'y_range_mm']) delete d[k];
+      d.x_mm = r(x); d.y_mm ??= r(W / 2); d.diameter_mm = r(size);
+    } else {
+      if (d.x_mm != null) { const half = (d.diameter_mm ?? 10) / 2; d.x_start_mm = r(Math.max(.2, d.x_mm - half)); d.x_end_mm = r(Math.min(L - .2, d.x_mm + half)); }
+      for (const k of ['shape', 'x_mm', 'y_mm', 'diameter_mm']) delete d[k];
+    }
+  }
   if (d.type === 'contact') {
     if (d.orientation === 'vertical') { const x = d.x_mm ?? ((d.x_start_mm + d.x_end_mm) / 2 || L / 2); for (const k of ['x_start_mm', 'x_end_mm', 'depth_mm', 'y_range_mm']) delete d[k]; d.x_mm = r(x); }
     else { const x = d.x_mm ?? L / 2; delete d.x_mm; d.x_start_mm = r(Math.max(.2, x - 5)); d.x_end_mm = r(Math.min(L - .2, x + 5)); d.depth_mm = r(T / 2); }
