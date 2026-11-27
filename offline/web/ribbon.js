@@ -20,7 +20,7 @@ export const RIBBON = [
   { id: 'geometry', label: '几何', groups: [
     { label: '结构类型', items: [L('kind:plate', '平板', 'geometry'), L('kind:pipe', '圆管', 'geometry'), L('kind:hole', '带通孔板', 'geometry'), L('kind:notch', '带缺口板', 'geometry')] },
     { label: '一键添加缺陷', items: [L('add-defect:crack', '裂纹', 'crack', { tip: '表面开口裂纹（可改为内部、闭合）' }), L('add-defect:hole', '孔', 'holeDefect', { tip: '贯穿板厚的通孔（可改为横孔）' }),
-      L('add-defect:delamination', '分层', 'delamination', { tip: '水平分层（可设为闭合）' }), L('add-defect:contact', '接触界面', 'contact', { tip: '受压传力、受拉张开的接触面' }), L('add-defect:notch', '缺口', 'notchDefect', { tip: '矩形槽' })] },
+      L('add-defect:delamination', '分层', 'delamination', { tip: '水平分层：矩形或圆形（可设为闭合）' }), L('add-defect:contact', '接触界面', 'contact', { tip: '受压传力、受拉张开的接触面' }), L('add-defect:notch', '缺口', 'notchDefect', { tip: '矩形槽' })] },
     { label: '设置', items: [L('sel:geometry', '几何设置', 'geometry'), S('sel:defects', '缺陷列表', 'folder'), S('focus-command', '文字描述', 'command', { tip: '用文字描述修改模型（例如：在 100 mm 处添加裂纹）' })] },
     { label: '视图', items: [S('view:iso', '等轴视图', 'viewIso'), S('view:front', '正视 XZ', 'viewFront'), S('view:top', '俯视 XY', 'viewTop'), S('view:side', '侧视 YZ', 'viewSide'), S('toggle:thin', '放大薄方向', 'thin')] },
   ] },

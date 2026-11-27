@@ -153,6 +153,96 @@ class DefectMesh(unittest.TestCase):
         _front_cuts([delamination], cuts, size, 0.25)
         self.assertEqual(sorted(cuts[0]), [0.0, 3.75, 4.0, 4.25, 7.75, 8.0, 8.25, 12.0])
         self.assertEqual(sorted(cuts[2]), [0.0, 1.25, 1.5, 1.6])  # 1.75 lies outside the plate; no sliver lines
+        # a layer narrower than twice the refinement distance is thin enough: a plate 2 mm thick with a delamination at mid-depth and
+        # elements of 2.5 mm keeps its two layers of 1 mm (the lines at 0.375 and 1.625 would cut the whole plate into four layers)
+        thin = {'axis': 2, 'position_mm': 1.0, 'ranges_mm': [[4.0, 8.0], [0.0, 2.0], [1.0, 1.0]]}
+        cuts = [{0.0: 'f', 4.0: 'd', 8.0: 'd', 12.0: 'f'}, {0.0: 'f', 2.0: 'f'}, {0.0: 'f', 1.0: 'd', 2.0: 'f'}]
+        _front_cuts([thin], cuts, (12.0, 2.0, 2.0), 0.625)
+        self.assertEqual(sorted(cuts[2]), [0.0, 1.0, 2.0])
+        self.assertEqual(
+            sorted(cuts[0]), [0.0, 3.375, 4.0, 4.625, 7.375, 8.0, 8.625, 12.0]
+        )  # in the plane the fronts are refined as before
+        cuts = [{0.0: 'f', 4.0: 'd', 8.0: 'd', 12.0: 'f'}, {0.0: 'f', 2.0: 'f'}, {0.0: 'f', 1.0: 'd', 2.0: 'f'}]
+        _front_cuts([thin], cuts, (12.0, 2.0, 2.0), 0.5)  # exactly twice: the layer is cut in two halves, as it always was
+        self.assertEqual(sorted(cuts[2]), [0.0, 0.5, 1.0, 1.5, 2.0])
+
+    def test_a_circular_delamination_is_a_disc_of_faces_with_the_area_of_the_circle(self):
+        from spectral3d import feature_mesh
+        from spectral3d.feature_mesh import circle_lattice
+
+        # the lattice: faces no larger than the step, as many across as the disc spans, and the area exact for every step
+        for radius, step in ((5.0, 0.5175), (5.0, 1.035), (3.0, 0.5), (0.5, 0.2), (40.0, 0.6)):
+            for bias in (0.0, 0.2):
+                a, n, level, count = circle_lattice(radius, step, bias)
+                self.assertLessEqual(a, step * (1 + 1e-9))
+                self.assertGreater(a, 0.8 * step)
+                self.assertAlmostEqual(count * a * a, np.pi * (radius + bias * a) ** 2, places=9)
+                offsets = np.arange(n) - (n - 1) / 2
+                d2 = offsets[:, None] ** 2 + offsets[None, :] ** 2
+                self.assertEqual(int((d2 <= level + 1e-9).sum()), count)
+                self.assertTrue((d2 <= level + 1e-9).any(axis=0).all())  # every row of the lattice is used
+                self.assertLess(abs(n * a / 2 - radius), a)
+        self.assertEqual(feature_mesh.CIRCLE_BIAS, 0.2)
+
+        s = plate(L=16.0, W=16.0, T=1.6)
+        s['defects'] = [
+            {'type': 'delamination', 'shape': 'circle', 'x_mm': 8.0, 'y_mm': 8.0, 'diameter_mm': 6.0, 'depth_mm': 0.8, 'closed': True}
+        ]
+        m = make_mesh(s, 4, 2.0)
+        a, n, level, count = circle_lattice(3.0, 0.5)
+        points = m['points'] * 1e3
+        x = np.unique(np.round(points[:, 0], 9))[::4]  # element edges
+        # the lattice lines and one more step outside the square; elements of at most 2 mm elsewhere
+        lo = 8.0 - n * a / 2
+        inner = lo + a * np.arange(n + 1)
+        self.assertTrue(np.allclose(x[(x > lo - a - 1e-6) & (x < 16.0 - lo + a + 1e-6)], np.r_[lo - a, inner, inner[-1] + a], atol=1e-8))
+        self.assertTrue(np.array_equal(np.unique(np.round(points[:, 1], 9)), np.unique(np.round(points[:, 0], 9))))
+        self.assertEqual(len(np.unique(np.round(points[:, 2], 9))), 9)  # two layers of 0.8 mm: no lines across the plane in a thin plate
+        pa, pb = m['contact_a'], m['contact_b']
+        self.assertTrue(np.array_equal(points[pa], points[pb]))
+        self.assertTrue(np.allclose(points[pa][:, 2], 0.8))
+        self.assertEqual(int(m['split_nodes'][0]), len(pa))
+        # a node separates when every face around it belongs to the disc: the stepped edge stays closed
+        offsets = np.arange(n) - (n - 1) / 2
+        disc = {(i, j) for i in range(n) for j in range(n) if offsets[i] ** 2 + offsets[j] ** 2 <= level + 1e-9}
+        self.assertEqual(len(disc), count)
+        around = lambda v: {int(np.floor((v - lo) / a - 1e-6)), int(np.floor((v - lo) / a + 1e-6))}
+        plane = np.flatnonzero(np.abs(points[:, 2] - 0.8) < 1e-9)
+        expected = {
+            tuple(np.round(points[k, :2], 6))
+            for k in plane
+            if all((i, j) in disc for i in around(points[k, 0]) for j in around(points[k, 1]))
+        }
+        self.assertEqual({tuple(np.round(q[:2], 6)) for q in points[pa]}, expected)
+        # the weights of the pairs: the area of the disc less the half rows of nodes on its edge
+        self.assertLess(m['contact_area'].sum() * 1e6, count * a * a)
+        self.assertGreater(m['contact_area'].sum() * 1e6, 0.93 * count * a * a)
+        # an open circular delamination: the same nodes separate, without contact pairs
+        s['defects'][0]['closed'] = False
+        opened = make_mesh(s, 4, 2.0)
+        self.assertEqual((int(opened['split_nodes'][0]), len(opened['contact_a']), len(opened['points'])), (len(pa), 0, len(points)))
+        # the coarse front mesh: steps of h/2, and no lines within h/2 of a front where the standard mesh has them at h/4
+        s['defects'][0].update(closed=True, front_mesh='coarse')
+        coarse = make_mesh(s, 4, 2.0)
+        a2, n2, _, count2 = circle_lattice(3.0, 1.0)
+        self.assertGreater(a2, 0.8)
+        self.assertAlmostEqual(count2 * a2 * a2, np.pi * (3.0 + 0.2 * a2) ** 2, places=9)
+        self.assertLess(len(coarse['points']), len(points))
+        self.assertGreater(coarse['min_node_spacing'], 1.6 * m['min_node_spacing'])
+        cx = np.unique(np.round(coarse['points'][:, 0] * 1e3, 9))[::4]
+        lo2 = 8.0 - n2 * a2 / 2
+        self.assertTrue(
+            np.allclose(
+                cx[(cx > lo2 - a2 - 1e-6) & (cx < 16.0 - lo2 + a2 + 1e-6)],
+                np.r_[lo2 - a2, lo2 + a2 * np.arange(n2 + 1), 16.0 - lo2 + a2],
+                atol=1e-8,
+            )
+        )
+        s['defects'][0].pop('front_mesh')
+        # too close to the plate edge for the step outside the square
+        s['defects'][0].update(x_mm=3.2)
+        with self.assertRaisesRegex(ValueError, '离板边太近'):
+            make_mesh(s, 4, 2.0)
 
     def test_a_defect_mesh_and_its_record_are_the_same_at_a_quarter_of_the_size(self):
         # Elasticity without dissipation has no length of its own: with the same traction, the displacements of the quarter-size

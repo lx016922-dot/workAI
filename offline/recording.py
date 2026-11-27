@@ -61,6 +61,10 @@ def is_compact(m):
     return m.get('record_mode') == 'compact'
 
 
+def _is_point(p):
+    return isinstance(p, list) and len(p) == 3 and all(type(v) in (int, float) for v in p)
+
+
 def _receiver_traces(directory, m, part, points):
     """Waveforms of a compact record: the requested points must be receivers of the computation."""
     rows = []
@@ -97,7 +101,23 @@ def traces(directory, part, points):
     m = manifest(directory)
     available(m, part)
     if is_compact(m):
-        return _receiver_traces(directory, m, part, points)
+        try:
+            return _receiver_traces(directory, m, part, points)
+        except ValueError as not_receivers:
+            # not all of them receivers: a wave-field record (offline/wavefield.py) answers for points of its region
+            from .wavefield import traces as field_traces
+
+            found = field_traces(directory, part, points) if m.get('wavefield') and all(_is_point(p) for p in points) else None
+            if found is None:
+                if m.get('wavefield'):
+                    from .wavefield import REGIONS
+
+                    raise ValueError(
+                        str(not_receivers)
+                        + f' 这次计算另外保存了{REGIONS[m["wavefield"].get("region", "all")]}的波场记录：该范围内的点可以直接提取。'
+                    ) from None
+                raise
+            return dict(found, recording_fingerprint=m['fingerprint'])
     with np.load(Path(directory) / 'mesh.npz', allow_pickle=False) as data:
         mesh = dict(data)
     locations = [interpolation(mesh, p) for p in points]

@@ -1,0 +1,859 @@
+{
+ "frequency_mhz": 0.1,
+ "plate_mm": [
+  120.0,
+  2.0
+ ],
+ "cases": {
+  "T0-intact": {
+   "reference": {
+    "top_30": {
+     "grids_mm": [
+      0.1,
+      0.05
+     ],
+     "order": 2.0,
+     "finest_vs_extrapolated": 0.0072162665733775284,
+     "2f_over_f": 0.0004107714065645566,
+     "3f_over_f": 0.00011181681246898201
+    },
+    "top_60": {
+     "grids_mm": [
+      0.1,
+      0.05
+     ],
+     "order": 2.0,
+     "finest_vs_extrapolated": 0.007192296655135148,
+     "2f_over_f": 0.0004151505068721972,
+     "3f_over_f": 6.66150831048938e-05
+    },
+    "top_90": {
+     "grids_mm": [
+      0.1,
+      0.05
+     ],
+     "order": 2.0,
+     "finest_vs_extrapolated": 0.006841772947634847,
+     "2f_over_f": 0.0004712848961495881,
+     "3f_over_f": 2.6599940690265775e-05
+    },
+    "bottom_60": {
+     "grids_mm": [
+      0.1,
+      0.05
+     ],
+     "order": 2.0,
+     "finest_vs_extrapolated": 0.0073721985472110715,
+     "2f_over_f": 0.0004972226811503745,
+     "3f_over_f": 4.7648074124785305e-05
+    }
+   },
+   "variants": {
+    "old-h2.5": {
+     "nodes": 4825,
+     "h_mm": 2.5,
+     "rule": 0.0,
+     "nodes_through_thickness": 5,
+     "smallest_z_spacing_mm": 0.345346329,
+     "scheme": "verlet2",
+     "step_ns": 20.0,
+     "evaluations_per_control": 6000,
+     "seconds": 6.195680299000742,
+     "work_node_evaluations": 28950000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.00034114796307684996,
+       "waveform_to_3.5f": 0.00033681160956915466,
+       "2f_over_f_vs_reference": -0.006609269403058615,
+       "3f_over_f_vs_reference": -0.002121607559206873
+      },
+      "top_60": {
+       "waveform": 0.0003319708161468236,
+       "waveform_to_3.5f": 0.000331951193834893,
+       "2f_over_f_vs_reference": -0.0035308011154382424,
+       "3f_over_f_vs_reference": -0.004262604113818291
+      },
+      "top_90": {
+       "waveform": 0.0003194703578732202,
+       "waveform_to_3.5f": 0.0003194644209511625,
+       "2f_over_f_vs_reference": -0.0004299668196495743,
+       "3f_over_f_vs_reference": -0.0013945098446872528
+      },
+      "bottom_60": {
+       "waveform": 0.00032765153278291505,
+       "waveform_to_3.5f": 0.000327609650845762,
+       "2f_over_f_vs_reference": -0.0026989734756320827,
+       "3f_over_f_vs_reference": -0.005241658892948253
+      }
+     },
+     "worst": {
+      "waveform": 0.00034114796307684996,
+      "waveform_to_3.5f": 0.00033681160956915466,
+      "2f_over_f_vs_reference": 0.0035308011154382424,
+      "3f_over_f_vs_reference": 0.005241658892948253
+     }
+    },
+    "new-h4": {
+     "nodes": 3025,
+     "h_mm": 4.0,
+     "rule": 2.0,
+     "nodes_through_thickness": 5,
+     "smallest_z_spacing_mm": 0.345346329,
+     "scheme": "verlet2",
+     "step_ns": 20.0,
+     "evaluations_per_control": 6000,
+     "seconds": 3.80822987800002,
+     "work_node_evaluations": 18150000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.0013895288583983543,
+       "waveform_to_3.5f": 0.0013810341595577899,
+       "2f_over_f_vs_reference": -0.05106636710439427,
+       "3f_over_f_vs_reference": -0.021198903057208507
+      },
+      "top_60": {
+       "waveform": 0.0013615494561456834,
+       "waveform_to_3.5f": 0.0013612757308317535,
+       "2f_over_f_vs_reference": -0.025177257142617093,
+       "3f_over_f_vs_reference": -0.038227620658439765
+      },
+      "top_90": {
+       "waveform": 0.001391391505289344,
+       "waveform_to_3.5f": 0.0013913509059159373,
+       "2f_over_f_vs_reference": -0.0034504533858402686,
+       "3f_over_f_vs_reference": -0.01805238022909572
+      },
+      "bottom_60": {
+       "waveform": 0.0013852922672503458,
+       "waveform_to_3.5f": 0.0013849784112880542,
+       "2f_over_f_vs_reference": -0.0188985972926341,
+       "3f_over_f_vs_reference": -0.03447418312008499
+      }
+     },
+     "worst": {
+      "waveform": 0.001391391505289344,
+      "waveform_to_3.5f": 0.0013913509059159373,
+      "2f_over_f_vs_reference": 0.025177257142617093,
+      "3f_over_f_vs_reference": 0.038227620658439765
+     }
+    },
+    "new-h5": {
+     "nodes": 2425,
+     "h_mm": 5.0,
+     "rule": 2.0,
+     "nodes_through_thickness": 5,
+     "smallest_z_spacing_mm": 0.345346329,
+     "scheme": "verlet2",
+     "step_ns": 20.0,
+     "evaluations_per_control": 6000,
+     "seconds": 3.4386755199993786,
+     "work_node_evaluations": 14550000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.006272552943784411,
+       "waveform_to_3.5f": 0.006248538736927955,
+       "2f_over_f_vs_reference": -0.19130685660753377,
+       "3f_over_f_vs_reference": -0.11805042379564834
+      },
+      "top_60": {
+       "waveform": 0.00605376320166168,
+       "waveform_to_3.5f": 0.006052462947585028,
+       "2f_over_f_vs_reference": -0.08266065386509502,
+       "3f_over_f_vs_reference": -0.19074909715418076
+      },
+      "top_90": {
+       "waveform": 0.006153310965805524,
+       "waveform_to_3.5f": 0.006153196278602304,
+       "2f_over_f_vs_reference": -0.007586431329595911,
+       "3f_over_f_vs_reference": -0.07849462876552826
+      },
+      "bottom_60": {
+       "waveform": 0.006195100006689563,
+       "waveform_to_3.5f": 0.006193750791215577,
+       "2f_over_f_vs_reference": -0.06204594296544563,
+       "3f_over_f_vs_reference": -0.15133444520414274
+      }
+     },
+     "worst": {
+      "waveform": 0.006272552943784411,
+      "waveform_to_3.5f": 0.006248538736927955,
+      "2f_over_f_vs_reference": 0.08266065386509502,
+      "3f_over_f_vs_reference": 0.19074909715418076
+     }
+    },
+    "old-h1.25": {
+     "nodes": 17325,
+     "h_mm": 1.25,
+     "rule": 0.0,
+     "nodes_through_thickness": 9,
+     "smallest_z_spacing_mm": 0.1726731649999999,
+     "scheme": "verlet2",
+     "step_ns": 12.499999999999998,
+     "evaluations_per_control": 9600,
+     "seconds": 32.49606859599953,
+     "work_node_evaluations": 166320000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.00019072219676890978,
+       "waveform_to_3.5f": 0.00018839188351581275,
+       "2f_over_f_vs_reference": -0.0018195059716006323,
+       "3f_over_f_vs_reference": -0.000943224616144156
+      },
+      "top_60": {
+       "waveform": 0.00015544056420270034,
+       "waveform_to_3.5f": 0.00015542344446395484,
+       "2f_over_f_vs_reference": -0.0013262473007393805,
+       "3f_over_f_vs_reference": -0.0013465274155430862
+      },
+      "top_90": {
+       "waveform": 0.0001264836049288415,
+       "waveform_to_3.5f": 0.00012648302643386675,
+       "2f_over_f_vs_reference": -0.0002357105936837689,
+       "3f_over_f_vs_reference": -0.0005200337217596829
+      },
+      "bottom_60": {
+       "waveform": 0.00015430473627829573,
+       "waveform_to_3.5f": 0.00015429522154367532,
+       "2f_over_f_vs_reference": -0.0010835388385997957,
+       "3f_over_f_vs_reference": -0.002018733897420799
+      }
+     },
+     "worst": {
+      "waveform": 0.00019072219676890978,
+      "waveform_to_3.5f": 0.00018839188351581275,
+      "2f_over_f_vs_reference": 0.0013262473007393805,
+      "3f_over_f_vs_reference": 0.002018733897420799
+     }
+    }
+   }
+  },
+  "T1-open-delamination": {
+   "reference": {
+    "top_30": {
+     "grids_mm": [
+      0.1,
+      0.05,
+      0.025
+     ],
+     "order": 1.76106717182278,
+     "finest_vs_extrapolated": 0.00404643082960684,
+     "2f_over_f": 0.00027727905116219754,
+     "3f_over_f": 3.728008165866116e-05
+    },
+    "top_60": {
+     "grids_mm": [
+      0.1,
+      0.05,
+      0.025
+     ],
+     "order": 1.6514804676555463,
+     "finest_vs_extrapolated": 0.006416897059068132,
+     "2f_over_f": 0.0006546453743245315,
+     "3f_over_f": 4.650025812125006e-05
+    },
+    "top_90": {
+     "grids_mm": [
+      0.1,
+      0.05,
+      0.025
+     ],
+     "order": 1.7943774522247298,
+     "finest_vs_extrapolated": 0.0037901580375843185,
+     "2f_over_f": 0.0006628358380412773,
+     "3f_over_f": 2.1978185680975158e-05
+    },
+    "bottom_60": {
+     "grids_mm": [
+      0.1,
+      0.05,
+      0.025
+     ],
+     "order": 1.651510528510971,
+     "finest_vs_extrapolated": 0.006410233123244145,
+     "2f_over_f": 0.0007913390042387643,
+     "3f_over_f": 5.3267260144412776e-05
+    }
+   },
+   "variants": {
+    "old-h2.5": {
+     "nodes": 17880,
+     "h_mm": 2.5,
+     "rule": 0.0,
+     "nodes_through_thickness": 17,
+     "smallest_z_spacing_mm": 0.06475243699999994,
+     "scheme": "verlet2",
+     "step_ns": 5.88235294117647,
+     "evaluations_per_control": 20400,
+     "seconds": 848.4370066359998,
+     "work_node_evaluations": 364752000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.008372797890222316,
+       "waveform_to_3.5f": 0.008421298708292594,
+       "2f_over_f_vs_reference": 0.04993468885521901,
+       "3f_over_f_vs_reference": 0.03607634130820503
+      },
+      "top_60": {
+       "waveform": 0.016071264567354814,
+       "waveform_to_3.5f": 0.01601139483103653,
+       "2f_over_f_vs_reference": -0.025000194985860147,
+       "3f_over_f_vs_reference": 0.009534388195103327
+      },
+      "top_90": {
+       "waveform": 0.007078118474817672,
+       "waveform_to_3.5f": 0.007077011032279134,
+       "2f_over_f_vs_reference": 0.00023427764817962604,
+       "3f_over_f_vs_reference": -0.02147107205163279
+      },
+      "bottom_60": {
+       "waveform": 0.01605420306764383,
+       "waveform_to_3.5f": 0.01599444549717005,
+       "2f_over_f_vs_reference": -0.00856550443940185,
+       "3f_over_f_vs_reference": 0.006063025449106529
+      }
+     },
+     "worst": {
+      "waveform": 0.016071264567354814,
+      "waveform_to_3.5f": 0.01601139483103653,
+      "2f_over_f_vs_reference": 0.025000194985860147,
+      "3f_over_f_vs_reference": 0.009534388195103327
+     }
+    },
+    "new-h2.5": {
+     "nodes": 9520,
+     "h_mm": 2.5,
+     "rule": 2.0,
+     "nodes_through_thickness": 9,
+     "smallest_z_spacing_mm": 0.1726731649999999,
+     "scheme": "verlet2",
+     "step_ns": 10.0,
+     "evaluations_per_control": 12000,
+     "seconds": 27.784575278000375,
+     "work_node_evaluations": 114240000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.01369140559567578,
+       "waveform_to_3.5f": 0.013770906756864132,
+       "2f_over_f_vs_reference": 0.10558245403615873,
+       "3f_over_f_vs_reference": 0.05860440470791972
+      },
+      "top_60": {
+       "waveform": 0.02606143052661063,
+       "waveform_to_3.5f": 0.025962888585635065,
+       "2f_over_f_vs_reference": -0.033907473209361494,
+       "3f_over_f_vs_reference": 0.015438849838994795
+      },
+      "top_90": {
+       "waveform": 0.011598547380891458,
+       "waveform_to_3.5f": 0.01159654834018494,
+       "2f_over_f_vs_reference": -0.0005754684756600348,
+       "3f_over_f_vs_reference": -0.035101892702430026
+      },
+      "bottom_60": {
+       "waveform": 0.026033813318385828,
+       "waveform_to_3.5f": 0.02593534944439862,
+       "2f_over_f_vs_reference": -0.015815316464658724,
+       "3f_over_f_vs_reference": 0.009850960512071127
+      }
+     },
+     "worst": {
+      "waveform": 0.02606143052661063,
+      "waveform_to_3.5f": 0.025962888585635065,
+      "2f_over_f_vs_reference": 0.033907473209361494,
+      "3f_over_f_vs_reference": 0.015438849838994795
+     }
+    },
+    "new-h4": {
+     "nodes": 6240,
+     "h_mm": 4.0,
+     "rule": 2.0,
+     "nodes_through_thickness": 9,
+     "smallest_z_spacing_mm": 0.1726731649999999,
+     "scheme": "verlet2",
+     "step_ns": 14.285714285714283,
+     "evaluations_per_control": 8400,
+     "seconds": 12.891285652999613,
+     "work_node_evaluations": 52416000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.016848502676856194,
+       "waveform_to_3.5f": 0.016947701373459946,
+       "2f_over_f_vs_reference": 0.1300060269410943,
+       "3f_over_f_vs_reference": 0.16150285100001072
+      },
+      "top_60": {
+       "waveform": 0.03006467535495006,
+       "waveform_to_3.5f": 0.029964764282310985,
+       "2f_over_f_vs_reference": -0.024619839367429064,
+       "3f_over_f_vs_reference": 0.046139222806869995
+      },
+      "top_90": {
+       "waveform": 0.01451267213850351,
+       "waveform_to_3.5f": 0.014510293406222202,
+       "2f_over_f_vs_reference": 0.006840167966539301,
+       "3f_over_f_vs_reference": -0.08852019425654845
+      },
+      "bottom_60": {
+       "waveform": 0.03003107873743827,
+       "waveform_to_3.5f": 0.029930686257044228,
+       "2f_over_f_vs_reference": -0.02687824181994436,
+       "3f_over_f_vs_reference": 0.029366816708622734
+      }
+     },
+     "worst": {
+      "waveform": 0.03006467535495006,
+      "waveform_to_3.5f": 0.029964764282310985,
+      "2f_over_f_vs_reference": 0.02687824181994436,
+      "3f_over_f_vs_reference": 0.046139222806869995
+     }
+    },
+    "new-h5": {
+     "nodes": 5160,
+     "h_mm": 5.0,
+     "rule": 2.0,
+     "nodes_through_thickness": 9,
+     "smallest_z_spacing_mm": 0.1726731649999999,
+     "scheme": "verlet2",
+     "step_ns": 14.285714285714283,
+     "evaluations_per_control": 8400,
+     "seconds": 10.236941088999629,
+     "work_node_evaluations": 43344000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.01993050390227466,
+       "waveform_to_3.5f": 0.02004704453232899,
+       "2f_over_f_vs_reference": 0.16902087272427635,
+       "3f_over_f_vs_reference": 0.2777489372349218
+      },
+      "top_60": {
+       "waveform": 0.03337115991367229,
+       "waveform_to_3.5f": 0.03327216282680689,
+       "2f_over_f_vs_reference": -0.022964593817016432,
+       "3f_over_f_vs_reference": 0.013585183556776848
+      },
+      "top_90": {
+       "waveform": 0.01732956656447383,
+       "waveform_to_3.5f": 0.01732655611020013,
+       "2f_over_f_vs_reference": 0.021223153535014472,
+       "3f_over_f_vs_reference": -0.13120903344483148
+      },
+      "bottom_60": {
+       "waveform": 0.03333569864784496,
+       "waveform_to_3.5f": 0.03323616108591957,
+       "2f_over_f_vs_reference": -0.030151839605908726,
+       "3f_over_f_vs_reference": -0.014592887809838362
+      }
+     },
+     "worst": {
+      "waveform": 0.03337115991367229,
+      "waveform_to_3.5f": 0.03327216282680689,
+      "2f_over_f_vs_reference": 0.030151839605908726,
+      "3f_over_f_vs_reference": 0.014592887809838362
+     }
+    },
+    "old-h1.25": {
+     "nodes": 34280,
+     "h_mm": 1.25,
+     "rule": 0.0,
+     "nodes_through_thickness": 17,
+     "smallest_z_spacing_mm": 0.05396036399999988,
+     "scheme": "verlet2",
+     "step_ns": 4.545454545454545,
+     "evaluations_per_control": 26400,
+     "seconds": 178.79383468699962,
+     "work_node_evaluations": 904992000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.0034149486223309642,
+       "waveform_to_3.5f": 0.003434533256945074,
+       "2f_over_f_vs_reference": 0.015321699261365618,
+       "3f_over_f_vs_reference": 0.013004960420074596
+      },
+      "top_60": {
+       "waveform": 0.006783866624057103,
+       "waveform_to_3.5f": 0.006759798722955452,
+       "2f_over_f_vs_reference": -0.01068528677033631,
+       "3f_over_f_vs_reference": 0.004068752770381989
+      },
+      "top_90": {
+       "waveform": 0.0028662114963462957,
+       "waveform_to_3.5f": 0.0028658457110622543,
+       "2f_over_f_vs_reference": 9.608906861835464e-05,
+       "3f_over_f_vs_reference": -0.008046435458086476
+      },
+      "bottom_60": {
+       "waveform": 0.006776691549051433,
+       "waveform_to_3.5f": 0.006752705949072987,
+       "2f_over_f_vs_reference": -0.002862700556489406,
+       "3f_over_f_vs_reference": 0.0027288383632977364
+      }
+     },
+     "worst": {
+      "waveform": 0.006783866624057103,
+      "waveform_to_3.5f": 0.006759798722955452,
+      "2f_over_f_vs_reference": 0.01068528677033631,
+      "3f_over_f_vs_reference": 0.004068752770381989
+     }
+    },
+    "new-h1.25": {
+     "nodes": 34280,
+     "h_mm": 1.25,
+     "rule": 2.0,
+     "nodes_through_thickness": 17,
+     "smallest_z_spacing_mm": 0.05396036399999988,
+     "scheme": "verlet2",
+     "step_ns": 4.545454545454545,
+     "evaluations_per_control": 26400,
+     "seconds": 177.40139628399993,
+     "work_node_evaluations": 904992000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.0034149486223309642,
+       "waveform_to_3.5f": 0.003434533256945074,
+       "2f_over_f_vs_reference": 0.015321699261365618,
+       "3f_over_f_vs_reference": 0.013004960420074596
+      },
+      "top_60": {
+       "waveform": 0.006783866624057103,
+       "waveform_to_3.5f": 0.006759798722955452,
+       "2f_over_f_vs_reference": -0.01068528677033631,
+       "3f_over_f_vs_reference": 0.004068752770381989
+      },
+      "top_90": {
+       "waveform": 0.0028662114963462957,
+       "waveform_to_3.5f": 0.0028658457110622543,
+       "2f_over_f_vs_reference": 9.608906861835464e-05,
+       "3f_over_f_vs_reference": -0.008046435458086476
+      },
+      "bottom_60": {
+       "waveform": 0.006776691549051433,
+       "waveform_to_3.5f": 0.006752705949072987,
+       "2f_over_f_vs_reference": -0.002862700556489406,
+       "3f_over_f_vs_reference": 0.0027288383632977364
+      }
+     },
+     "worst": {
+      "waveform": 0.006783866624057103,
+      "waveform_to_3.5f": 0.006759798722955452,
+      "2f_over_f_vs_reference": 0.01068528677033631,
+      "3f_over_f_vs_reference": 0.004068752770381989
+     }
+    }
+   }
+  },
+  "T2-closed-delamination": {
+   "reference": {
+    "top_30": {
+     "grids_mm": [
+      0.1,
+      0.05,
+      0.025
+     ],
+     "order": 1.760740941391472,
+     "finest_vs_extrapolated": 0.004048801524860019,
+     "2f_over_f": 0.00028408844143203713,
+     "3f_over_f": 3.806642173562537e-05
+    },
+    "top_60": {
+     "grids_mm": [
+      0.1,
+      0.05,
+      0.025
+     ],
+     "order": 1.6566378041435892,
+     "finest_vs_extrapolated": 0.006372446642116647,
+     "2f_over_f": 0.001873959641854423,
+     "3f_over_f": 0.0008153612930446197
+    },
+    "top_90": {
+     "grids_mm": [
+      0.1,
+      0.05,
+      0.025
+     ],
+     "order": 1.793989189525002,
+     "finest_vs_extrapolated": 0.003792581560489771,
+     "2f_over_f": 0.0006622996641624416,
+     "3f_over_f": 4.7934461177682975e-05
+    },
+    "bottom_60": {
+     "grids_mm": [
+      0.1,
+      0.05,
+      0.025
+     ],
+     "order": 1.638176920471965,
+     "finest_vs_extrapolated": 0.0065629953342724485,
+     "2f_over_f": 0.0010463908982123822,
+     "3f_over_f": 0.0007085315474665362
+    }
+   },
+   "variants": {
+    "old-h2.5": {
+     "nodes": 17880,
+     "h_mm": 2.5,
+     "rule": 0.0,
+     "nodes_through_thickness": 17,
+     "smallest_z_spacing_mm": 0.06475243699999994,
+     "scheme": "verlet2",
+     "step_ns": 1.9230769230769231,
+     "evaluations_per_control": 62400,
+     "seconds": 894.1459859679999,
+     "work_node_evaluations": 1115712000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.008386126465791182,
+       "waveform_to_3.5f": 0.00840549275622365,
+       "2f_over_f_vs_reference": 0.018157406757314476,
+       "3f_over_f_vs_reference": 0.0017568421690103975
+      },
+      "top_60": {
+       "waveform": 0.017707262281622147,
+       "waveform_to_3.5f": 0.017650691537181924,
+       "2f_over_f_vs_reference": -0.10980706362107895,
+       "3f_over_f_vs_reference": 0.2628823641811717
+      },
+      "top_90": {
+       "waveform": 0.007083729132986019,
+       "waveform_to_3.5f": 0.007062032119728672,
+       "2f_over_f_vs_reference": -0.0010321844776916,
+       "3f_over_f_vs_reference": 0.0025188034112559876
+      },
+      "bottom_60": {
+       "waveform": 0.017730417129064223,
+       "waveform_to_3.5f": 0.01759917852304242,
+       "2f_over_f_vs_reference": 0.3939812984534188,
+       "3f_over_f_vs_reference": 0.3053603988663689
+      }
+     },
+     "worst": {
+      "waveform": 0.017730417129064223,
+      "waveform_to_3.5f": 0.017650691537181924,
+      "2f_over_f_vs_reference": 0.3939812984534188,
+      "3f_over_f_vs_reference": 0.3053603988663689
+     }
+    },
+    "new-h2.5": {
+     "nodes": 9520,
+     "h_mm": 2.5,
+     "rule": 2.0,
+     "nodes_through_thickness": 9,
+     "smallest_z_spacing_mm": 0.1726731649999999,
+     "scheme": "verlet2",
+     "step_ns": 3.225806451612903,
+     "evaluations_per_control": 37200,
+     "seconds": 66.18465897900023,
+     "work_node_evaluations": 354144000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.013669212595359236,
+       "waveform_to_3.5f": 0.013728632200781564,
+       "2f_over_f_vs_reference": 0.06176176918588783,
+       "3f_over_f_vs_reference": -0.01355938594347128
+      },
+      "top_60": {
+       "waveform": 0.026709395274974502,
+       "waveform_to_3.5f": 0.026612323585499618,
+       "2f_over_f_vs_reference": 0.07081498710326994,
+       "3f_over_f_vs_reference": 0.2825290024182714
+      },
+      "top_90": {
+       "waveform": 0.011571149633256277,
+       "waveform_to_3.5f": 0.01155632011139137,
+       "2f_over_f_vs_reference": -0.000709257083727044,
+       "3f_over_f_vs_reference": 0.009860500743703815
+      },
+      "bottom_60": {
+       "waveform": 0.026759475935726904,
+       "waveform_to_3.5f": 0.02663531063393255,
+       "2f_over_f_vs_reference": 0.2676447623620879,
+       "3f_over_f_vs_reference": 0.3217178241689651
+      }
+     },
+     "worst": {
+      "waveform": 0.026759475935726904,
+      "waveform_to_3.5f": 0.02663531063393255,
+      "2f_over_f_vs_reference": 0.2676447623620879,
+      "3f_over_f_vs_reference": 0.3217178241689651
+     }
+    },
+    "new-h4": {
+     "nodes": 6240,
+     "h_mm": 4.0,
+     "rule": 2.0,
+     "nodes_through_thickness": 9,
+     "smallest_z_spacing_mm": 0.1726731649999999,
+     "scheme": "verlet2",
+     "step_ns": 5.0,
+     "evaluations_per_control": 24000,
+     "seconds": 28.65934091500003,
+     "work_node_evaluations": 149760000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.016777606209014844,
+       "waveform_to_3.5f": 0.016862678993840596,
+       "2f_over_f_vs_reference": 0.10755612914184809,
+       "3f_over_f_vs_reference": 0.13941867230713667
+      },
+      "top_60": {
+       "waveform": 0.03122889918677552,
+       "waveform_to_3.5f": 0.03109555161271721,
+       "2f_over_f_vs_reference": -0.034876365452124136,
+       "3f_over_f_vs_reference": 0.2662730221890479
+      },
+      "top_90": {
+       "waveform": 0.014441164982733559,
+       "waveform_to_3.5f": 0.01442607879576287,
+       "2f_over_f_vs_reference": 0.014812765842327824,
+       "3f_over_f_vs_reference": 0.0006980740787900785
+      },
+      "bottom_60": {
+       "waveform": 0.031945391346755614,
+       "waveform_to_3.5f": 0.03182887391305671,
+       "2f_over_f_vs_reference": 0.4997935904584878,
+       "3f_over_f_vs_reference": 0.30074175527191693
+      }
+     },
+     "worst": {
+      "waveform": 0.031945391346755614,
+      "waveform_to_3.5f": 0.03182887391305671,
+      "2f_over_f_vs_reference": 0.4997935904584878,
+      "3f_over_f_vs_reference": 0.30074175527191693
+     }
+    },
+    "new-h5": {
+     "nodes": 5160,
+     "h_mm": 5.0,
+     "rule": 2.0,
+     "nodes_through_thickness": 9,
+     "smallest_z_spacing_mm": 0.1726731649999999,
+     "scheme": "verlet2",
+     "step_ns": 5.0,
+     "evaluations_per_control": 24000,
+     "seconds": 25.88507340199976,
+     "work_node_evaluations": 123840000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.01985021021068572,
+       "waveform_to_3.5f": 0.019955640987341927,
+       "2f_over_f_vs_reference": 0.141345454172773,
+       "3f_over_f_vs_reference": -0.015428836255856115
+      },
+      "top_60": {
+       "waveform": 0.036943715721222285,
+       "waveform_to_3.5f": 0.03688042854709798,
+       "2f_over_f_vs_reference": -0.08123746038995949,
+       "3f_over_f_vs_reference": 0.32869417541045354
+      },
+      "top_90": {
+       "waveform": 0.017247540327540185,
+       "waveform_to_3.5f": 0.01723506795545049,
+       "2f_over_f_vs_reference": 0.029164515595217377,
+       "3f_over_f_vs_reference": 0.05486876460112766
+      },
+      "bottom_60": {
+       "waveform": 0.03530067181928141,
+       "waveform_to_3.5f": 0.03509164842350759,
+       "2f_over_f_vs_reference": 0.5986907012470337,
+       "3f_over_f_vs_reference": 0.3754554093457172
+      }
+     },
+     "worst": {
+      "waveform": 0.036943715721222285,
+      "waveform_to_3.5f": 0.03688042854709798,
+      "2f_over_f_vs_reference": 0.5986907012470337,
+      "3f_over_f_vs_reference": 0.3754554093457172
+     }
+    },
+    "old-h1.25": {
+     "nodes": 34280,
+     "h_mm": 1.25,
+     "rule": 0.0,
+     "nodes_through_thickness": 17,
+     "smallest_z_spacing_mm": 0.05396036399999988,
+     "scheme": "verlet2",
+     "step_ns": 1.6129032258064515,
+     "evaluations_per_control": 74400,
+     "seconds": 483.60552013000006,
+     "work_node_evaluations": 2550432000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.0034503920191040643,
+       "waveform_to_3.5f": 0.003428259351826125,
+       "2f_over_f_vs_reference": -0.01304182476025817,
+       "3f_over_f_vs_reference": -0.08193482186840206
+      },
+      "top_60": {
+       "waveform": 0.008267564710183332,
+       "waveform_to_3.5f": 0.008235317223462485,
+       "2f_over_f_vs_reference": 0.07004386046062261,
+       "3f_over_f_vs_reference": 0.1630345001929987
+      },
+      "top_90": {
+       "waveform": 0.0028859205159485705,
+       "waveform_to_3.5f": 0.002859333564344417,
+       "2f_over_f_vs_reference": -0.0050004714576562526,
+       "3f_over_f_vs_reference": 0.025857643898929528
+      },
+      "bottom_60": {
+       "waveform": 0.008673645720120443,
+       "waveform_to_3.5f": 0.008614315668280826,
+       "2f_over_f_vs_reference": 0.09452155182536881,
+       "3f_over_f_vs_reference": 0.18692110112671267
+      }
+     },
+     "worst": {
+      "waveform": 0.008673645720120443,
+      "waveform_to_3.5f": 0.008614315668280826,
+      "2f_over_f_vs_reference": 0.09452155182536881,
+      "3f_over_f_vs_reference": 0.18692110112671267
+     }
+    },
+    "new-h1.25": {
+     "nodes": 34280,
+     "h_mm": 1.25,
+     "rule": 2.0,
+     "nodes_through_thickness": 17,
+     "smallest_z_spacing_mm": 0.05396036399999988,
+     "scheme": "verlet2",
+     "step_ns": 1.6129032258064515,
+     "evaluations_per_control": 74400,
+     "seconds": 480.2333283750004,
+     "work_node_evaluations": 2550432000,
+     "receivers": {
+      "top_30": {
+       "waveform": 0.0034503920191040643,
+       "waveform_to_3.5f": 0.003428259351826125,
+       "2f_over_f_vs_reference": -0.01304182476025817,
+       "3f_over_f_vs_reference": -0.08193482186840206
+      },
+      "top_60": {
+       "waveform": 0.008267564710183332,
+       "waveform_to_3.5f": 0.008235317223462485,
+       "2f_over_f_vs_reference": 0.07004386046062261,
+       "3f_over_f_vs_reference": 0.1630345001929987
+      },
+      "top_90": {
+       "waveform": 0.0028859205159485705,
+       "waveform_to_3.5f": 0.002859333564344417,
+       "2f_over_f_vs_reference": -0.0050004714576562526,
+       "3f_over_f_vs_reference": 0.025857643898929528
+      },
+      "bottom_60": {
+       "waveform": 0.008673645720120443,
+       "waveform_to_3.5f": 0.008614315668280826,
+       "2f_over_f_vs_reference": 0.09452155182536881,
+       "3f_over_f_vs_reference": 0.18692110112671267
+      }
+     },
+     "worst": {
+      "waveform": 0.008673645720120443,
+      "waveform_to_3.5f": 0.008614315668280826,
+      "2f_over_f_vs_reference": 0.09452155182536881,
+      "3f_over_f_vs_reference": 0.18692110112671267
+     }
+    }
+   }
+  }
+ }
+}

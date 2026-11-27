@@ -131,6 +131,25 @@ test('defects: one line each, add / remove on plates only, tree folder, variant 
   const contact = reshapeDefect({ type: 'contact', orientation: 'horizontal', x_mm: 20 }, s);
   assert.equal(contact.x_mm, undefined); assert.ok(contact.x_end_mm > contact.x_start_mm); assert.ok(contact.depth_mm > 0);
   const hole = reshapeDefect({ type: 'hole', axis: 'y', x_mm: 30, y_mm: 1, radius_mm: .5 }, s); assert.equal(hole.y_mm, undefined); assert.equal(hole.z_mm, .8);
+  // a delamination is a strip across the plate or a circle; switching the shape swaps the fields
+  const wide = structuredClone(s); wide.geometry.width_mm = 60; wide.defects = [{ type: 'delamination', x_start_mm: 20, x_end_mm: 28, depth_mm: .8, closed: true }];
+  assert.match(inspectorMarkup(wide, 'defect:0', 4, {}), /value="rectangle" selected/); assert.match(inspectorMarkup(wide, 'defect:0', 4, {}), /data-path="defects\.0\.x_start_mm"/);
+  const round = reshapeDefect({ ...wide.defects[0], shape: 'circle' }, wide);
+  assert.deepEqual(round, { type: 'delamination', depth_mm: .8, closed: true, shape: 'circle', x_mm: 24, y_mm: 30, diameter_mm: 8 });
+  assert.match(defectSummary(round), /圆形 Φ8 · 圆心 \(24, 30\) · 距上表面 0\.8 mm · 闭合/);
+  wide.defects = [round];
+  const form = inspectorMarkup(wide, 'defect:0', 4, {});
+  assert.match(form, /value="circle" selected/); assert.match(form, /data-path="defects\.0\.diameter_mm"/); assert.match(form, /圆的边缘由细小的台阶逼近（台阶宽度就是下面的前沿单元）/); assert.ok(!form.includes('x_start_mm'));
+  assert.ok(drawScene({ clientWidth: 800, clientHeight: 500, width: 800, height: 500, getContext: () => new Proxy({}, { get: (_, k) => (k === 'measureText' ? () => ({ width: 10 }) : () => {}), set: () => true }) }, wide, { yaw: -.6, pitch: .5, zoom: 1, grid: false }).some(p => p.id === 'defect:0'));
+  // the front mesh: standard is not written, coarse is, and the form says what it costs
+  assert.match(form, /data-path="defects\.0\.front_mesh"/); assert.match(form, /value="standard" selected/); assert.match(form, /“较粗”通常快/);
+  const coarse = reshapeDefect({ ...round, front_mesh: 'coarse' }, wide); assert.equal(coarse.front_mesh, 'coarse'); assert.match(defectSummary(coarse), /前沿网格较粗/);
+  assert.equal(reshapeDefect({ ...round, front_mesh: 'standard' }, wide).front_mesh, undefined);
+  assert.match(inspectorMarkup({ ...wide, defects: [coarse] }, 'defect:0', 4, {}), /value="coarse" selected/);
+  assert.match(inspectorMarkup(s, 'defect:0', 4, {}), /data-path="defects\.0\.front_mesh"/);   // a crack has it too
+  assert.ok(!inspectorMarkup(s, 'defect:1', 4, {}).includes('front_mesh'));                      // a hole has no front
+  const strip = reshapeDefect({ ...round, shape: 'rectangle' }, wide);
+  assert.deepEqual(strip, { type: 'delamination', depth_mm: .8, closed: true, x_start_mm: 20, x_end_mm: 28 });
   const ctx = new Proxy({}, { get: (_, k) => (k === 'measureText' ? () => ({ width: 10 }) : () => {}), set: () => true });
   const canvas = { clientWidth: 800, clientHeight: 500, width: 800, height: 500, getContext: () => ctx };
   const picks = drawScene(canvas, s, { yaw: -.6, pitch: .5, zoom: 1, exaggerate: true, grid: false, selected: 'defect:0' });
@@ -307,4 +326,25 @@ test('result viewer: the note on contact, the first view of a strip, the colour 
   for (const id of ['solid-color-mode', 'solid-color-max', 'solid-thin', 'solid-contact-note']) assert.ok(page.includes(`id="${id}"`), id);
   for (const view of ['iso', 'side', 'top']) assert.ok(page.includes(`data-solid-view="${view}"`), view);
   assert.ok(!solidResultMarkup(result([defects[1]])).includes('solid-contact-note')); assert.ok(!solidResultMarkup(result(undefined)).includes('solid-contact-note'));
+});
+
+test('wave-field record: the solver form, the stored setting and the message before a computation', async () => {
+  const { inspectorMarkup, wavefieldOf, WAVEFIELD_REGIONS, WAVEFIELD_COMPONENTS } = await import('../offline/web/inspector.js');
+  const { previewMessages } = await import('../offline/web/shell.js');
+  assert.deepEqual(Object.keys(WAVEFIELD_REGIONS), ['none', 'top', 'bottom', 'both', 'all']); assert.deepEqual(Object.keys(WAVEFIELD_COMPONENTS), ['z', 'xyz']);
+  // a stored setting: unknown values fall back, "none" and nothing are no record
+  assert.equal(wavefieldOf(null), null); assert.equal(wavefieldOf({ region: 'none' }), null); assert.equal(wavefieldOf({ region: 'side' }), null);
+  assert.deepEqual(wavefieldOf({ region: 'top' }), { region: 'top', components: 'z', every: 1 });
+  assert.deepEqual(wavefieldOf({ region: 'all', components: 'xyz', every: 4 }), { region: 'all', components: 'xyz', every: 4 });
+  assert.deepEqual(wavefieldOf({ region: 'bottom', components: 'q', every: 0 }), { region: 'bottom', components: 'z', every: 1 });
+  const s = upgrade(v1); s.acquisition.sample_step_us = .2;
+  const off = inspectorMarkup(s, 'engine', 4, { engine: 'network' });
+  assert.match(off, /data-action="wavefield-region"/); assert.match(off, /value="none" selected/); assert.ok(!off.includes('wavefield-every'));
+  const on = inspectorMarkup(s, 'engine', 4, { engine: 'network', wavefield: { region: 'top', components: 'z', every: 4 } });
+  assert.match(on, /value="top" selected/); assert.match(on, /data-action="wavefield-components"/); assert.match(on, /data-action="wavefield-every"[^>]*value="4"/);
+  assert.match(on, /波场的时间间隔 0\.8 μs，可分辨到 0\.625 MHz/);
+  assert.ok(!inspectorMarkup(s, 'engine', 4, { engine: 'coarse', wavefield: { region: 'top', components: 'z', every: 4 } }).includes('wavefield-region'));   // the fast engine has none
+  const rows = previewMessages({ ok: true, errors: [], estimate: { scheme: 'verlet2', layer_step_us: .005, seconds: 60, memory_bytes: 1e9, wavefield: { text: '波场记录：上表面（z 最大）的 100 个节点' } } });
+  assert.ok(rows.some(r => r.text.startsWith('波场记录：上表面')));
+  assert.ok(!previewMessages({ ok: true, errors: [], estimate: { scheme: 'verlet2', layer_step_us: .005, seconds: 60, memory_bytes: 1e9 } }).some(r => r.text.startsWith('波场记录')));
 });

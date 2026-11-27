@@ -15,7 +15,7 @@
 | 内存 | 估计值 0.25 GB + （0.3 + 0.48 × 控制数）kB × 节点数 + 一个输出分块（不超过 512 MiB），不得超过物理内存的 80%。三组控制都算时约 1.7 kB / 节点，只算完整响应约 0.8 kB / 节点。分摊到多核（第 6 节）时每组控制再加 0.32 kB / 节点；这样放不下时退回每组控制一个线程 | `offline/resources.py` |
 | 磁盘 | 提交前按记录方式估算，空间不足时拒绝 | `graphnet/rollout.py: storage_bytes` |
 | 时间 | 不设上限。提交前给出预计耗时，计算中显示预计剩余时间，可随时暂停、之后从检查点继续 | `offline/app.py`、`offline/worker.py` |
-| 网格生成 | 无缺陷的平板和贯穿缺口：最多 800 万节点（`large_plate_mesh`，与冻结网格生成器逐位一致，只是去掉了逐单元循环和 10 万节点上限）；含缺陷的平板（包括孔，`prepare_curved` 与冻结函数逐位一致）100 万节点；管和旧的带孔板几何（`geometry.kind` 为 `pipe`、`hole`）仍是冻结生成器的 10 万节点 | `spectral3d/feature_mesh.py` |
+| 网格生成 | 无缺陷的平板和贯穿缺口：最多 800 万节点（`large_plate_mesh`，与冻结网格生成器逐位一致，只是去掉了逐单元循环和 10 万节点上限）；含缺陷的平板（包括孔，`prepare_curved` 与冻结函数逐位一致）400 万节点；管和旧的带孔板几何（`geometry.kind` 为 `pipe`、`hole`）仍是冻结生成器的 10 万节点 | `spectral3d/feature_mesh.py` |
 
 自动网格（`offline/automesh.py`）只在本机内存放不下时才放粗，仍不粗于 2f 分辨率 8；放不下时给出原因和建议。
 

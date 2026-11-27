@@ -255,7 +255,14 @@ def preview(body, data_directory=None):
 
                         layer = model_layer(scene, built[0])
                     cost = estimate(
-                        scene, built[0], request.get('time_stepping', 'auto'), request.get('record', 'auto'), data_directory, chosen, layer
+                        scene,
+                        built[0],
+                        request.get('time_stepping', 'auto'),
+                        request.get('record', 'auto'),
+                        data_directory,
+                        chosen,
+                        layer,
+                        request.get('wavefield'),
                     )
                     out['estimate'] = cost
                     out['record'].update(mode=cost['record'], uncompressed_bytes=samples * out['mesh']['nodes'] * 3 * 8 * len(chosen))

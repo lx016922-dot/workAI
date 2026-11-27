@@ -126,7 +126,7 @@ def choose(raw, validate, degree=DEGREE, controls=3, h_min=H_MIN):
         except ValueError as error:
             if not _size_error(error):
                 raise
-            problem = '超过网格生成上限的节点数（管和带孔板几何为 10 万，含缺陷的平板为 100 万）'
+            problem = '超过网格生成上限的节点数（管和带孔板几何为 10 万，含缺陷的平板为 400 万）'
             continue
         problem = over_budget(len(mesh['points']), controls)
         if not problem:

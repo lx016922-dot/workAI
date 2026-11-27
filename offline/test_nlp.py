@@ -31,6 +31,26 @@ class Interpret(unittest.TestCase):
         self.assertEqual([(x['type'], x['x_mm'], x['radius_mm']) for x in d], [('hole', 30.0, 0.5), ('hole', 60.0, 0.5)])
         _, d = self.defects('在60到80mm之间添加分层，距上表面0.8mm')
         self.assertEqual((d[0]['type'], d[0]['x_start_mm'], d[0]['x_end_mm'], d[0]['depth_mm']), ('delamination', 60.0, 80.0, 0.8))
+        wide = plate()
+        wide['geometry']['width_mm'] = 60.0
+        r, d = self.defects('在100mm处添加直径10mm的圆形闭合分层，距上表面0.5mm', wide)
+        self.assertEqual(
+            d,
+            [
+                {
+                    'type': 'delamination',
+                    'shape': 'circle',
+                    'x_mm': 100.0,
+                    'y_mm': 30.0,
+                    'diameter_mm': 10.0,
+                    'closed': True,
+                    'depth_mm': 0.5,
+                }
+            ],
+        )
+        self.assertIn('圆形，直径 10 mm，圆心 (100, 30) mm', r['operations'][0]['summary'])
+        _, d = self.defects('add a circular delamination at 60 mm, radius 4 mm, y = 20 mm', wide)
+        self.assertEqual((d[0]['shape'], d[0]['x_mm'], d[0]['y_mm'], d[0]['diameter_mm']), ('circle', 60.0, 20.0, 8.0))
         _, d = self.defects('在 150mm 处添加宽 1mm 深 0.5mm 的缺口')
         self.assertEqual((d[0]['type'], d[0]['width_mm'], d[0]['depth_mm']), ('notch', 1.0, 0.5))
         _, d = self.defects('在 40 mm 处加一个距上表面 0.6 mm、直径 0.6 mm 的横孔')

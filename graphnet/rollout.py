@@ -21,6 +21,9 @@ Two things can be chosen per record (the defaults reproduce the frozen behaviour
   afford: the receivers at every sample (float64, bit-identical to the full record), the display mesh
   (`spectral3d.display`) at the animation frames as float32 (`display_parts`: the linear response and the
   increments when the controls allow them), and a few full float64 snapshots;
+* `wavefield` (compact records): {'nodes': mesh node ids, 'components': axes among 0, 1, 2, 'every': n} keeps these nodes'
+  displacement at every n-th sample as float32 — the whole wave field of a surface, which a scanning laser vibrometer
+  measures and no list of receivers can hold. The same parts as on the display mesh, increments formed in float64 first;
 * material damping (`physics.damping`) comes with the scene: the mass-proportional part joins the nodal damping of the
   absorbing layers, the stiffness-proportional part is taken by the layer itself (`graphnet.recurrence`), with the
   element message and the viscous force of the last layer as two more arrays of the state. Such a record uses one
@@ -108,8 +111,18 @@ def display_parts(controls):
     return tuple(('full' if name == 'murnaghan' else name, name, None) for name in controls)
 
 
-def storage_bytes(frames, nodes, record, display_nodes=0, shown=0, receivers=0, snapshots=SNAPSHOTS, controls=3):
-    """Upper bound of the record on disk, checkpoints included."""
+def wavefield_frames(frames, every):
+    """Samples a wave-field record keeps: every `every`-th one, from the first."""
+    return np.arange(0, frames, every)
+
+
+def wavefield_bytes(frames, values, every, parts):
+    """Size of a wave-field record: `values` = nodes × components, float32, one array per stored part."""
+    return len(wavefield_frames(frames, every)) * values * 4 * parts
+
+
+def storage_bytes(frames, nodes, record, display_nodes=0, shown=0, receivers=0, snapshots=SNAPSHOTS, controls=3, wavefield=0):
+    """Upper bound of the record on disk, checkpoints included. `wavefield`: bytes of the wave-field record (wavefield_bytes)."""
     checkpoints = 2 * nodes * controls * 3 * 8 * 4
     if record == 'full':
         return frames * nodes * 3 * 8 * controls + checkpoints
@@ -118,6 +131,7 @@ def storage_bytes(frames, nodes, record, display_nodes=0, shown=0, receivers=0, 
         + shown * display_nodes * 3 * 4 * controls
         + snapshots * nodes * 24 * controls
         + checkpoints
+        + wavefield
     )
 
 
@@ -136,9 +150,10 @@ def rollout(
     spread=None,
     threads=None,
     flush=False,
+    wavefield=None,
 ):
-    """`model` from graphnet.model.load(..., long_record=True). See the module text for `time_plan`, `record`, `controls`, `spread` and `flush`;
-    `threads` limits the threads used (default: all that numba was started with)."""
+    """`model` from graphnet.model.load(..., long_record=True). See the module text for `time_plan`, `record`, `controls`, `spread`, `flush`
+    and `wavefield`; `threads` limits the threads used (default: all that numba was started with)."""
     if not is_v2(scene):
         from graphwave.long_rollout import rollout as frozen
 
@@ -202,6 +217,24 @@ def rollout(
     derivative = weights['derivative_' + str(int(mesh['degree']))]
     inverse = inverse_mapping(mesh)
     receivers = [interpolation(mesh, r['point_mm']) for r in scene['receivers']]
+    if wavefield is not None:
+        field_nodes = np.asarray(wavefield['nodes'], dtype=np.int64)
+        field_axes = [int(a) for a in wavefield['components']]
+        field_every = wavefield['every']
+        require(
+            compact
+            and field_nodes.ndim == 1
+            and len(field_nodes)
+            and (np.diff(field_nodes) > 0).all()
+            and 0 <= field_nodes[0]
+            and field_nodes[-1] < nodes
+            and field_axes
+            and field_axes == sorted(set(field_axes))
+            and set(field_axes) <= {0, 1, 2}
+            and type(field_every) is int
+            and 1 <= field_every < frames,
+            '波场记录无效：需要精简记录、升序不重复的节点编号、0–2 中的分量和不小于 1 的采样间隔倍数。',
+        )
     sources = source_hashes()
     fingerprint = hashlib.sha256(
         json.dumps(
@@ -215,6 +248,17 @@ def rollout(
                 **({} if given is None else {'layer': [stage_weights, per_sample]}),
                 **({} if controls == LAWS else {'controls': list(controls)}),
                 **({'flush_subnormals': True} if flush else {}),
+                **(
+                    {
+                        'wavefield': {
+                            'nodes_sha256': hashlib.sha256(field_nodes.tobytes()).hexdigest(),
+                            'components': field_axes,
+                            'every': field_every,
+                        }
+                    }
+                    if wavefield is not None
+                    else {}
+                ),
             },
             sort_keys=True,
         ).encode()
@@ -300,10 +344,19 @@ def rollout(
         kept = snapshot_frames(frames)
         shown_set = set(shown.tolist())
         kept_set = set(kept.tolist())
-        keep = np.unique(np.concatenate([ids for ids, _ in receivers])).astype(np.int64) if receivers else np.zeros(0, dtype=np.int64)
+        kept_ids = [ids for ids, _ in receivers] + ([field_nodes] if wavefield is not None else [])
+        keep = np.unique(np.concatenate(kept_ids)).astype(np.int64) if kept_ids else np.zeros(0, dtype=np.int64)
         local = [(np.searchsorted(keep, ids), w) for ids, w in receivers]
+        field_local = np.searchsorted(keep, field_nodes) if wavefield is not None else None
         chunk_frames = max(
-            2, min(256, 20000 // subdivisions, work_frames, (256 * 1024**2) // (len(display['nodes']) * 12 * len(shown_parts)))
+            2,
+            min(
+                256,
+                20000 // subdivisions,
+                work_frames,
+                (256 * 1024**2) // (len(display['nodes']) * 12 * len(shown_parts)),
+                (512 * 1024**2) // max(1, len(keep) * 24 * count),  # the kept nodes of one chunk, every sample and control, in float64
+            ),
         )
     else:
         keep = np.zeros(0, dtype=np.int64)
@@ -318,7 +371,16 @@ def rollout(
         elapsed_before = manifest['elapsed_s']
     else:
         estimate = storage_bytes(
-            frames, nodes, record, len(display['nodes']) if compact else 0, len(shown) if compact else 0, len(receivers), controls=count
+            frames,
+            nodes,
+            record,
+            len(display['nodes']) if compact else 0,
+            len(shown) if compact else 0,
+            len(receivers),
+            controls=count,
+            wavefield=wavefield_bytes(frames, len(field_nodes) * len(field_axes), field_every, len(shown_parts))
+            if wavefield is not None
+            else 0,
         )
         require(
             shutil.disk_usage(directory).free >= estimate + 512 * 1024**2,
@@ -405,6 +467,22 @@ def rollout(
             }
             manifest['snapshot_frames'] = kept.tolist()
             manifest['receivers'] = [{'name': r['name'], 'point_mm': list(r['point_mm'])} for r in scene['receivers']]
+            if wavefield is not None:
+                save_arrays(directory / 'wavefield.npz', nodes=field_nodes, points_mm=np.asarray(mesh['points'])[field_nodes] * 1e3)
+                manifest['wavefield'] = {
+                    'file': 'wavefield.npz',
+                    'sha256': digest(directory / 'wavefield.npz'),
+                    'nodes': int(len(field_nodes)),
+                    'components': field_axes,
+                    'every': field_every,
+                    'frames': int(len(wavefield_frames(frames, field_every))),
+                    'sample_step_us': sample * field_every,
+                    'dtype': 'float32',
+                    'unit': 'm',
+                    'parts': [name for name, _, _ in shown_parts],
+                    'layout': 'part,frame,node,component',
+                    **{k: wavefield[k] for k in ('region',) if k in wavefield},
+                }
     manifest.update(layer_threads=used, layer_spread=spread)  # how this run uses the cores (a resumed run may differ: the bits do not)
     manifest['flush_subnormals'] = flush  # part of the fingerprint: a resumed record keeps the arithmetic it started with
     workspace = prepare(mesh, inputs['loads'], alpha, laws, used, stiff) if spread else None
@@ -497,6 +575,17 @@ def rollout(
         )
         path = directory / 'fields' / f'{next_frame:06d}.npz'
         if compact:
+            waves = {}
+            if wavefield is not None:  # the kept samples of this chunk on the wave-field nodes; increments in float64, stored as float32
+                at = np.arange(next_frame, last_frame + 1)
+                at = at[at % field_every == 0]
+                values = {name: f[at - next_frame][:, field_local][:, :, field_axes] for name, f in zip(controls, fields)}
+                waves = {
+                    'wavefield': np.stack([values[a] if b is None else values[a] - values[b] for _, a, b in shown_parts]).astype(
+                        np.float32
+                    ),
+                    'wavefield_frames': at.astype(np.int64),
+                }
             save_arrays(
                 path,
                 probes=probes,
@@ -505,6 +594,7 @@ def rollout(
                 display_frames=np.asarray(shown_here, dtype=np.int64),
                 snapshots=snaps,
                 snapshot_frames=np.asarray(kept_here, dtype=np.int64),
+                **waves,
             )
         else:
             save_arrays(path, probes=probes, energies=energies, **{name: fields[i] for i, name in enumerate(controls)})

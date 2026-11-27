@@ -136,7 +136,28 @@ def _defects_from_text(kind, text, scene):
     from_bottom = _length(FROM_BOTTOM, text, before=False)
     closed = bool(_find(r'闭合|呼吸|紧贴|带接触|有接触|closed|breathing|kissing|with\s+contact', text))
     horizontal = kind == 'delamination' or (kind == 'contact' and _find(r'水平|层间|horizontal|between\s+layers', text))
-    if horizontal:
+    round_shape = kind == 'delamination' and bool(_find(r'圆形|圆的|圆|circular|circle|round', text))
+    if round_shape:
+        diameter = _length(PARAMS[2], text)
+        radius = _length(PARAMS[3], text)
+        if diameter is None:
+            diameter = 2 * radius if radius is not None else 10.0
+            if radius is None:
+                used.append(f'直径未指定，取 {diameter:g} mm')
+        centre = (where.get('x') or [None])[0]
+        if centre is None:
+            centre = L / 2
+            used.append(f'位置未指定，取板长中点 {centre:g} mm')
+        y = _length(PARAMS[7], text, before=False)
+        d = {
+            'type': 'delamination',
+            'shape': 'circle',
+            'x_mm': round(centre, 4),
+            'y_mm': round(W / 2 if y is None else y, 4),
+            'diameter_mm': diameter,
+            'closed': closed,
+        }
+    elif horizontal:
         if 'range' in where:
             a, b = where['range']
         else:
@@ -150,6 +171,7 @@ def _defects_from_text(kind, text, scene):
             a, b = centre - length / 2, centre + length / 2
         d = {'type': 'delamination', 'closed': closed} if kind == 'delamination' else {'type': 'contact', 'orientation': 'horizontal'}
         d['x_start_mm'], d['x_end_mm'] = round(a, 4), round(b, 4)
+    if round_shape or horizontal:
         if from_top is not None:
             d['depth_mm'] = from_top
         elif from_bottom is not None:
@@ -240,9 +262,12 @@ def describe(d):
             f'{"高" if d.get("from") == "inside" else "深"} {d["depth_mm"]:g} mm',
         ] + (['闭合（接触）'] if d.get('closed') else [])
     elif kind == 'delamination':
-        parts = [f'x = {d["x_start_mm"]:g}–{d["x_end_mm"]:g} mm', f'距上表面 {d["depth_mm"]:g} mm'] + (
-            ['闭合（接触）'] if d.get('closed') else []
+        where = (
+            f'圆形，直径 {d["diameter_mm"]:g} mm，圆心 ({d["x_mm"]:g}, {d["y_mm"]:g}) mm'
+            if d.get('shape') == 'circle'
+            else f'x = {d["x_start_mm"]:g}–{d["x_end_mm"]:g} mm'
         )
+        parts = [where, f'距上表面 {d["depth_mm"]:g} mm'] + (['闭合（接触）'] if d.get('closed') else [])
     elif kind == 'contact':
         parts = (
             [f'竖直截面 x = {d["x_mm"]:g} mm']

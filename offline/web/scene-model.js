@@ -148,8 +148,9 @@ export function sourceSummary(source) {
 }
 /** One line for a defect (the backend's offline/nlp.describe says the same in full). */
 export function defectSummary(d) {
-  const f = v => +(+v).toPrecision(6), closed = d.closed ? ' · 闭合' : '';
+  const f = v => +(+v).toPrecision(6), closed = (d.closed ? ' · 闭合' : '') + (d.front_mesh === 'coarse' ? ' · 前沿网格较粗' : '');
   if (d.type === 'crack') return `x ${f(d.x_mm)} · ${CRACK_FROM[d.from || 'top']} · ${d.from === 'inside' ? '高' : '深'} ${f(d.depth_mm)} mm${closed}`;
+  if (d.type === 'delamination' && d.shape === 'circle') return `圆形 Φ${f(d.diameter_mm)} · 圆心 (${f(d.x_mm)}, ${f(d.y_mm)}) · 距上表面 ${f(d.depth_mm)} mm${closed}`;
   if (d.type === 'delamination') return `x ${f(d.x_start_mm)}–${f(d.x_end_mm)} · 距上表面 ${f(d.depth_mm)} mm${closed}`;
   if (d.type === 'contact') return d.orientation === 'vertical' ? `竖直截面 x ${f(d.x_mm)} mm` : `水平 x ${f(d.x_start_mm)}–${f(d.x_end_mm)} · 距上表面 ${f(d.depth_mm)} mm`;
   if (d.type === 'notch') return `x ${f(d.x_mm)} · 宽 ${f(d.width_mm)} · 深 ${f(d.depth_mm)} mm`;

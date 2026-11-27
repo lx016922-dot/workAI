@@ -233,13 +233,16 @@ def validate_request(body):
     layer; frozen: the trained three-stage layer; the fast engine runs on its model's own layer). Both default to auto.
     Version-2 scenes on either engine take 'controls':
     all (linear, StVK and complete: five responses; the default), full_linear (complete and linear: three responses) or
-    full (the complete response only)."""
+    full (the complete response only). On the network engine they take 'wavefield' (offline/wavefield.py): the displacement of
+    a face or of every node at every n-th sample, kept in the compact record."""
     if not isinstance(body, dict) or 'scene' not in body:
         raise ValueError('需要场景。')
     body = {k: v for k, v in body.items() if k != 'mesh_report'}
-    if set(body) - {'scene', 'degree', 'mesh', 'engine', 'coarse_model', 'record', 'time_stepping', 'controls'}:
-        raise ValueError('请求只能包含 scene、degree、mesh、engine、coarse_model、record、time_stepping、controls。')
-    options = {k: body.pop(k) for k in ('record', 'time_stepping', 'controls') if k in body}
+    if set(body) - {'scene', 'degree', 'mesh', 'engine', 'coarse_model', 'record', 'time_stepping', 'controls', 'wavefield'}:
+        raise ValueError('请求只能包含 scene、degree、mesh、engine、coarse_model、record、time_stepping、controls、wavefield。')
+    options = {k: body.pop(k) for k in ('record', 'time_stepping', 'controls', 'wavefield') if k in body}
+    if options.get('wavefield') is None:
+        options.pop('wavefield', None)
     v2 = isinstance(body['scene'], dict) and body['scene'].get('schema') == V2
     if options.get('controls', 'all') not in CONTROL_SETS:
         raise ValueError('计算的控制需为 all（线性、StVK、完整）、full_linear（完整与线性）或 full（仅完整）。')
@@ -253,7 +256,21 @@ def validate_request(body):
         raise ValueError('记录方式设置需要 v2 场景。')
     if 'time_stepping' in options and not (body.get('engine', 'network') == 'network' and v2):
         raise ValueError('时间层设置只用于 v2 场景的冻结网络引擎；快速引擎使用模型训练时的时间层。')
+    if 'wavefield' in options:
+        from .wavefield import validate as validate_wavefield
+
+        options['wavefield'] = validate_wavefield(options['wavefield'])
+        if not (body.get('engine', 'network') == 'network' and v2):
+            raise ValueError('波场记录只用于 v2 场景的冻结网络引擎。')
+        if options.get('record') == 'full':
+            raise ValueError(
+                '完整记录已经保存了每个节点的全部采样点，不需要再保存波场记录；请把记录方式改为自动或精简记录，或关掉波场记录。'
+            )
     checked = _validate_request(body, len(CONTROL_SETS[options.get('controls', 'all')]), options.get('time_stepping') == 'frozen')
+    if 'wavefield' in options:
+        from .wavefield import check_scene
+
+        check_scene(options['wavefield'], checked['scene'])
     if (checked['scene'].get('damping') or {}).get('stiffness_s'):
         # the stiffness-proportional term needs the one-stage layer of the automatic plan (graphnet/timestep.py)
         if options.get('time_stepping') == 'frozen':

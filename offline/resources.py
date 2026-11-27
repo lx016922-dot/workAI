@@ -140,7 +140,16 @@ def save_throughput(data_directory, nodes, evaluations_per_control, seconds, rel
         pass
 
 
-def estimate(scene, mesh, time_stepping='auto', record='auto', data_directory=None, controls=('linear', 'stvk', 'murnaghan'), layer=None):
+def estimate(
+    scene,
+    mesh,
+    time_stepping='auto',
+    record='auto',
+    data_directory=None,
+    controls=('linear', 'stvk', 'murnaghan'),
+    layer=None,
+    wavefield=None,
+):
     """Plan and cost of a network computation before it starts: record mode, layer, memory, disk and time.
 
     The layer uses ω_max ≈ 3.6 c / Δx instead of the measured value (the worker measures it), so the time is an estimate."""
@@ -155,7 +164,7 @@ def estimate(scene, mesh, time_stepping='auto', record='auto', data_directory=No
     frames = round(acquisition['duration_us'] / acquisition['sample_step_us']) + 1
     nodes = int(len(mesh['points']))
     count = len(controls)
-    mode = record_mode(record, frames, nodes, count)
+    mode = 'compact' if wavefield else record_mode(record, frames, nodes, count)  # the wave field of a face lives in the compact record
     material = scene['material']
     speed = (
         fastest_speed(material)
@@ -194,7 +203,24 @@ def estimate(scene, mesh, time_stepping='auto', record='auto', data_directory=No
     # A display mesh is at most the browser budget; the surface of a small mesh is smaller still.
     display_nodes = min(BROWSER_NODES, nodes)
     shown = min(FRAMES, frames)
-    disk = storage_bytes(frames, nodes, mode, display_nodes, shown, len(scene['receivers']), controls=count)
+    wave = None
+    if wavefield:
+        from graphnet.rollout import display_parts
+        from .wavefield import describe, node_ids, size_bytes
+
+        wave_nodes = len(node_ids(mesh['points'], wavefield['region']))
+        parts = len(display_parts(controls))
+        wave_bytes = size_bytes(frames, wave_nodes, wavefield, parts)
+        wave = dict(
+            wavefield,
+            nodes=wave_nodes,
+            parts=parts,
+            bytes=int(wave_bytes),
+            text=describe(wavefield, wave_nodes, frames, acquisition['sample_step_us'], parts, wave_bytes),
+        )
+    disk = storage_bytes(
+        frames, nodes, mode, display_nodes, shown, len(scene['receivers']), controls=count, wavefield=wave['bytes'] if wave else 0
+    )
     rate, measured = throughput(data_directory) if data_directory else (DEFAULT_RATE, False)
     from graphnet.parallel import CONTROL_COST, layer_time
 
@@ -216,7 +242,8 @@ def estimate(scene, mesh, time_stepping='auto', record='auto', data_directory=No
         'evaluations_per_control': layers['evaluations_per_control'],
         'frozen_evaluations_per_control': layers.get('frozen_evaluations_per_control', layers['evaluations_per_control']),
         'layer_reason': layers['reason'],
-        'memory_bytes': memory_bytes(nodes, mode, display_nodes, count, frames, use[0]),
+        # a wave-field record adds the kept nodes of one chunk in float64 (at most 512 MiB) and the float32 arrays written from it
+        'memory_bytes': memory_bytes(nodes, mode, display_nodes, count, frames, use[0]) + (768 * 1024**2 if wave else 0),
         'physical_memory_bytes': physical_memory(),
         'disk_bytes': int(disk),
         'free_bytes': free,
@@ -226,4 +253,5 @@ def estimate(scene, mesh, time_stepping='auto', record='auto', data_directory=No
         'cpu_relative_to_all': sum(CONTROL_COST[name] for name in controls) / sum(CONTROL_COST.values()),
         'threads': use[1],
         'spread': use[0],
+        **({'wavefield': wave} if wave else {}),
     }
